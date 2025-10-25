@@ -22,14 +22,14 @@ export const MenuUpload: React.FC = () => {
 
     // Parse CSV
     Papa.parse(selectedFile, {
-      complete: (results) => {
+      complete: (results: Papa.ParseResult<any>) => {
         const validationResult = validateCSV(results.data);
         setValidation(validationResult);
         setIsProcessing(false);
       },
       header: true,
       skipEmptyLines: true,
-      error: (error) => {
+      error: (error: Error) => {
         toast.error(`Failed to parse CSV: ${error.message}`);
         setIsProcessing(false);
       }

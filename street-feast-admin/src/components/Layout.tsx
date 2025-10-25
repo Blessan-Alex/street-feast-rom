@@ -12,9 +12,10 @@ export const Layout: React.FC = () => {
   };
 
   const navItems = [
+    { path: '/dashboard', label: 'Dashboard', enabled: true },
+    { path: '/create-order', label: 'Create Order', enabled: true },
+    { path: '/manage-orders', label: 'Manage Orders', enabled: true },
     { path: '/menu', label: 'Menu', enabled: true },
-    { path: '/create-order', label: 'Create Order', enabled: false },
-    { path: '/manage-orders', label: 'Manage Orders', enabled: false },
     { path: '/settings', label: 'Settings', enabled: true },
   ];
 

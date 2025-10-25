@@ -88,7 +88,7 @@ export const CategoryEditor: React.FC = () => {
     }
 
     // Validate items
-    items.forEach((item, index) => {
+    items.forEach((item) => {
       if (!item.name.trim()) {
         newErrors[`${item.id}-name`] = 'Item name is required';
       }
@@ -116,7 +116,7 @@ export const CategoryEditor: React.FC = () => {
       // Update items (remove old ones and add new ones)
       // For simplicity on Day 1, we'll just add new items
       // A full implementation would handle updates/deletes properly
-      const newItems = items
+      items
         .filter(item => !item.id.startsWith('temp-'))
         .map(item => ({
           ...item,
@@ -205,7 +205,7 @@ export const CategoryEditor: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          {items.map((item, index) => (
+          {items.map((item) => (
             <div key={item.id} className="border border-gray-200 rounded-lg p-4 relative">
               {/* Delete Button */}
               {items.length > 1 && (

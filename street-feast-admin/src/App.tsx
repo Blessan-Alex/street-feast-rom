@@ -9,22 +9,47 @@ import { MenuUpload } from './pages/MenuUpload';
 import { CategoryEditor } from './pages/CategoryEditor';
 import { MenuSummary } from './pages/MenuSummary';
 import { Settings } from './pages/Settings';
+import { Dashboard } from './pages/Dashboard';
+import { CreateOrder } from './pages/CreateOrder';
+import { ManageOrders } from './pages/ManageOrders';
 import { useMenuStore } from './store/menuStore';
+import { useOrdersStore } from './store/ordersStore';
 import { loadFromStorage, saveToStorage } from './utils/storage';
+import { loadOrdersFromStorage, saveOrdersToStorage } from './utils/ordersStorage';
 
 function App() {
-  // Load data from localStorage on mount
+  // Load menu data from localStorage on mount
   useEffect(() => {
     const data = loadFromStorage();
     useMenuStore.setState(data);
   }, []);
 
-  // Persist store changes to localStorage
+  // Load orders data from localStorage on mount
+  useEffect(() => {
+    const data = loadOrdersFromStorage();
+    useOrdersStore.setState(data);
+  }, []);
+
+  // Persist menu store changes to localStorage
   useEffect(() => {
     let isActive = true;
     const unsubscribe = useMenuStore.subscribe((state) => {
       if (isActive) {
         saveToStorage(state.categories, state.items, state.frequentItemIds);
+      }
+    });
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Persist orders store changes to localStorage
+  useEffect(() => {
+    let isActive = true;
+    const unsubscribe = useOrdersStore.subscribe((state) => {
+      if (isActive) {
+        saveOrdersToStorage(state.orders, state.draft);
       }
     });
     return () => {
@@ -43,7 +68,10 @@ function App() {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/menu" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="create-order" element={<CreateOrder />} />
+          <Route path="manage-orders" element={<ManageOrders />} />
           <Route path="menu" element={<MenuChooser />} />
           <Route path="menu/upload" element={<MenuUpload />} />
           <Route path="menu/create" element={<CategoryEditor />} />

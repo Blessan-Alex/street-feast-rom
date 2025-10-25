@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { create } from 'zustand';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';

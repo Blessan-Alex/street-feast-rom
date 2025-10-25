@@ -73,16 +73,16 @@ export const validateCSV = (data: any[]): ValidationResult => {
     // Validate and parse sizes
     let sizes: string[] = [];
     if (sizesRaw) {
-      const sizeParts = sizesRaw.split(',').map(s => s.trim()).filter(s => s);
+      const sizeParts = sizesRaw.split(',').map((s: string) => s.trim()).filter((s: string) => s);
       const invalidSizes = sizeParts.filter(
-        size => !VALID_SIZES.some(valid => valid.toLowerCase() === size.toLowerCase())
+        (size: string) => !VALID_SIZES.some(valid => valid.toLowerCase() === size.toLowerCase())
       );
       
       if (invalidSizes.length > 0 && !rowError) {
         rowError = `Row ${rowNum}: Invalid sizes "${invalidSizes.join(', ')}". Must be Small, Large, or blank`;
       } else {
         // Normalize to proper case
-        sizes = sizeParts.map(size => {
+        sizes = sizeParts.map((size: string) => {
           const validSize = VALID_SIZES.find(v => v.toLowerCase() === size.toLowerCase());
           return validSize || size;
         });

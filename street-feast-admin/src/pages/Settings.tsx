@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { Dialog } from '../components/Dialog';
 import { useMenuStore } from '../store/menuStore';
+import { useOrdersStore, clearOrderCounter } from '../store/ordersStore';
+import { clearStorage } from '../utils/storage';
+import { clearOrdersStorage } from '../utils/ordersStorage';
+import { logout } from '../utils/auth';
 import { toast } from '../components/Toast';
 
 export const Settings: React.FC = () => {
@@ -208,22 +214,126 @@ export const Settings: React.FC = () => {
         </div>
       )}
 
-      {/* Other Settings Placeholder */}
-      <div className="bg-white rounded-lg shadow p-6 mt-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Data Controls</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Additional settings will be available here soon.
-        </p>
-        <div className="space-y-2">
-          <Button variant="secondary" disabled>
-            Download Template
-          </Button>
-          <Button variant="danger" disabled>
-            Delete All Data
-          </Button>
-        </div>
-      </div>
+      {/* Danger Zone */}
+      <DangerZone />
     </div>
+  );
+};
+
+// Danger Zone Component
+const DangerZone: React.FC = () => {
+  const navigate = useNavigate();
+  const resetMenu = useMenuStore(state => state.reset);
+  const resetOrders = useOrdersStore(state => state.reset);
+  const [showFirstDialog, setShowFirstDialog] = useState(false);
+  const [showSecondDialog, setShowSecondDialog] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
+  const handleDeleteAll = () => {
+    // Clear all stores
+    resetMenu();
+    resetOrders();
+    
+    // Clear localStorage
+    clearStorage();
+    clearOrdersStorage();
+    clearOrderCounter();
+    
+    // Logout
+    logout();
+    
+    toast.success('All data has been deleted');
+    navigate('/login');
+  };
+
+  const handleFirstConfirm = () => {
+    setShowFirstDialog(false);
+    setShowSecondDialog(true);
+  };
+
+  const handleSecondConfirm = () => {
+    if (confirmText === 'DELETE') {
+      handleDeleteAll();
+    }
+  };
+
+  return (
+    <>
+      <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 mt-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-red-900 mb-2">DANGER ZONE</h2>
+          <p className="text-sm text-red-800">
+            Deleting all data will permanently remove your menu, orders, frequent items, and settings.
+            This action cannot be undone and you will be logged out.
+          </p>
+        </div>
+        <Button
+          variant="danger"
+          onClick={() => setShowFirstDialog(true)}
+        >
+          Delete All Data
+        </Button>
+      </div>
+
+      {/* First Confirmation Dialog */}
+      <Dialog
+        isOpen={showFirstDialog}
+        onClose={() => setShowFirstDialog(false)}
+        title="Delete All Data?"
+        message="This will delete ALL data including menu, orders, and frequent items. Are you sure you want to continue?"
+        confirmText="Yes, Continue"
+        cancelText="Cancel"
+        onConfirm={handleFirstConfirm}
+        confirmVariant="danger"
+      />
+
+      {/* Second Confirmation Dialog with Text Input */}
+      {showSecondDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => {
+            setShowSecondDialog(false);
+            setConfirmText('');
+          }} />
+          
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-fade-in">
+            <h2 className="text-2xl font-bold text-red-900 mb-2">Final Confirmation</h2>
+            <p className="text-gray-700 mb-4">
+              Type <strong>DELETE</strong> to confirm permanent deletion of all data.
+            </p>
+            
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Type DELETE here"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-red-500 mb-4"
+              autoFocus
+            />
+            
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowSecondDialog(false);
+                  setConfirmText('');
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleSecondConfirm}
+                disabled={confirmText !== 'DELETE'}
+                className="flex-1"
+              >
+                Confirm Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
