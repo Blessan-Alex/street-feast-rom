@@ -36,6 +36,24 @@ export const MenuUpload: React.FC = () => {
     });
   };
 
+  const downloadTemplate = () => {
+    const template = `Item Name,Category,Available Sizes,Veg/NonVeg
+Chicken Soup,Chinese,"Small, Large",NonVeg
+Caesar Salad,American,,Veg
+Paneer Tikka,Indian,Small,Veg
+Chocolate Cake,Desserts,,Veg
+Butter Chicken,Indian,"Small, Large",NonVeg`;
+
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'menu-template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Template downloaded successfully');
+  };
+
   const handleApply = () => {
     if (!validation || !validation.valid) {
       toast.error('Please fix validation errors before applying');
@@ -104,12 +122,22 @@ export const MenuUpload: React.FC = () => {
 
       {/* Template Info */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <h3 className="font-semibold text-blue-900 mb-2">CSV Template Requirements:</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• <strong>Required headers:</strong> Item Name, Category, Available Sizes, Veg/NonVeg</li>
-          <li>• <strong>Available Sizes:</strong> Small, Large (comma-separated) or leave blank for no sizes</li>
-          <li>• <strong>Veg/NonVeg:</strong> Must be either "Veg" or "NonVeg"</li>
-        </ul>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 mb-2">CSV Template Requirements:</h3>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• <strong>Required headers:</strong> Item Name, Category, Available Sizes, Veg/NonVeg</li>
+              <li>• <strong>Available Sizes:</strong> Small, Large (comma-separated) or leave blank for no sizes</li>
+              <li>• <strong>Veg/NonVeg:</strong> Must be either "Veg" or "NonVeg"</li>
+            </ul>
+          </div>
+          <button
+            onClick={downloadTemplate}
+            className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            Download Template
+          </button>
+        </div>
       </div>
 
       {/* File Input */}

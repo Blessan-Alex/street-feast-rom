@@ -44,9 +44,9 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
 
   const icons = {
     success: '✓',
-    error: '✕',
-    warning: '⚠',
-    info: 'ℹ'
+    error: '×',
+    warning: '!',
+    info: 'i'
   };
 
   return (

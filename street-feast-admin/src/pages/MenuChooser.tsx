@@ -1,12 +1,22 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenuStore } from '../store/menuStore';
+import { seedMenu } from '../utils/seedData';
+import { toast } from '../components/Toast';
 
 export const MenuChooser: React.FC = () => {
   const navigate = useNavigate();
-  const { categories } = useMenuStore();
+  const { categories, addCategory, addItems } = useMenuStore();
 
   const hasMenu = categories.length > 0;
+
+  const handleSeedMenu = () => {
+    const { categories, items } = seedMenu();
+    categories.forEach(cat => addCategory(cat));
+    addItems(items);
+    toast.success('Demo menu loaded! 3 categories with 6 items.');
+    navigate('/menu/summary');
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -20,7 +30,7 @@ export const MenuChooser: React.FC = () => {
       {!hasMenu && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-blue-800">
-            💡 <strong>Tip:</strong> You can upload a CSV file for quick setup, or create your menu manually using the interface.
+            <strong>Tip:</strong> You can upload a CSV file for quick setup, or create your menu manually using the interface.
           </p>
         </div>
       )}
@@ -31,7 +41,7 @@ export const MenuChooser: React.FC = () => {
           onClick={() => navigate('/menu/upload')}
           className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-action-primary p-8 text-center"
         >
-          <div className="text-5xl mb-4">📄</div>
+          <div className="text-5xl mb-4 text-gray-400">CSV</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Upload from CSV</h2>
           <p className="text-gray-600 mb-4">
             Have a CSV file? Upload it and we'll validate and import your menu items automatically.
@@ -46,7 +56,7 @@ export const MenuChooser: React.FC = () => {
           onClick={() => navigate('/menu/create')}
           className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-action-primary p-8 text-center"
         >
-          <div className="text-5xl mb-4">✏️</div>
+          <div className="text-5xl mb-4 text-gray-400">+</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Create Manually</h2>
           <p className="text-gray-600 mb-4">
             Prefer to create your menu step by step? Use our interface to add categories and items.
@@ -56,6 +66,17 @@ export const MenuChooser: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {!hasMenu && (
+        <div className="text-center mt-6">
+          <button
+            onClick={handleSeedMenu}
+            className="text-sm text-gray-600 hover:text-gray-900 underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded px-2 py-1"
+          >
+            Or load a demo menu to test quickly
+          </button>
+        </div>
+      )}
 
       {hasMenu && (
         <div className="bg-white rounded-lg shadow-md p-6 text-center">

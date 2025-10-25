@@ -40,7 +40,7 @@ export const MenuSummary: React.FC = () => {
   if (categories.length === 0) {
     return (
       <div className="max-w-2xl mx-auto text-center py-12">
-        <div className="text-6xl mb-4">📋</div>
+        <div className="text-6xl mb-4 text-gray-300">MENU</div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">No categories yet</h2>
         <p className="text-gray-600 mb-6">
           Create your first category to get started with your menu.
@@ -160,7 +160,7 @@ export const MenuSummary: React.FC = () => {
                         <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                           item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
-                          {item.vegFlag === 'Veg' ? '🟢' : '🔴'} {item.vegFlag}
+                          {item.vegFlag}
                         </span>
                       </div>
                     </div>

@@ -21,10 +21,16 @@ function App() {
 
   // Persist store changes to localStorage
   useEffect(() => {
+    let isActive = true;
     const unsubscribe = useMenuStore.subscribe((state) => {
-      saveToStorage(state.categories, state.items, state.frequentItemIds);
+      if (isActive) {
+        saveToStorage(state.categories, state.items, state.frequentItemIds);
+      }
     });
-    return unsubscribe;
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, []);
 
   return (
