@@ -1,0 +1,116 @@
+🍽 Restaurant Order Management System (ROMS) – Product Requirements Document (PRD)
+
+1. Overview
+1.1 Product Name
+ROMS (Restaurant Order Management System)
+1.2 Description
+ROMS is a multi-device web-based platform designed to streamline restaurant operations by connecting three key roles — Admin, Chef, and Waiter — through a centralized, minimal, and responsive interface. The system simplifies menu management, order creation, preparation tracking, and delivery coordination.
+The goal is to reduce manual communication, minimize errors, and ensure smooth tracking of every order from creation to delivery.
+1.3 Devices Supported
+• Primary: Laptops, Desktops (Web App)
+• Secondary: Mobile Phones (Responsive Web App / PWA)
+• Optional Future Extension: Tablets (for waiter or chef usage)
+⸻
+2. Goals and Objectives
+Objective Description
+Efficiency Streamline the process of creating, managing, and tracking orders across multiple roles.
+Transparency Allow real-time visibility of order statuses for all roles.
+Flexibility Enable dynamic menu creation through Excel import or manual input.
+Usability Ensure a clean, minimal, and intuitive UI/UX across devices.
+Scalability Design system architecture to support multiple concurrent tables, orders, and users.
+
+3. User Roles and Panels
+Role Device Access Main Responsibilities Core Panel Name
+Admin Laptop, Phone Manage menus, create and monitor orders, close or extend orders. Admin Panel
+Chef Tablet, Laptop, Phone Accept, prepare, and update order status. Chef Panel
+Waiter Phone, Tablet Deliver orders, update delivery status. Waiter Panel
+
+4. Functional Requirements by Panel
+🧑‍💼 Admin Panel
+4.1 Core Responsibilities
+• Menu management
+• Order creation and modification
+• Monitoring and managing order statuses
+• Closing or extending orders
+4.2 Features
+Feature Description Functional Requirements
+Menu Management Admin can upload a menu via Excel or manually create/edit items. - Upload Excel (CSV/XLSX) containing item name, category, price, and availability.   - Interface-based menu creation/editing with “+ Add Item” and “Save” buttons.  - Menu always editable.  - Validation for duplicate or missing fields.
+Create Order Initiate a new order by selecting mode and table. - Modes: Dine-in, Parcel, Delivery.  - For Dine-in: Select or create table number.  - For Delivery: Enter customer details (name, address, phone).
+Add Menu Items to Order Add items from the available menu. - Menu item list displayed with name, price, and “+/-” buttons for quantity.  - Real-time total calculation.  - Option to delete items or update quantities.
+Manage Orders (Status Tracking) Track and manage all active and past orders. - Display order summary cards with: Order ID, Table No., Mode, Items, Total, Status.  - Status indicators (see color codes below).  - Admin can view full order history.
+Order Lifecycle Management Control order progression and closure. - Admin sees status flow: Created → Accepted → Prepared → Delivered → Closed.  - After “Delivered”, Admin chooses: 1️⃣ Close Order (table freed). 2️⃣ Add More Items (order reopens in “Accepted” status).
+4.3 Status Color Codes
+Status Color Visibility
+Created Grey Visible to all
+Accepted (by Chef) Blue Chef & Admin
+Prepared Yellow Waiter & Admin
+Delivered Green Admin
+Closed Dark Grey Admin only
+👨‍🍳 Chef Panel
+4.4 Core Responsibilities
+• Accept incoming orders.
+• Update order status to “Prepared” when ready.
+4.5 Features
+Feature Description Functional Requirements
+View Incoming Orders Display list of newly created orders from Admin. - Show order number, items, and table number.  - Option to “Accept Order.”
+Accept Order Notify Admin that preparation has started. - Status changes to “Accepted.”  - Timestamp recorded.
+Mark as Prepared Update order status to indicate readiness. - Button “Mark as Prepared.”  - Status updates to “Prepared.”  - Notification sent to Waiter panel.
+🧍‍♂ Waiter Panel
+4.6 Core Responsibilities
+• View orders ready for delivery.
+• Deliver orders and update their status.
+4.7 Features
+Feature Description Functional Requirements
+View Prepared Orders Displays all “Prepared” orders. - Order list with table number, items, and customer info (if delivery).
+Deliver Order Notify system that the order was delivered. - Button “Delivered.”  - Status updates to “Delivered.”  - Notification sent to Admin panel.
+5. Data Flow Overview
+Order Lifecycle
+1. Admin → Creates order → Status: Created
+2. Chef → Accepts order → Status: Accepted
+3. Chef → Marks as prepared → Status: Prepared
+4. Waiter → Marks as delivered → Status: Delivered
+5. Admin → Closes order → Status: Closed OR adds new items (returns to Accepted)
+6. UI / UX Design Guidelines
+6.1 General Design
+• Clean, minimal, and modern design.
+• White background with soft accent colors (use status colors as highlights).
+• Top bar: Logo (top-left), User Role indicator (top-right).
+• Responsive layout: Scalable for mobile and desktop views.
+6.2 Component Guidelines
+Component Description
+Buttons Rounded edges, hover feedback, role-specific color.
+Tables/Lists Simple, sortable, and searchable.
+Status Tags Colored chips (consistent with status codes).
+Notifications Toast messages for order status changes.
+Logo Simple restaurant logo displayed on all panels.
+7. Technical Requirements
+Requirement Description
+Frontend React / Vue / Angular (Responsive)
+Backend Node.js / Django / Laravel (REST API-based)
+Database MySQL / PostgreSQL
+File Upload Excel import (CSV/XLSX parser)
+Authentication Role-based login (Admin, Chef, Waiter)
+Real-time Updates WebSockets / Firebase Realtime Database
+Notifications Browser-based pop-ups or toast alerts
+Deployment Web app (PWA capable) hosted on cloud (AWS/Azure/Render)
+8. Non-Functional Requirements
+Category Requirement
+Performance Load each panel within 3 seconds; support 50 concurrent users.
+Security Role-based access control; password encryption.
+Scalability Support for multiple restaurants in future.
+Reliability System uptime > 99%.
+Usability Clean UX, minimal clicks to perform any action.
+Localization Future support for multiple languages.
+9. Future Enhancements
+• Table QR Code integration (auto-load table orders).
+• Customer mobile view for order tracking.
+• Integration with payment gateways.
+• Analytics dashboard for Admin (sales, performance, etc.).
+• Offline mode for waiters (PWA support).
+10. Acceptance Criteria
+Scenario Expected Outcome
+Admin uploads Excel menu Menu items appear with correct fields and no errors.
+Chef accepts an order Order status updates to “Accepted” and reflects in all panels.
+Waiter delivers an order Order status updates to “Delivered.”
+Admin closes an order Table marked as free, order archived.
+Admin adds more items Order reopens as “Accepted.”

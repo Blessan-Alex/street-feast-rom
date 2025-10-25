@@ -1,0 +1,32 @@
+# PRD for order [management](https://www.notion.so/PRD-for-order-management-system-295387dcbdab8039b76ad5c9f5a341dd?pvs=21) system
+
+- Devices supported phone and laptop ( if possible with more devices).
+- Panels: admin, chef and waiter
+- Interface should be clean and minimal, with logo.
+
+Panel Brief
+
+| Name | Work | Functionality |
+| --- | --- | --- |
+| Admin | Manage and create orders  | 1. Load data from excel for menu or custom design/create menu in the interface itself.
+the option to add menu should be available always.
+
+2. Create order: mode of eating table, dine in, parcel, or delivery
+
+3. Add menu items
+items will be available through the excel menu or interface menu he created. Once he adds the item there should be the option of quantity’s increase and decrease (plus/minus).
+
+4. Manage Orders: once order created it should be displayed order accepted.
+All status of the orders should be displayed to admin.
+
+5. After the order is delivered then the admin should have 2 options 
+1. to close the order and no more orders will be made to this table and new table will be created.
+2. to add more items to the order.
+
+**** |
+| Chef | Accepts orders and prepares them. | 1. Accept the orders to show the admin that the  order has been proceeded.
+
+2. Once the order is prepared, the chef will change the status to prepared. |
+| Waiter. | Delivers the order  | Changes the status to delivered.  |
+
+When the status is changed different colour should highlight it.
