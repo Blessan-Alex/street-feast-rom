@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/chefNewOrdersFragment">
+
+    <fragment
+        android:id="@+id/chefNewOrdersFragment"
+        android:name="com.streatfeast.app.fragments.ChefNewOrdersFragment"
+        android:label="@string/nav_new_orders" />
+
+    <fragment
+        android:id="@+id/chefPreparingFragment"
+        android:name="com.streatfeast.app.fragments.ChefPreparingFragment"
+        android:label="@string/nav_preparing" />
+
+    <fragment
+        android:id="@+id/waiterReadyFragment"
+        android:name="com.streatfeast.app.fragments.WaiterReadyFragment"
+        android:label="@string/nav_ready" />
+</navigation>
+
+

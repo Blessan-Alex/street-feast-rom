@@ -1,0 +1,70 @@
+<resources>
+    <string name="app_name">Street Feast</string>
+    
+    <!-- Login -->
+    <string name="login_title">Welcome Back</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Login</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="logging_in">Logging in…</string>
+    
+    <!-- Navigation -->
+    <string name="nav_new_orders">New Orders</string>
+    <string name="nav_preparing">Preparing</string>
+    <string name="nav_ready">Ready</string>
+    
+    <!-- Actions -->
+    <string name="action_accept">Accept</string>
+    <string name="action_mark_prepared">Mark Prepared</string>
+    <string name="action_mark_delivered">Mark Delivered</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_logout">Logout</string>
+    
+    <!-- Empty States -->
+    <string name="empty_new_orders">No new orders yet</string>
+    <string name="empty_preparing">No orders in kitchen</string>
+    <string name="empty_ready">No orders ready to serve</string>
+    
+    <!-- Order Details -->
+    <string name="order_number">Order #%1$d</string>
+    <string name="chef_tip">Chef Tip: %1$s</string>
+    <string name="chef_tip_label">Chef Tip</string>
+    <string name="order_type_dinein">Dine-in</string>
+    <string name="order_type_parcel">Parcel</string>
+    <string name="order_type_delivery">Delivery</string>
+    <string name="items_count">%1$d items</string>
+    <string name="time_ago_min">%1$d min ago</string>
+    <string name="time_ago_now">Just now</string>
+    
+    <!-- Status -->
+    <string name="status_created">Created</string>
+    <string name="status_accepted">Accepted</string>
+    <string name="status_inkitchen">In Kitchen</string>
+    <string name="status_prepared">Prepared</string>
+    <string name="status_delivered">Delivered</string>
+    <string name="status_closed">Closed</string>
+    <string name="status_canceled">Canceled</string>
+    
+    <!-- Notifications -->
+    <string name="notif_channel_orders">Order Updates</string>
+    <string name="notif_new_order_title">New Order</string>
+    <string name="notif_new_order_body">Order #%1$d is ready to accept</string>
+    <string name="notif_prepared_title">Order Ready</string>
+    <string name="notif_prepared_body">Order #%1$d is ready to serve</string>
+    
+    <!-- Errors -->
+    <string name="error_login_failed">Login failed. Please try again.</string>
+    <string name="error_network">Network error. Check your connection.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="error_accept_order">Failed to accept order</string>
+    <string name="error_mark_prepared">Failed to mark order as prepared</string>
+    <string name="error_mark_delivered">Failed to mark order as delivered</string>
+
+    <string name="gcm_defaultSenderId" translatable="false">539846043685</string>
+    <string name="google_api_key" translatable="false">AIzaSyBF0wlB7mQNWoYFpv_D79v0pliBFLcLqb0</string>
+    <string name="google_app_id" translatable="false">1:539846043685:android:82e6f2a60b4f0c0353f7cc</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyBF0wlB7mQNWoYFpv_D79v0pliBFLcLqb0</string>
+    <string name="google_storage_bucket" translatable="false">street-feast-22c58.firebasestorage.app</string>
+    <string name="project_id" translatable="false">street-feast-22c58</string>
+</resources>

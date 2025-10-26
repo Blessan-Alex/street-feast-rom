@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="@dimen/spacing_sm"
+    android:gravity="center_vertical">
+
+    <!-- Veg/Non-Veg Icon -->
+    <ImageView
+        android:id="@+id/ivVegIcon"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:src="@drawable/ic_veg"
+        android:contentDescription="Veg indicator" />
+
+    <!-- Item Name with Size -->
+    <TextView
+        android:id="@+id/tvItemName"
+        style="@style/Text.Body"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="@dimen/spacing_sm"
+        tools:text="Chicken Burger - Large" />
+
+    <!-- Quantity -->
+    <TextView
+        android:id="@+id/tvQuantity"
+        style="@style/Text.Body"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        tools:text="× 2" />
+
+</LinearLayout>
+
+

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Status Colors (matching desktop) -->
+    <color name="status_created">#3B82F6</color>
+    <color name="status_accepted">#F97316</color>
+    <color name="status_inkitchen">#EAB308</color>
+    <color name="status_prepared">#22C55E</color>
+    <color name="status_delivered">#A855F7</color>
+    <color name="status_closed">#6B7280</color>
+    <color name="status_canceled">#EF4444</color>
+    
+    <!-- Action Colors -->
+    <color name="action_primary">#22C55E</color>
+    <color name="action_danger">#EF4444</color>
+    <color name="action_secondary">#6B7280</color>
+    
+    <!-- Base Colors -->
+    <color name="background">#F9FAFB</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="text_primary">#1F2937</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="divider">#E5E7EB</color>
+    
+    <!-- Veg/Non-Veg -->
+    <color name="veg">#10B981</color>
+    <color name="non_veg">#DC2626</color>
+    
+    <!-- Legacy colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

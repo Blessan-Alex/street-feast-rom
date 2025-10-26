@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="@dimen/spacing_md"
+    android:layout_marginVertical="@dimen/spacing_sm"
+    app:cardCornerRadius="@dimen/card_radius"
+    app:cardElevation="@dimen/card_elevation">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="@dimen/card_padding">
+
+        <!-- Order Number -->
+        <TextView
+            android:id="@+id/tvOrderNumber"
+            style="@style/Text.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Order #123"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Order Type Chip -->
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipOrderType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_md"
+            android:textColor="@color/white"
+            tools:text="Dine-in"
+            app:chipBackgroundColor="@color/status_created"
+            app:layout_constraintStart_toEndOf="@id/tvOrderNumber"
+            app:layout_constraintTop_toTopOf="@id/tvOrderNumber"
+            app:layout_constraintBottom_toBottomOf="@id/tvOrderNumber" />
+
+        <!-- Time -->
+        <TextView
+            android:id="@+id/tvTime"
+            style="@style/Text.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="2 min ago"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Items Summary -->
+        <TextView
+            android:id="@+id/tvItemsSummary"
+            style="@style/Text.Body"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            tools:text="2× Chicken Burger\n1× Caesar Salad"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tvOrderNumber" />
+
+        <!-- Accept Button -->
+        <Button
+            android:id="@+id/btnAccept"
+            style="@style/Button.Primary"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/min_touch_target"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="@string/action_accept"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tvItemsSummary" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
+
+

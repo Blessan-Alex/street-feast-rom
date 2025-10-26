@@ -1,0 +1,803 @@
+I'll create a comprehensive Android app plan for Street Feast based on the product specifications. Let me analyze the requirements and provide you with a complete setup guide.
+
+[2 tools called]
+
+# Street Feast Android App - Complete Setup Guide
+
+Based on your product specifications, here's a comprehensive plan for building a simple Kotlin + XML Android app that matches the desktop app's UI/UX.
+
+---
+
+## 1. Project Setup
+
+### Create New Android Studio Project
+1. **File → New → New Project**
+2. **Select:** Empty Views Activity
+3. **Project Details:**
+   - Name: `Street Feast`
+   - Package: `com.streetfeast.app`
+   - Language: `Kotlin`
+   - Minimum SDK: `API 26 (Android 8.0)`
+   - Build configuration: `Kotlin DSL (build.gradle.kts)`
+
+---
+
+## 2. Complete File Structure
+
+```
+street-feast-android/
+├── app/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/streetfeast/app/
+│   │   │   │   ├── activities/
+│   │   │   │   │   ├── MainActivity.kt
+│   │   │   │   │   ├── LoginActivity.kt
+│   │   │   │   │   └── SplashActivity.kt
+│   │   │   │   │
+│   │   │   │   ├── fragments/
+│   │   │   │   │   ├── ChefNewOrdersFragment.kt
+│   │   │   │   │   ├── ChefPreparingFragment.kt
+│   │   │   │   │   └── WaiterReadyFragment.kt
+│   │   │   │   │
+│   │   │   │   ├── adapters/
+│   │   │   │   │   ├── NewOrdersAdapter.kt
+│   │   │   │   │   ├── PreparingOrdersAdapter.kt
+│   │   │   │   │   └── ReadyOrdersAdapter.kt
+│   │   │   │   │
+│   │   │   │   ├── models/
+│   │   │   │   │   ├── Order.kt
+│   │   │   │   │   ├── OrderItem.kt
+│   │   │   │   │   └── User.kt
+│   │   │   │   │
+│   │   │   │   ├── viewmodels/
+│   │   │   │   │   ├── OrdersViewModel.kt
+│   │   │   │   │   └── AuthViewModel.kt
+│   │   │   │   │
+│   │   │   │   ├── repositories/
+│   │   │   │   │   ├── OrderRepository.kt
+│   │   │   │   │   └── AuthRepository.kt
+│   │   │   │   │
+│   │   │   │   ├── utils/
+│   │   │   │   │   ├── Constants.kt
+│   │   │   │   │   ├── DateTimeUtils.kt
+│   │   │   │   │   ├── NotificationHelper.kt
+│   │   │   │   │   └── SoundManager.kt
+│   │   │   │   │
+│   │   │   │   └── StreetFeastApplication.kt
+│   │   │   │
+│   │   │   ├── res/
+│   │   │   │   ├── layout/
+│   │   │   │   │   ├── activity_main.xml
+│   │   │   │   │   ├── activity_login.xml
+│   │   │   │   │   ├── activity_splash.xml
+│   │   │   │   │   ├── fragment_chef_new_orders.xml
+│   │   │   │   │   ├── fragment_chef_preparing.xml
+│   │   │   │   │   ├── fragment_waiter_ready.xml
+│   │   │   │   │   ├── item_new_order.xml
+│   │   │   │   │   ├── item_preparing_order.xml
+│   │   │   │   │   ├── item_ready_order.xml
+│   │   │   │   │   └── dialog_order_details.xml
+│   │   │   │   │
+│   │   │   │   ├── values/
+│   │   │   │   │   ├── colors.xml
+│   │   │   │   │   ├── strings.xml
+│   │   │   │   │   ├── themes.xml
+│   │   │   │   │   └── dimens.xml
+│   │   │   │   │
+│   │   │   │   ├── drawable/
+│   │   │   │   │   ├── bg_button_green.xml
+│   │   │   │   │   ├── bg_button_red.xml
+│   │   │   │   │   ├── bg_card.xml
+│   │   │   │   │   ├── bg_chip_blue.xml
+│   │   │   │   │   ├── bg_chip_orange.xml
+│   │   │   │   │   ├── bg_chip_yellow.xml
+│   │   │   │   │   ├── bg_chip_green.xml
+│   │   │   │   │   ├── bg_chip_purple.xml
+│   │   │   │   │   ├── bg_chip_gray.xml
+│   │   │   │   │   ├── bg_chip_red.xml
+│   │   │   │   │   └── ic_veg.xml
+│   │   │   │   │   └── ic_nonveg.xml
+│   │   │   │   │
+│   │   │   │   ├── raw/
+│   │   │   │   │   ├── ping.mp3
+│   │   │   │   │   ├── click.mp3
+│   │   │   │   │   └── buzzer.mp3
+│   │   │   │   │
+│   │   │   │   ├── menu/
+│   │   │   │   │   └── bottom_nav_menu.xml
+│   │   │   │   │
+│   │   │   │   └── navigation/
+│   │   │   │       └── nav_graph.xml
+│   │   │   │
+│   │   │   ├── AndroidManifest.xml
+│   │   │   └── google-services.json (from Firebase Console)
+│   │   │
+│   │   └── test/ (unit tests)
+│   │
+│   ├── build.gradle.kts
+│   └── proguard-rules.pro
+│
+├── gradle/
+├── build.gradle.kts (project level)
+├── settings.gradle.kts
+└── gradle.properties
+```
+
+---
+
+## 3. Dependencies (app/build.gradle.kts)
+
+```kotlin
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
+    id("kotlin-parcelize")
+}
+
+android {
+    namespace = "com.streetfeast.app"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.streetfeast.app"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+    
+    buildFeatures {
+        viewBinding = true
+    }
+}
+
+dependencies {
+    // AndroidX Core
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    
+    // Lifecycle & ViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    
+    // Fragment & Navigation
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+    implementation("androidx.navigation:navigation-fragment-ktx:2.7.6")
+    implementation("androidx.navigation:navigation-ui-ktx:2.7.6")
+    
+    // Firebase BOM
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    
+    // RecyclerView
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    
+    // SwipeRefreshLayout
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    
+    // Testing
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+}
+```
+
+---
+
+## 4. Key Resource Files
+
+### **colors.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Status Colors (matching desktop) -->
+    <color name="status_created">#3B82F6</color>      <!-- Blue -->
+    <color name="status_accepted">#F97316</color>     <!-- Orange -->
+    <color name="status_inkitchen">#EAB308</color>    <!-- Yellow -->
+    <color name="status_prepared">#22C55E</color>     <!-- Green -->
+    <color name="status_delivered">#A855F7</color>    <!-- Purple -->
+    <color name="status_closed">#6B7280</color>       <!-- Gray -->
+    <color name="status_canceled">#EF4444</color>     <!-- Red -->
+    
+    <!-- Action Colors -->
+    <color name="action_primary">#22C55E</color>      <!-- Green -->
+    <color name="action_danger">#EF4444</color>       <!-- Red -->
+    <color name="action_secondary">#6B7280</color>    <!-- Gray -->
+    
+    <!-- Base Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="background">#F9FAFB</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="text_primary">#1F2937</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="divider">#E5E7EB</color>
+    
+    <!-- Veg/Non-Veg -->
+    <color name="veg">#10B981</color>
+    <color name="non_veg">#DC2626</color>
+</resources>
+```
+
+### **dimens.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Touch Targets -->
+    <dimen name="min_touch_target">44dp</dimen>
+    
+    <!-- Spacing -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">16dp</dimen>
+    <dimen name="spacing_lg">24dp</dimen>
+    <dimen name="spacing_xl">32dp</dimen>
+    
+    <!-- Text Sizes -->
+    <dimen name="text_xs">12sp</dimen>
+    <dimen name="text_sm">14sp</dimen>
+    <dimen name="text_md">16sp</dimen>
+    <dimen name="text_lg">18sp</dimen>
+    <dimen name="text_xl">24sp</dimen>
+    <dimen name="text_xxl">32sp</dimen>
+    
+    <!-- Radius -->
+    <dimen name="radius_sm">4dp</dimen>
+    <dimen name="radius_md">8dp</dimen>
+    <dimen name="radius_lg">12dp</dimen>
+    
+    <!-- Card -->
+    <dimen name="card_elevation">2dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+</resources>
+```
+
+### **strings.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Street Feast</string>
+    
+    <!-- Login -->
+    <string name="login_title">Welcome Back</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Login</string>
+    <string name="forgot_password">Forgot Password?</string>
+    
+    <!-- Navigation -->
+    <string name="nav_new_orders">New Orders</string>
+    <string name="nav_preparing">Preparing</string>
+    <string name="nav_ready">Ready</string>
+    
+    <!-- Actions -->
+    <string name="action_accept">Accept</string>
+    <string name="action_mark_prepared">Mark Prepared</string>
+    <string name="action_mark_delivered">Mark Delivered</string>
+    <string name="action_cancel">Cancel</string>
+    
+    <!-- Empty States -->
+    <string name="empty_new_orders">No new orders yet</string>
+    <string name="empty_preparing">No orders in kitchen</string>
+    <string name="empty_ready">No orders ready to serve</string>
+    
+    <!-- Order Details -->
+    <string name="order_number">Order #%1$d</string>
+    <string name="chef_tip">Chef Tip: %1$s</string>
+    <string name="order_type_dinein">Dine-in</string>
+    <string name="order_type_parcel">Parcel</string>
+    <string name="order_type_delivery">Delivery</string>
+    
+    <!-- Status -->
+    <string name="status_created">Created</string>
+    <string name="status_accepted">Accepted</string>
+    <string name="status_inkitchen">In Kitchen</string>
+    <string name="status_prepared">Prepared</string>
+    <string name="status_delivered">Delivered</string>
+    <string name="status_closed">Closed</string>
+    <string name="status_canceled">Canceled</string>
+    
+    <!-- Notifications -->
+    <string name="notif_channel_orders">Order Updates</string>
+    <string name="notif_new_order_title">New Order</string>
+    <string name="notif_new_order_body">Order #%1$d is ready to accept</string>
+    <string name="notif_prepared_title">Order Ready</string>
+    <string name="notif_prepared_body">Order #%1$d is ready to serve</string>
+</resources>
+```
+
+### **themes.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Base.Theme.StreetFeast" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/action_primary</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:statusBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:fontFamily">@font/roboto</item>
+        <item name="fontFamily">@font/roboto</item>
+    </style>
+
+    <style name="Theme.StreetFeast" parent="Base.Theme.StreetFeast" />
+    
+    <!-- Button Styles -->
+    <style name="Button.Primary">
+        <item name="android:layout_height">@dimen/min_touch_target</item>
+        <item name="android:background">@drawable/bg_button_green</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">@dimen/text_md</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingHorizontal">@dimen/spacing_lg</item>
+    </style>
+    
+    <style name="Button.Danger">
+        <item name="android:layout_height">@dimen/min_touch_target</item>
+        <item name="android:background">@drawable/bg_button_red</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">@dimen/text_md</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingHorizontal">@dimen/spacing_lg</item>
+    </style>
+    
+    <!-- Text Styles -->
+    <style name="Text.Title">
+        <item name="android:textSize">@dimen/text_xl</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    
+    <style name="Text.Body">
+        <item name="android:textSize">@dimen/text_md</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+    
+    <style name="Text.Caption">
+        <item name="android:textSize">@dimen/text_sm</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+    
+    <!-- Card Style -->
+    <style name="Card">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">@dimen/card_padding</item>
+        <item name="android:layout_marginHorizontal">@dimen/spacing_md</item>
+        <item name="android:layout_marginVertical">@dimen/spacing_sm</item>
+        <item name="android:elevation">@dimen/card_elevation</item>
+    </style>
+</resources>
+```
+
+---
+
+## 5. Core Models
+
+### **Order.kt**
+```kotlin
+package com.streetfeast.app.models
+
+import android.os.Parcelable
+import com.google.firebase.Timestamp
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
+data class Order(
+    val id: String = "",
+    val orderNumber: Int = 0,
+    val type: OrderType = OrderType.DINE_IN,
+    val chefTip: String = "",
+    val status: OrderStatus = OrderStatus.CREATED,
+    val createdBy: String = "",
+    val createdAt: Timestamp = Timestamp.now(),
+    val updatedAt: Timestamp = Timestamp.now(),
+    val parentOrderId: String? = null,
+    var items: List<OrderItem> = emptyList() // populated from subcollection
+) : Parcelable
+
+enum class OrderType {
+    DINE_IN, PARCEL, DELIVERY;
+    
+    companion object {
+        fun fromString(value: String): OrderType = when(value) {
+            "DineIn" -> DINE_IN
+            "Parcel" -> PARCEL
+            "Delivery" -> DELIVERY
+            else -> DINE_IN
+        }
+    }
+}
+
+enum class OrderStatus(val colorRes: Int) {
+    CREATED(R.color.status_created),
+    ACCEPTED(R.color.status_accepted),
+    IN_KITCHEN(R.color.status_inkitchen),
+    PREPARED(R.color.status_prepared),
+    DELIVERED(R.color.status_delivered),
+    CLOSED(R.color.status_closed),
+    CANCELED(R.color.status_canceled);
+    
+    companion object {
+        fun fromString(value: String): OrderStatus = when(value) {
+            "Created" -> CREATED
+            "Accepted" -> ACCEPTED
+            "InKitchen" -> IN_KITCHEN
+            "Prepared" -> PREPARED
+            "Delivered" -> DELIVERED
+            "Closed" -> CLOSED
+            "Canceled" -> CANCELED
+            else -> CREATED
+        }
+    }
+}
+```
+
+### **OrderItem.kt**
+```kotlin
+package com.streetfeast.app.models
+
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
+data class OrderItem(
+    val id: String = "",
+    val itemId: String = "",
+    val nameSnapshot: String = "",
+    val size: String? = null, // "Small" or "Large" or null
+    val vegFlagSnapshot: String = "Veg", // "Veg" or "NonVeg"
+    val qty: Int = 1
+) : Parcelable {
+    
+    val isVeg: Boolean
+        get() = vegFlagSnapshot == "Veg"
+        
+    fun getDisplayName(): String {
+        return if (size != null) {
+            "$nameSnapshot - $size"
+        } else {
+            nameSnapshot
+        }
+    }
+}
+```
+
+---
+
+## 6. Sample Layout Files
+
+### **activity_main.xml** (Main container with tabs)
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <!-- Top Bar -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:elevation="4dp"
+        app:title="@string/app_name"
+        app:titleTextColor="@color/text_primary"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Fragment Container -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toTopOf="@id/bottom_navigation"
+        app:navGraph="@navigation/nav_graph" />
+
+    <!-- Bottom Navigation -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:elevation="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:menu="@menu/bottom_nav_menu" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+### **item_new_order.xml** (Order card for new orders list)
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Card">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="@dimen/spacing_md">
+
+        <!-- Order Number -->
+        <TextView
+            android:id="@+id/tvOrderNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Text.Title"
+            tools:text="Order #123"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Order Type Chip -->
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipOrderType"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_md"
+            tools:text="Dine-in"
+            app:chipBackgroundColor="@color/status_created"
+            app:layout_constraintStart_toEndOf="@id/tvOrderNumber"
+            app:layout_constraintTop_toTopOf="@id/tvOrderNumber"
+            app:layout_constraintBottom_toBottomOf="@id/tvOrderNumber" />
+
+        <!-- Time -->
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Text.Caption"
+            tools:text="2 min ago"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Items Summary -->
+        <TextView
+            android:id="@+id/tvItemsSummary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_sm"
+            style="@style/Text.Body"
+            tools:text="2× Chicken Burger\n1× Caesar Salad"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tvOrderNumber" />
+
+        <!-- Accept Button -->
+        <Button
+            android:id="@+id/btnAccept"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="@string/action_accept"
+            style="@style/Button.Primary"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tvItemsSummary" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
+```
+
+---
+
+## 7. Navigation Setup
+
+### **bottom_nav_menu.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_new_orders"
+        android:icon="@drawable/ic_new_orders"
+        android:title="@string/nav_new_orders" />
+    
+    <item
+        android:id="@+id/nav_preparing"
+        android:icon="@drawable/ic_preparing"
+        android:title="@string/nav_preparing" />
+    
+    <item
+        android:id="@+id/nav_ready"
+        android:icon="@drawable/ic_ready"
+        android:title="@string/nav_ready" />
+</menu>
+```
+
+---
+
+## 8. Firebase Configuration
+
+### **AndroidManifest.xml**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android:permission.VIBRATE" />
+
+    <application
+        android:name=".StreetFeastApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.StreetFeast">
+
+        <!-- Firebase Messaging Service -->
+        <service
+            android:name=".utils.StreetFeastMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Splash Activity -->
+        <activity
+            android:name=".activities.SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.StreetFeast">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Login Activity -->
+        <activity android:name=".activities.LoginActivity" />
+
+        <!-- Main Activity -->
+        <activity android:name=".activities.MainActivity" />
+
+    </application>
+
+</manifest>
+```
+
+### **StreetFeastApplication.kt**
+```kotlin
+package com.streetfeast.app
+
+import android.app.Application
+import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreSettings
+
+class StreetFeastApplication : Application() {
+    
+    override fun onCreate() {
+        super.onCreate()
+        
+        // Initialize Firebase
+        FirebaseApp.initializeApp(this)
+        
+        // Enable offline persistence
+        val firestore = FirebaseFirestore.getInstance()
+        val settings = FirebaseFirestoreSettings.Builder()
+            .setPersistenceEnabled(true)
+            .build()
+        firestore.firestoreSettings = settings
+    }
+}
+```
+
+---
+
+## 9. Key Implementation Details
+
+### **OrderRepository.kt** (Firestore operations)
+```kotlin
+package com.streetfeast.app.repositories
+
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.streetfeast.app.models.Order
+import com.streetfeast.app.models.OrderStatus
+import kotlinx.coroutines.tasks.await
+
+class OrderRepository {
+    private val db = FirebaseFirestore.getInstance()
+    private val storeId = "default" // Can be dynamic in future
+    
+    fun getNewOrdersRealtime(callback: (List<Order>) -> Unit) {
+        db.collection("stores/$storeId/orders")
+            .whereEqualTo("status", "Created")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                val orders = snapshot?.documents?.mapNotNull { 
+                    it.toObject(Order::class.java)?.copy(id = it.id)
+                } ?: emptyList()
+                callback(orders)
+            }
+    }
+    
+    suspend fun acceptOrder(orderId: String): Result<Unit> {
+        return try {
+            db.collection("stores/$storeId/orders")
+                .document(orderId)
+                .update("status", "InKitchen") // Auto-accept to InKitchen
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Similar methods for other status updates...
+}
+```
+
+---
+
+## 10. UI/UX Consistency Guidelines
+
+### Colors Match Desktop:
+- **Created:** Blue `#3B82F6`
+- **Accepted:** Orange `#F97316`  
+- **In Kitchen:** Yellow `#EAB308`
+- **Prepared:** Green `#22C55E`
+- **Delivered:** Purple `#A855F7`
+- **Closed:** Gray `#6B7280`
+- **Canceled:** Red `#EF4444`
+
+### Typography:
+- Use **Roboto** (system default)
+- Minimum 14sp for body text
+- 16–18sp for buttons
+- 24sp+ for headings
+
+### Touch Targets:
+- Minimum **44dp** height for all buttons
+- Large, tappable cards with clear spacing
+
+### Animations:
+- Fade-in for list items (200ms)
+- Simple slide transitions between screens
+
+---
+
+This structure gives you a **production-ready, maintainable Android app** that perfectly aligns with your desktop UI/UX while staying simple and beginner-friendly. The key is using Material Design 3 components, clear color coding, and following the same design language as your Electron app.
+
+Would you like me to provide more detailed code for any specific component (ViewModels, Adapters, Fragments)?
