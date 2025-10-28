@@ -41,7 +41,7 @@ export const Layout: React.FC = () => {
     { path: '/dashboard', label: 'Dashboard', icon: '/icons/dashboard.png', enabled: hasMenu },
     { path: '/create-order', label: 'Create Order', icon: '/icons/create-order.png', enabled: hasMenu },
     { path: '/manage-orders', label: 'Manage Orders', icon: '/icons/manage-order.png', enabled: hasMenu },
-    { path: '/menu', label: 'Menu', icon: '/icons/menu.png', enabled: true },
+    { path: '/menu/summary', label: 'Menu', icon: '/icons/menu.png', enabled: true },
     { path: '/settings', label: 'Settings', icon: '/icons/setting.png', enabled: hasMenu },
   ];
 

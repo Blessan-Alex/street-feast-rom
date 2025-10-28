@@ -14,9 +14,7 @@ export const MenuSummary: React.FC = () => {
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const getCategoryItemCount = (categoryId: string) => {
     return items.filter(item => item.categoryId === categoryId).length;
@@ -27,8 +25,11 @@ export const MenuSummary: React.FC = () => {
   };
 
   const handleEdit = (category: Category) => {
-    setEditingCategory(category);
-    setShowEditModal(true);
+    navigate('/menu/create', { 
+      state: { 
+        category: category 
+      } 
+    });
   };
 
   const handleDelete = (category: Category) => {
@@ -37,6 +38,10 @@ export const MenuSummary: React.FC = () => {
 
   const handleAddCategory = () => {
     setShowAddModal(true);
+  };
+
+  const handleUploadMenu = () => {
+    navigate('/menu/upload');
   };
 
   const handleBulkDelete = () => {
@@ -52,13 +57,6 @@ export const MenuSummary: React.FC = () => {
     toast.success('Category and item created successfully!');
   };
 
-  const confirmEditCategory = () => {
-    if (editingCategory) {
-      navigate('/menu/create', { state: { category: editingCategory } });
-    }
-    setShowEditModal(false);
-    setEditingCategory(null);
-  };
 
   const confirmDeleteCategory = () => {
     if (deletingCategory) {
@@ -70,13 +68,14 @@ export const MenuSummary: React.FC = () => {
   };
 
   const confirmBulkDelete = () => {
-    // For now, delete one at a time - could be enhanced for bulk delete
-    const category = categories.find(c => c.id === selectedCategories[0]);
-    if (category) {
-      deleteCategory(category.id);
-      toast.success(`Category "${category.name}" deleted successfully`);
-      setSelectedCategories(selectedCategories.filter(id => id !== category.id));
+    if (selectedCategories.length === 0) {
+      setShowDeleteModal(false);
+      return;
     }
+    const ids = [...selectedCategories];
+    ids.forEach(id => deleteCategory(id));
+    toast.success(`Deleted ${ids.length} ${ids.length === 1 ? 'category' : 'categories'}`);
+    setSelectedCategories([]);
     setShowDeleteModal(false);
   };
 
@@ -118,7 +117,7 @@ export const MenuSummary: React.FC = () => {
     <div className="flex h-full">
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header with Add More button */}
+        {/* Header with buttons */}
         <div className="px-6 py-4 bg-white border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -127,9 +126,14 @@ export const MenuSummary: React.FC = () => {
                 {categories.length} {categories.length === 1 ? 'category' : 'categories'} • {items.length} {items.length === 1 ? 'item' : 'items'}
               </p>
             </div>
-            <Button variant="primary" onClick={handleAddCategory}>
-              + Add More
-            </Button>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={handleUploadMenu}>
+                Upload Menu
+              </Button>
+              <Button variant="primary" onClick={handleAddCategory}>
+                + Add More
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -208,15 +212,6 @@ export const MenuSummary: React.FC = () => {
         message="Create a new category to organize your menu items."
       />
 
-      <MenuActionModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        action="edit"
-        onConfirm={confirmEditCategory}
-        title="Edit Category"
-        message={`Edit "${editingCategory?.name}" category and its items.`}
-        categoryName={editingCategory?.name}
-      />
 
       <MenuActionModal
         isOpen={showDeleteModal}

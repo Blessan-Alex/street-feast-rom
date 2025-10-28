@@ -73,7 +73,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="manage-orders" element={<ManageOrders />} />
-          <Route path="menu" element={<MenuChooser />} />
+          <Route path="menu" element={<Navigate to="/menu/summary" replace />} />
           <Route path="menu/upload" element={<MenuUpload />} />
           <Route path="menu/create" element={<CategoryEditor />} />
           <Route path="menu/summary" element={<MenuSummary />} />

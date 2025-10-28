@@ -4,7 +4,6 @@ import { useOrdersStore, OrderType } from '../store/ordersStore';
 import { useMenuStore } from '../store/menuStore';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
-import { ItemAdditionModal } from './ItemAdditionModal';
 import { toast } from './Toast';
 
 export const OrderSummaryCard: React.FC = () => {
@@ -13,7 +12,6 @@ export const OrderSummaryCard: React.FC = () => {
   const { items } = useMenuStore();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPlaceOrderDialog, setShowPlaceOrderDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
 
   const handleTypeChange = (type: OrderType) => {
     setDraft({ type });
@@ -45,28 +43,22 @@ export const OrderSummaryCard: React.FC = () => {
   const handleEditItem = (item: any) => {
     const menuItem = items.find(i => i.id === item.itemId);
     if (menuItem) {
-      setEditingItem({
-        item: menuItem,
-        editData: {
-          size: item.size,
-          chefTip: item.chefTip || '',
-          quantity: item.qty
-        }
-      });
+      // Find the category for this item
+      const { categories } = useMenuStore.getState();
+      const category = categories.find(c => c.id === menuItem.categoryId);
+      
+      if (category) {
+        // Navigate to menu/create with category data
+        navigate('/menu/create', { 
+          state: { 
+            category: category,
+            editingItem: menuItem
+          } 
+        });
+      }
     }
   };
 
-  const handleUpdateItem = (data: { size: string | null; chefTip: string; quantity: number }) => {
-    if (!editingItem) return;
-    
-    updateDraftLine(editingItem.item.id, {
-      size: data.size,
-      qty: data.quantity,
-      chefTip: data.chefTip
-    });
-    
-    setEditingItem(null);
-  };
 
   const totalItems = draft.orderItems.reduce((sum, item) => sum + item.qty, 0);
 
@@ -202,16 +194,6 @@ export const OrderSummaryCard: React.FC = () => {
         confirmVariant="danger"
       />
 
-      {/* Item Edit Modal */}
-      {editingItem && (
-        <ItemAdditionModal
-          item={editingItem.item}
-          isOpen={!!editingItem}
-          onClose={() => setEditingItem(null)}
-          onAdd={handleUpdateItem}
-          editData={editingItem.editData}
-        />
-      )}
     </div>
   );
 };

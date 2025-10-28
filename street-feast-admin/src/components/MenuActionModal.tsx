@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
 import { useMenuStore, Category, Item } from '../store/menuStore';
 
@@ -20,121 +20,162 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
   onConfirm,
   title,
   message,
-  categoryName,
   category
 }) => {
   const { addCategory, addItems } = useMenuStore();
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
-    categoryName: category?.name || '',
-    itemName: '',
-    sizes: [] as string[],
-    vegFlag: 'Veg' as 'Veg' | 'NonVeg',
-  });
+  // Always declare add/edit wizard state hooks BEFORE any conditional returns
+  const [categoryNameState, setCategoryNameState] = useState(category?.name || '');
+  const [itemCount, setItemCount] = useState(1);
+  const [itemForms, setItemForms] = useState<Array<{ name: string; sizes: string[]; vegFlag: 'Veg' | 'NonVeg' }>>([
+    { name: '', sizes: [], vegFlag: 'Veg' }
+  ]);
+  useEffect(() => {
+    if (itemCount < 1) setItemCount(1);
+    setItemForms(prev => {
+      const next = [...prev];
+      if (itemCount > next.length) {
+        while (next.length < itemCount) next.push({ name: '', sizes: [], vegFlag: 'Veg' });
+      } else if (itemCount < next.length) {
+        next.length = itemCount;
+      }
+      return next;
+    });
+  }, [itemCount]);
 
+  // DELETE: simple confirm path, no creation
   if (!isOpen) return null;
+  if (action === 'delete') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div 
+          className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+          onClick={onClose}
+        />
+        <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{title}</h2>
+          <p className="text-gray-600 mb-6">{message}</p>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button variant="danger" onClick={() => { onConfirm(); onClose(); }} className="flex-1">Delete</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ADD/EDIT: wizard flow (Category → Number of Items → per-item steps)
+
+  const totalSteps = 2 + itemCount; // 1=Category, 2=Number, 3..=items
 
   const handleNext = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+    if (currentStep < totalSteps) setCurrentStep(currentStep + 1);
   };
   const handleBack = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
   const handleSubmit = () => {
-    // Create category
     const now = Date.now();
     const newCategory: Category = {
       id: crypto.randomUUID(),
-      name: formData.categoryName.trim(),
+      name: categoryNameState.trim(),
       isActive: true,
       createdAt: now,
       updatedAt: now,
     };
     addCategory(newCategory);
 
-    // Create item
-    const newItem: Item = {
-      id: crypto.randomUUID(),
-      categoryId: newCategory.id,
-      name: formData.itemName.trim(),
-      sizes: formData.sizes,
-      vegFlag: formData.vegFlag,
-      flavors: undefined,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-    addItems([newItem]);
+    const itemsToAdd: Item[] = itemForms
+      .filter(f => f.name.trim())
+      .map(f => ({
+        id: crypto.randomUUID(),
+        categoryId: newCategory.id,
+        name: f.name.trim(),
+        sizes: f.sizes,
+        vegFlag: f.vegFlag,
+        flavors: undefined,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      }));
+    if (itemsToAdd.length) addItems(itemsToAdd);
 
-    onConfirm({ category: newCategory, item: newItem });
+    onConfirm({ category: newCategory, items: itemsToAdd });
     onClose();
   };
 
   const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
+    if (currentStep === 1) {
+      return (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Name</h3>
+          <input
+            type="text"
+            value={categoryNameState}
+            onChange={(e) => setCategoryNameState(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
+            placeholder="e.g., Chinese"
+          />
+        </div>
+      );
+    }
+    if (currentStep === 2) {
+      return (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Number of Items</h3>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={itemCount}
+            onChange={(e) => setItemCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
+          />
+        </div>
+      );
+    }
+    const idx = currentStep - 3;
+    const form = itemForms[idx];
+    const updateForm = (patch: Partial<typeof form>) => {
+      setItemForms(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
+    };
+    return (
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Item {idx + 1} of {itemCount}</h3>
+        <div className="space-y-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Name</h3>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
             <input
-              type="text"
-              value={formData.categoryName}
-              onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
-              placeholder="e.g., Chinese"
-            />
-          </div>
-        );
-      case 2:
-        return (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Item Name</h3>
-            <input
-              type="text"
-              value={formData.itemName}
-              onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+              value={form.name}
+              onChange={(e) => updateForm({ name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
               placeholder="e.g., Chicken Momos"
             />
           </div>
-        );
-      case 3:
-        return (
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Sizes</h3>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sizes (comma-separated)</label>
             <input
-              type="text"
-              value={formData.sizes.join(', ')}
-              onChange={(e) => setFormData({ ...formData, sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+              value={form.sizes.join(', ')}
+              onChange={(e) => updateForm({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
-              placeholder="e.g., Small, Medium, Large"
+              placeholder="Small, Medium, Large"
             />
-            <p className="text-xs text-gray-500 mt-2">Leave empty if no sizes</p>
           </div>
-        );
-      case 4:
-        return (
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Type</h3>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
             <div className="flex gap-3">
-              {(['Veg', 'NonVeg'] as const).map(option => (
-                <label key={option} className={`px-3 py-2 border rounded-lg cursor-pointer ${formData.vegFlag === option ? 'border-action-primary bg-action-primary/5' : 'border-gray-300'}`}>
-                  <input
-                    type="radio"
-                    className="hidden"
-                    checked={formData.vegFlag === option}
-                    onChange={() => setFormData({ ...formData, vegFlag: option })}
-                  />
-                  <span className="text-sm font-medium text-gray-800">{option === 'Veg' ? 'Vegetarian' : 'Non-Vegetarian'}</span>
+              {(['Veg','NonVeg'] as const).map(v => (
+                <label key={v} className={`px-3 py-2 border rounded-lg cursor-pointer ${form.vegFlag === v ? 'border-action-primary bg-action-primary/5' : 'border-gray-300'}`}>
+                  <input type="radio" className="hidden" checked={form.vegFlag === v} onChange={() => updateForm({ vegFlag: v })} />
+                  <span className="text-sm">{v === 'Veg' ? 'Vegetarian' : 'Non-Vegetarian'}</span>
                 </label>
               ))}
             </div>
           </div>
-        );
-      default:
-        return null;
-    }
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -154,13 +195,13 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
           {/* Progress Bar */}
           <div className="mb-6">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-              <span>Step {currentStep} of 4</span>
-              <span>{Math.round((currentStep / 4) * 100)}%</span>
+              <span>Step {currentStep} of {totalSteps}</span>
+              <span>{Math.round((currentStep / totalSteps) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-action-primary h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(currentStep / 4) * 100}%` }}
+                style={{ width: `${(currentStep / totalSteps) * 100}%` }}
               />
             </div>
           </div>
@@ -178,12 +219,12 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
               Cancel
             </Button>
           )}
-          {currentStep < 4 ? (
+          {currentStep < totalSteps ? (
             <Button 
               variant="primary" 
               onClick={handleNext} 
               className="flex-1"
-              disabled={(currentStep === 1 && !formData.categoryName.trim()) || (currentStep === 2 && !formData.itemName.trim())}
+              disabled={(currentStep === 1 && !categoryNameState.trim())}
             >
               Next
             </Button>
@@ -192,7 +233,7 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
               variant="primary" 
               onClick={handleSubmit} 
               className="flex-1"
-              disabled={!formData.categoryName.trim() || !formData.itemName.trim()}
+              disabled={!categoryNameState.trim() || itemForms.some(f => !f.name.trim())}
             >
               Create
             </Button>
