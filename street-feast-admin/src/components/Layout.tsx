@@ -38,38 +38,47 @@ export const Layout: React.FC = () => {
   const isMenuSetup = location.pathname.startsWith('/menu');
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '/icons/dashboard.png', enabled: hasMenu },
-    { path: '/create-order', label: 'Create Order', icon: '/icons/create-order.png', enabled: hasMenu },
-    { path: '/manage-orders', label: 'Manage Orders', icon: '/icons/manage-order.png', enabled: hasMenu },
-    { path: '/menu/summary', label: 'Menu', icon: '/icons/menu.png', enabled: true },
-    { path: '/settings', label: 'Settings', icon: '/icons/setting.png', enabled: hasMenu },
+    { path: '/dashboard', label: 'Dashboard', enabled: hasMenu },
+    { path: '/create-order', label: 'Create Order', enabled: hasMenu },
+    { path: '/manage-orders', label: 'Manage Orders', enabled: hasMenu },
+    { path: '/menu/summary', label: 'Menu', enabled: true },
+    { path: '/settings', label: 'Settings', enabled: hasMenu },
   ];
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* Sidebar Toggle Button - Outside Sidebar */}
+      <button
+        onClick={toggleSidebar}
+        className={`fixed top-16 left-4 z-50 p-2 bg-white hover:bg-gray-100 rounded-lg shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 ${sidebarCollapsed ? 'block' : 'hidden'}`}
+        aria-label="Toggle sidebar"
+      >
+        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
       {/* Left Sidebar */}
-      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-64'} bg-white shadow-lg flex flex-col transition-all duration-300`}>
+      <aside className={`${sidebarCollapsed ? 'w-0' : 'w-64'} bg-white shadow-lg flex flex-col transition-all duration-300 overflow-hidden`}>
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-3">
-            <Logo variant="compact" />
-            <button
-              onClick={toggleSidebar}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
-              aria-label="Toggle sidebar"
-            >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-3">
+              <Logo variant="compact" />
+              <button
+                onClick={toggleSidebar}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
+                aria-label="Toggle sidebar"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
           </div>
-          {!sidebarCollapsed && (
-            <>
-              <h1 className="text-2xl font-bold text-gray-800">Streat Feast</h1>
-              <p className="text-sm text-gray-500">Admin Panel</p>
-            </>
-          )}
+          <h1 className="text-2xl font-bold text-gray-800">Streat Feast</h1>
+          <p className="text-sm text-gray-500">Admin Panel</p>
         </div>
         
         <nav className="flex-1 p-4">
@@ -83,31 +92,14 @@ export const Layout: React.FC = () => {
                       isActive(item.path)
                         ? 'bg-action-primary text-white'
                         : 'text-gray-700 hover:bg-gray-100'
-                    } ${sidebarCollapsed ? 'justify-center' : ''}`}
-                    title={sidebarCollapsed ? item.label : undefined}
+                    }`}
                   >
-                    <img 
-                      src={item.icon} 
-                      alt={item.label} 
-                      className={`w-5 h-5 ${isActive(item.path) ? 'brightness-0 invert' : 'opacity-80'}`} 
-                    />
-                    {!sidebarCollapsed && <span className="ml-3">{item.label}</span>}
+                    <span>{item.label}</span>
                   </Link>
                 ) : (
-                  <div className={`flex items-center px-4 py-3 rounded-lg font-medium text-gray-400 cursor-not-allowed ${
-                    sidebarCollapsed ? 'justify-center' : ''
-                  }`} title={sidebarCollapsed ? item.label : undefined}>
-                    <img 
-                      src={item.icon} 
-                      alt={item.label} 
-                      className={`w-5 h-5 ${isActive(item.path) ? 'brightness-0 invert' : 'opacity-60'}`} 
-                    />
-                    {!sidebarCollapsed && (
-                      <>
-                        <span className="ml-3">{item.label}</span>
-                        <span className="text-xs ml-2">(Setup Required)</span>
-                      </>
-                    )}
+                  <div className="flex items-center px-4 py-3 rounded-lg font-medium text-gray-400 cursor-not-allowed">
+                    <span>{item.label}</span>
+                    <span className="text-xs ml-2">(Setup Required)</span>
                   </div>
                 )}
               </li>
@@ -119,13 +111,9 @@ export const Layout: React.FC = () => {
         <div className="p-4 border-t">
           <button
             onClick={handleLogout}
-            className={`flex items-center w-full px-4 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 ${
-              sidebarCollapsed ? 'justify-center' : ''
-            }`}
-            title={sidebarCollapsed ? 'Logout' : undefined}
+            className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
           >
-            <img src="/icons/logout.png" alt="Logout" className="w-5 h-5" />
-            {!sidebarCollapsed && <span className="ml-3">Logout</span>}
+            <span>Logout</span>
           </button>
         </div>
       </aside>

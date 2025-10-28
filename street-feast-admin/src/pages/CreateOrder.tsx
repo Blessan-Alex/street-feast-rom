@@ -260,10 +260,19 @@ export const CreateOrder: React.FC = () => {
                       <button
                         key={category.id}
                         onClick={() => handleSelectCategory(category.id)}
-                        className="p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all text-left focus:outline-none focus:ring-2 focus:ring-action-primary"
+                        className="relative p-5 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-md transition-all text-left focus:outline-none focus:ring-2 focus:ring-action-primary flex flex-col justify-between min-h-[100px]"
                       >
-                        <div className="text-lg font-bold text-gray-900">{category.name}</div>
-                        <div className="text-sm text-gray-500 mt-1">{itemCount} items</div>
+                        <div className="absolute top-3 right-3 w-6 h-6 bg-blue-200 text-blue-800 text-xs font-bold rounded-full flex items-center justify-center">
+                          {itemCount}
+                        </div>
+                        <div className="flex-1 min-w-0 pr-8">
+                          <div className="text-base font-medium text-gray-900 leading-tight">{category.name}</div>
+                        </div>
+                        <div className="flex justify-end mt-3">
+                          <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
                       </button>
                     );
                   })}

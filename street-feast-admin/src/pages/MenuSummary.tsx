@@ -15,6 +15,7 @@ export const MenuSummary: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
 
   const getCategoryItemCount = (categoryId: string) => {
     return items.filter(item => item.categoryId === categoryId).length;
@@ -41,7 +42,7 @@ export const MenuSummary: React.FC = () => {
   };
 
   const handleUploadMenu = () => {
-    navigate('/menu/upload');
+    setShowUploadOptions(true);
   };
 
   const handleBulkDelete = () => {
@@ -201,6 +202,89 @@ export const MenuSummary: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Upload Options Modal */}
+      {showUploadOptions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+            onClick={() => setShowUploadOptions(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 p-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Add Menu Items</h2>
+              <p className="text-gray-600">
+                Choose how you'd like to add items to your menu
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Import File Card */}
+              <div 
+                onClick={() => {
+                  setShowUploadOptions(false);
+                  navigate('/menu/upload');
+                }}
+                className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-8 cursor-pointer hover:shadow-lg transition-all border-2 border-transparent hover:border-blue-300 group"
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">Import File</h3>
+                  <p className="text-gray-600 mb-6">
+                    Upload a CSV file with your menu items. Perfect for bulk imports or migrating from other systems.
+                  </p>
+                  <div className="inline-flex items-center px-6 py-3 bg-blue-500 text-white rounded-lg font-medium group-hover:bg-blue-600 transition-colors">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    Upload CSV
+                  </div>
+                </div>
+              </div>
+
+              {/* Manual Creation Card */}
+              <div 
+                onClick={() => {
+                  setShowUploadOptions(false);
+                  navigate('/menu/create');
+                }}
+                className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-8 cursor-pointer hover:shadow-lg transition-all border-2 border-transparent hover:border-green-300 group"
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">Create Manually</h3>
+                  <p className="text-gray-600 mb-6">
+                    Use our interactive wizard to create categories and items step by step. Great for detailed customization.
+                  </p>
+                  <div className="inline-flex items-center px-6 py-3 bg-green-500 text-white rounded-lg font-medium group-hover:bg-green-600 transition-colors">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Start Creating
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center mt-8">
+              <button
+                onClick={() => setShowUploadOptions(false)}
+                className="px-6 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Modals */}
       <MenuActionModal
