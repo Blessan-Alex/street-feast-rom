@@ -2,7 +2,8 @@ export interface ValidatedRow {
   itemName: string;
   category: string;
   sizes: string[];
-  vegFlag: 'Veg' | 'NonVeg';
+  vegFlag: 'Veg' | 'NonVeg' | 'Both';
+  flavors?: string;
   error: string | null;
 }
 
@@ -12,9 +13,46 @@ export interface ValidationResult {
   errors: string[];
 }
 
-const REQUIRED_HEADERS = ['Item Name', 'Category', 'Available Sizes', 'Veg/NonVeg'];
-const VALID_SIZES = ['Small', 'Large'];
-const VALID_VEG_FLAGS = ['Veg', 'NonVeg'];
+const REQUIRED_HEADERS = ['Category', 'Item Name', 'Veg / Non-Veg', 'Portions (Half / Full)', 'Flavours / Toppings'];
+
+// Inference logic for Veg/NonVeg when not specified
+const inferVegFlag = (itemName: string, category: string): 'Veg' | 'NonVeg' => {
+  const text = `${itemName} ${category}`.toLowerCase();
+  
+  const nonVegKeywords = ['chicken', 'egg', 'meat', 'fish', 'prawn', 'mutton', 'beef', 'pork'];
+  const vegKeywords = ['paneer', 'veg', 'mushroom', 'chaap', 'dal', 'rice', 'noodles', 'pizza', 'burger', 'wrap', 'bowl', 'fries', 'drink', 'coffee', 'tea', 'soda', 'water', 'salad', 'naan', 'roti'];
+  
+  // Check for non-veg keywords first
+  for (const keyword of nonVegKeywords) {
+    if (text.includes(keyword)) {
+      return 'NonVeg';
+    }
+  }
+  
+  // Check for veg keywords
+  for (const keyword of vegKeywords) {
+    if (text.includes(keyword)) {
+      return 'Veg';
+    }
+  }
+  
+  // Default to Veg if no keywords found
+  return 'Veg';
+};
+
+// Parse sizes from various formats
+const parseSizes = (sizesRaw: string): string[] => {
+  if (!sizesRaw || sizesRaw.trim() === '') return [];
+  
+  // Split by common separators and clean up
+  const sizes = sizesRaw
+    .split(/[,/]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(s => s.replace(/['"]/g, '')); // Remove quotes
+  
+  return sizes;
+};
 
 export const validateCSV = (data: any[]): ValidationResult => {
   const errors: string[] = [];
@@ -29,9 +67,9 @@ export const validateCSV = (data: any[]): ValidationResult => {
   }
 
   // Check headers
-  const headers = Object.keys(data[0]);
+  const headers = Object.keys(data[0]).map(h => h.trim().replace(/\r/g, ''));
   const missingHeaders = REQUIRED_HEADERS.filter(
-    required => !headers.some(h => h.trim().toLowerCase() === required.toLowerCase())
+    required => !headers.some(h => h.toLowerCase() === required.toLowerCase())
   );
 
   if (missingHeaders.length > 0) {
@@ -41,13 +79,14 @@ export const validateCSV = (data: any[]): ValidationResult => {
 
   // Normalize header names (find case-insensitive matches)
   const getHeader = (required: string) => {
-    return headers.find(h => h.trim().toLowerCase() === required.toLowerCase()) || required;
+    return headers.find(h => h.toLowerCase() === required.toLowerCase()) || required;
   };
 
-  const itemNameHeader = getHeader('Item Name');
   const categoryHeader = getHeader('Category');
-  const sizesHeader = getHeader('Available Sizes');
-  const vegHeader = getHeader('Veg/NonVeg');
+  const itemNameHeader = getHeader('Item Name');
+  const vegHeader = getHeader('Veg / Non-Veg');
+  const sizesHeader = getHeader('Portions (Half / Full)');
+  const flavorsHeader = getHeader('Flavours / Toppings');
 
   // Validate each row
   data.forEach((row, index) => {
@@ -55,60 +94,50 @@ export const validateCSV = (data: any[]): ValidationResult => {
     let rowError: string | null = null;
 
     // Get raw values
-    const itemName = row[itemNameHeader]?.toString().trim() || '';
     const category = row[categoryHeader]?.toString().trim() || '';
-    const sizesRaw = row[sizesHeader]?.toString().trim() || '';
+    const itemName = row[itemNameHeader]?.toString().trim() || '';
     const vegFlagRaw = row[vegHeader]?.toString().trim() || '';
-
-    // Validate Item Name
-    if (!itemName) {
-      rowError = `Row ${rowNum}: Item Name is required`;
-    }
+    const sizesRaw = row[sizesHeader]?.toString().trim() || '';
+    const flavorsRaw = row[flavorsHeader]?.toString().trim() || '';
 
     // Validate Category
-    if (!category && !rowError) {
+    if (!category) {
       rowError = `Row ${rowNum}: Category is required`;
     }
 
-    // Validate and parse sizes
-    let sizes: string[] = [];
-    if (sizesRaw) {
-      const sizeParts = sizesRaw.split(',').map((s: string) => s.trim()).filter((s: string) => s);
-      const invalidSizes = sizeParts.filter(
-        (size: string) => !VALID_SIZES.some(valid => valid.toLowerCase() === size.toLowerCase())
-      );
-      
-      if (invalidSizes.length > 0 && !rowError) {
-        rowError = `Row ${rowNum}: Invalid sizes "${invalidSizes.join(', ')}". Must be Small, Large, or blank`;
-      } else {
-        // Normalize to proper case
-        sizes = sizeParts.map((size: string) => {
-          const validSize = VALID_SIZES.find(v => v.toLowerCase() === size.toLowerCase());
-          return validSize || size;
-        });
-      }
+    // Validate Item Name
+    if (!itemName && !rowError) {
+      rowError = `Row ${rowNum}: Item Name is required`;
     }
 
-    // Validate Veg/NonVeg
-    let vegFlag: 'Veg' | 'NonVeg' = 'Veg';
-    if (!vegFlagRaw && !rowError) {
-      rowError = `Row ${rowNum}: Veg/NonVeg is required`;
-    } else {
-      const validVegFlag = VALID_VEG_FLAGS.find(
-        v => v.toLowerCase() === vegFlagRaw.toLowerCase()
-      );
-      if (!validVegFlag && !rowError) {
-        rowError = `Row ${rowNum}: Veg/NonVeg must be "Veg" or "NonVeg"`;
+    // Parse and validate Veg/NonVeg
+    let vegFlag: 'Veg' | 'NonVeg' | 'Both' = 'Veg';
+    if (vegFlagRaw) {
+      const vegLower = vegFlagRaw.toLowerCase();
+      if (vegLower.includes('veg') && vegLower.includes('non')) {
+        vegFlag = 'Both';
+      } else if (vegLower.includes('non') || vegLower.includes('non veg')) {
+        vegFlag = 'NonVeg';
+      } else if (vegLower.includes('veg')) {
+        vegFlag = 'Veg';
       } else {
-        vegFlag = (validVegFlag as 'Veg' | 'NonVeg') || 'Veg';
+        // Try to infer from item name and category
+        vegFlag = inferVegFlag(itemName, category);
       }
+    } else {
+      // No veg flag specified, infer from context
+      vegFlag = inferVegFlag(itemName, category);
     }
+
+    // Parse sizes
+    const sizes = parseSizes(sizesRaw);
 
     rows.push({
       itemName,
       category,
       sizes,
       vegFlag,
+      flavors: flavorsRaw || undefined,
       error: rowError
     });
   });

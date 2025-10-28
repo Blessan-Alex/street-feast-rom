@@ -37,12 +37,12 @@ export const MenuUpload: React.FC = () => {
   };
 
   const downloadTemplate = () => {
-    const template = `Item Name,Category,Available Sizes,Veg/NonVeg
-Chicken Soup,Chinese,"Small, Large",NonVeg
-Caesar Salad,American,,Veg
-Paneer Tikka,Indian,Small,Veg
-Chocolate Cake,Desserts,,Veg
-Butter Chicken,Indian,"Small, Large",NonVeg`;
+    const template = `Category,Item Name,Veg / Non-Veg,Portions (Half / Full),Flavours / Toppings
+Noodles/Rice,Hakka Noodles,Veg / Non Veg,,
+Pizza,Margherita Pizza,Veg,8'' / 12'',
+Burgers,Simply Veg Burger,Veg,,
+Drinks,Coke,,,
+Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spicy / Sweet Heat / High Spicy`;
 
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -86,17 +86,51 @@ Butter Chicken,Indian,"Small, Large",NonVeg`;
           updatedAt: now
         });
 
-        // Add items for this category
-        const itemsToAdd = items.map((item, index) => ({
-          id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
-          categoryId,
-          name: item.itemName,
-          sizes: item.sizes,
-          vegFlag: item.vegFlag,
-          isActive: true,
-          createdAt: now,
-          updatedAt: now
-        }));
+      // Add items for this category
+      const itemsToAdd: any[] = [];
+      
+      items.forEach((item, index) => {
+        if (item.vegFlag === 'Both') {
+          // Create two separate items for "Both" vegFlag
+          itemsToAdd.push(
+            {
+              id: `item-${Date.now()}-${index}-veg-${Math.random().toString(36).substring(7)}`,
+              categoryId,
+              name: `${item.itemName} (Veg)`,
+              sizes: item.sizes,
+              vegFlag: 'Veg' as const,
+              flavors: item.flavors,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now
+            },
+            {
+              id: `item-${Date.now()}-${index}-nonveg-${Math.random().toString(36).substring(7)}`,
+              categoryId,
+              name: `${item.itemName} (Non-Veg)`,
+              sizes: item.sizes,
+              vegFlag: 'NonVeg' as const,
+              flavors: item.flavors,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now
+            }
+          );
+        } else {
+          // Single item for Veg or NonVeg
+          itemsToAdd.push({
+            id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
+            categoryId,
+            name: item.itemName,
+            sizes: item.sizes,
+            vegFlag: item.vegFlag,
+            flavors: item.flavors,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      });
 
         addItems(itemsToAdd);
       });
@@ -126,9 +160,12 @@ Butter Chicken,Indian,"Small, Large",NonVeg`;
           <div className="flex-1">
             <h3 className="font-semibold text-blue-900 mb-2">CSV Template Requirements:</h3>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• <strong>Required headers:</strong> Item Name, Category, Available Sizes, Veg/NonVeg</li>
-              <li>• <strong>Available Sizes:</strong> Small, Large (comma-separated) or leave blank for no sizes</li>
-              <li>• <strong>Veg/NonVeg:</strong> Must be either "Veg" or "NonVeg"</li>
+              <li>• <strong>Required headers:</strong> Category, Item Name, Veg / Non-Veg, Portions (Half / Full), Flavours / Toppings</li>
+              <li>• <strong>Category:</strong> Any category name (e.g., "Noodles/Rice", "Pizza", "Burgers")</li>
+              <li>• <strong>Item Name:</strong> Name of the menu item</li>
+              <li>• <strong>Veg / Non-Veg:</strong> "Veg", "Non Veg", or "Veg / Non Veg" (for flexible items)</li>
+              <li>• <strong>Portions:</strong> Any size format (Half/Full, 8''/12'', Extra Large) or leave blank</li>
+              <li>• <strong>Flavours:</strong> Optional customization options (spice levels, toppings, etc.)</li>
             </ul>
           </div>
           <button
@@ -185,10 +222,11 @@ Butter Chicken,Indian,"Small, Large",NonVeg`;
               <thead className="bg-gray-100 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">#</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Item Name</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Sizes</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Item Name</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Veg/NonVeg</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Sizes</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Flavors</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                 </tr>
               </thead>
@@ -199,17 +237,22 @@ Butter Chicken,Indian,"Small, Large",NonVeg`;
                     className={row.error ? 'bg-red-50' : 'hover:bg-gray-50'}
                   >
                     <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{row.itemName || <span className="text-gray-400">-</span>}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{row.category || <span className="text-gray-400">-</span>}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {row.sizes.length > 0 ? row.sizes.join(', ') : <span className="text-gray-400">No sizes</span>}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{row.itemName || <span className="text-gray-400">-</span>}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                        row.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        row.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 
+                        row.vegFlag === 'NonVeg' ? 'bg-red-100 text-red-800' : 
+                        'bg-blue-100 text-blue-800'
                       }`}>
                         {row.vegFlag}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {row.sizes.length > 0 ? row.sizes.join(', ') : <span className="text-gray-400">No sizes</span>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {row.flavors || <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {row.error ? (

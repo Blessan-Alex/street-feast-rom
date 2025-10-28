@@ -9,8 +9,8 @@ export interface OrderItem {
   id: string;
   itemId: string;
   nameSnapshot: string;
-  size: 'Small' | 'Large' | null;
-  vegFlagSnapshot: 'Veg' | 'NonVeg';
+  size: string | null; // Now supports any size format
+  vegFlagSnapshot: 'Veg' | 'NonVeg' | 'Both';
   qty: number;
 }
 

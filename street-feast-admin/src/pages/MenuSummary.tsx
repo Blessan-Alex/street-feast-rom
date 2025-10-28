@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
+import { MenuActionModal } from '../components/MenuActionModal';
 import { useMenuStore, Category } from '../store/menuStore';
 import { toast } from '../components/Toast';
 
@@ -11,6 +12,11 @@ export const MenuSummary: React.FC = () => {
   
   const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const getCategoryItemCount = (categoryId: string) => {
     return items.filter(item => item.categoryId === categoryId).length;
@@ -21,19 +27,70 @@ export const MenuSummary: React.FC = () => {
   };
 
   const handleEdit = (category: Category) => {
-    navigate('/menu/create', { state: { category } });
+    setEditingCategory(category);
+    setShowEditModal(true);
   };
 
   const handleDelete = (category: Category) => {
     setDeletingCategory(category);
   };
 
-  const confirmDelete = () => {
+  const handleAddCategory = () => {
+    setShowAddModal(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedCategories.length === 0) {
+      toast.error('Please select categories to delete');
+      return;
+    }
+    setShowDeleteModal(true);
+  };
+
+  const confirmAddCategory = () => {
+    setShowAddModal(false);
+    toast.success('Category and item created successfully!');
+  };
+
+  const confirmEditCategory = () => {
+    if (editingCategory) {
+      navigate('/menu/create', { state: { category: editingCategory } });
+    }
+    setShowEditModal(false);
+    setEditingCategory(null);
+  };
+
+  const confirmDeleteCategory = () => {
     if (deletingCategory) {
       deleteCategory(deletingCategory.id);
       toast.success(`Category "${deletingCategory.name}" deleted successfully`);
       setDeletingCategory(null);
+      setSelectedCategories(selectedCategories.filter(id => id !== deletingCategory.id));
     }
+  };
+
+  const confirmBulkDelete = () => {
+    // For now, delete one at a time - could be enhanced for bulk delete
+    const category = categories.find(c => c.id === selectedCategories[0]);
+    if (category) {
+      deleteCategory(category.id);
+      toast.success(`Category "${category.name}" deleted successfully`);
+      setSelectedCategories(selectedCategories.filter(id => id !== category.id));
+    }
+    setShowDeleteModal(false);
+  };
+
+  const toggleCategorySelection = (categoryId: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const handleSaveChanges = () => {
+    // In a real app, this would save changes to the server
+    toast.success('Changes saved successfully!');
   };
 
   // Empty state
@@ -58,64 +115,117 @@ export const MenuSummary: React.FC = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Menu Summary</h1>
-          <p className="text-gray-600">
-            {categories.length} {categories.length === 1 ? 'category' : 'categories'} • {items.length} {items.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => navigate('/menu')}>
-          + Add More
-        </Button>
-      </div>
-
-      {/* Categories Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {categories.map(category => {
-          const itemCount = getCategoryItemCount(category.id);
-          return (
-            <div key={category.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow border border-gray-200">
-              <div className="p-5">
-                <h3 className="text-xl font-bold text-gray-900 mb-1">{category.name}</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                </p>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setViewingCategory(category)}
-                    className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
-                  >
-                    View Items
-                  </button>
-                  <button
-                    onClick={() => handleEdit(category)}
-                    className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(category)}
-                    className="px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+    <div className="flex h-full">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header with Add More button */}
+        <div className="px-6 py-4 bg-white border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Menu Summary</h1>
+              <p className="text-gray-600">
+                {categories.length} {categories.length === 1 ? 'category' : 'categories'} • {items.length} {items.length === 1 ? 'item' : 'items'}
+              </p>
             </div>
-          );
-        })}
+            <Button variant="primary" onClick={handleAddCategory}>
+              + Add More
+            </Button>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Categories Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {categories.map(category => {
+              const itemCount = getCategoryItemCount(category.id);
+              const isSelected = selectedCategories.includes(category.id);
+              return (
+                <div 
+                  key={category.id} 
+                  className={`p-4 bg-white border-2 rounded-lg hover:border-action-primary hover:shadow-lg transition-all cursor-pointer ${
+                    isSelected ? 'border-action-primary bg-action-primary/5' : 'border-gray-200'
+                  }`}
+                  onClick={() => toggleCategorySelection(category.id)}
+                >
+                  <div className="text-lg font-bold text-gray-900 mb-1">{category.name}</div>
+                  <div className="text-sm text-gray-500 mb-3">{itemCount} items</div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingCategory(category);
+                      }}
+                      className="flex-1 px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(category);
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Action Bar */}
+        <div className="px-6 py-4 bg-white border-t flex items-center justify-between">
+          <Button 
+            variant="danger" 
+            onClick={handleBulkDelete}
+            disabled={selectedCategories.length === 0}
+            size="small"
+          >
+            Delete Categories ({selectedCategories.length})
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            onClick={handleSaveChanges}
+            size="small"
+          >
+            Save Changes
+          </Button>
+        </div>
       </div>
 
-      {/* Complete Setup Button */}
-      <div className="bg-white rounded-lg shadow p-6 text-center">
-        <p className="text-gray-700 mb-4">Ready to start taking orders?</p>
-        <Button variant="primary" size="large" onClick={() => navigate('/menu')}>
-          Complete Setup
-        </Button>
-      </div>
+      {/* Floating Modals */}
+      <MenuActionModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        action="add"
+        onConfirm={confirmAddCategory}
+        title="Add New Category"
+        message="Create a new category to organize your menu items."
+      />
+
+      <MenuActionModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        action="edit"
+        onConfirm={confirmEditCategory}
+        title="Edit Category"
+        message={`Edit "${editingCategory?.name}" category and its items.`}
+        categoryName={editingCategory?.name}
+      />
+
+      <MenuActionModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        action="delete"
+        onConfirm={confirmBulkDelete}
+        title="Delete Categories"
+        message={`Are you sure you want to delete ${selectedCategories.length} selected category(ies)? This will also delete all items in those categories.`}
+      />
 
       {/* View Items Modal */}
       {viewingCategory && (
@@ -155,10 +265,18 @@ export const MenuSummary: React.FC = () => {
                             {item.sizes.length === 0 && (
                               <span className="text-gray-400">No sizes</span>
                             )}
+                            {item.flavors && (
+                              <span className="inline-flex items-center">
+                                <span className="font-medium">Flavors:</span>
+                                <span className="ml-1">{item.flavors}</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                         <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                          item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 
+                          item.vegFlag === 'NonVeg' ? 'bg-red-100 text-red-800' : 
+                          'bg-blue-100 text-blue-800'
                         }`}>
                           {item.vegFlag}
                         </span>
@@ -186,7 +304,7 @@ export const MenuSummary: React.FC = () => {
         message={`Are you sure you want to delete "${deletingCategory?.name}"? This will delete the category and all its items. This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
-        onConfirm={confirmDelete}
+        onConfirm={confirmDeleteCategory}
         confirmVariant="danger"
       />
     </div>

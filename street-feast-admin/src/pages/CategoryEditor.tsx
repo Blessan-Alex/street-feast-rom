@@ -8,7 +8,8 @@ interface ItemFormData {
   id: string;
   name: string;
   sizes: string[];
-  vegFlag: 'Veg' | 'NonVeg';
+  vegFlag: 'Veg' | 'NonVeg' | 'Both';
+  flavors?: string;
 }
 
 export const CategoryEditor: React.FC = () => {
@@ -29,14 +30,16 @@ export const CategoryEditor: React.FC = () => {
         id: item.id,
         name: item.name,
         sizes: item.sizes,
-        vegFlag: item.vegFlag
+        vegFlag: item.vegFlag,
+        flavors: item.flavors
       }));
     }
     return [{
       id: `temp-${Date.now()}`,
       name: '',
       sizes: [],
-      vegFlag: 'Veg' as const
+      vegFlag: 'Veg' as const,
+      flavors: ''
     }];
   });
 
@@ -47,7 +50,8 @@ export const CategoryEditor: React.FC = () => {
       id: `temp-${Date.now()}-${Math.random()}`,
       name: '',
       sizes: [],
-      vegFlag: 'Veg'
+      vegFlag: 'Veg',
+      flavors: ''
     }]);
   };
 
@@ -68,16 +72,6 @@ export const CategoryEditor: React.FC = () => {
     setErrors({ ...errors });
   };
 
-  const toggleSize = (itemId: string, size: string) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-
-    const newSizes = item.sizes.includes(size)
-      ? item.sizes.filter(s => s !== size)
-      : [...item.sizes, size];
-    
-    updateItem(itemId, 'sizes', newSizes);
-  };
 
   const validate = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -140,16 +134,50 @@ export const CategoryEditor: React.FC = () => {
       });
 
       // Add items
-      const newItems = items.map((item, index) => ({
-        id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
-        categoryId,
-        name: item.name,
-        sizes: item.sizes,
-        vegFlag: item.vegFlag,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now
-      }));
+      const newItems: any[] = [];
+      
+      items.forEach((item, index) => {
+        if (item.vegFlag === 'Both') {
+          // Create two separate items for "Both" vegFlag
+          newItems.push(
+            {
+              id: `item-${Date.now()}-${index}-veg-${Math.random().toString(36).substring(7)}`,
+              categoryId,
+              name: `${item.name} (Veg)`,
+              sizes: item.sizes,
+              vegFlag: 'Veg' as const,
+              flavors: item.flavors,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now
+            },
+            {
+              id: `item-${Date.now()}-${index}-nonveg-${Math.random().toString(36).substring(7)}`,
+              categoryId,
+              name: `${item.name} (Non-Veg)`,
+              sizes: item.sizes,
+              vegFlag: 'NonVeg' as const,
+              flavors: item.flavors,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now
+            }
+          );
+        } else {
+          // Single item for Veg or NonVeg
+          newItems.push({
+            id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
+            categoryId,
+            name: item.name,
+            sizes: item.sizes,
+            vegFlag: item.vegFlag,
+            flavors: item.flavors,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      });
 
       addItems(newItems);
       toast.success(`Category "${categoryName}" created with ${items.length} items!`);
@@ -241,30 +269,21 @@ export const CategoryEditor: React.FC = () => {
 
                 {/* Sizes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor={`item-sizes-${item.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                     Available Sizes (optional)
                   </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={item.sizes.includes('Small')}
-                        onChange={() => toggleSize(item.id, 'Small')}
-                        className="w-4 h-4 text-action-primary border-gray-300 rounded focus:ring-2 focus:ring-action-primary"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Small</span>
-                    </label>
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={item.sizes.includes('Large')}
-                        onChange={() => toggleSize(item.id, 'Large')}
-                        className="w-4 h-4 text-action-primary border-gray-300 rounded focus:ring-2 focus:ring-action-primary"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Large</span>
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">Leave unchecked if no size variants</p>
+                  <input
+                    id={`item-sizes-${item.id}`}
+                    type="text"
+                    value={item.sizes.join(', ')}
+                    onChange={(e) => {
+                      const sizes = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                      updateItem(item.id, 'sizes', sizes);
+                    }}
+                    placeholder="e.g., Small, Large or Half, Full or 8'', 12''"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-transparent text-base"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Comma-separated sizes (leave blank for no size variants)</p>
                 </div>
 
                 {/* Veg/NonVeg */}
@@ -297,7 +316,35 @@ export const CategoryEditor: React.FC = () => {
                         Non-Veg
                       </span>
                     </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={item.vegFlag === 'Both'}
+                        onChange={() => updateItem(item.id, 'vegFlag', 'Both')}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700 flex items-center">
+                        <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-1"></span>
+                        Both
+                      </span>
+                    </label>
                   </div>
+                </div>
+
+                {/* Flavors/Toppings */}
+                <div className="md:col-span-2">
+                  <label htmlFor={`item-flavors-${item.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                    Flavors/Toppings (optional)
+                  </label>
+                  <input
+                    id={`item-flavors-${item.id}`}
+                    type="text"
+                    value={item.flavors || ''}
+                    onChange={(e) => updateItem(item.id, 'flavors', e.target.value)}
+                    placeholder="e.g., Medium Spicy, Sweet Heat, High Spicy"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-transparent text-base"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Customization options separated by commas</p>
                 </div>
               </div>
             </div>

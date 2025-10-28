@@ -12,8 +12,9 @@ export interface Item {
   id: string;
   categoryId: string;
   name: string;
-  sizes: string[];
-  vegFlag: 'Veg' | 'NonVeg';
+  sizes: string[]; // Now supports any size format
+  vegFlag: 'Veg' | 'NonVeg' | 'Both';
+  flavors?: string; // Optional flavors/toppings
   isActive: boolean;
   createdAt: number;
   updatedAt: number;

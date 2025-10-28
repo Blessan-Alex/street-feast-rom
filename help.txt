@@ -1,0 +1,61 @@
+We need to make some ui ux changes 
+**Application UI/UX Requirements**
+
+**1. Data Loading**
+
+- Data loading should be mandatory and rigid to ensure consistency.(should not navigate to other pages , only adding menu for first time user)
+by this we mean that for the first time user , after loging in it menu should come for the first time , there should be only one card saying Uplod menu, then after clicking that floating cards two should open up saying upload manually or import file , while this is happening the user should not be able to naviagte the other screens becasue menu uploading is the first and foremost thing, after it is done then normal , frits time user can be identified as if menu is not loaded
+
+**2. Default Page**
+
+- After loading, the “Create Order” page should be set as the default landing page. this is for existing user(if menu is loaded already)
+
+**3. Header**
+
+- Remove “Street Feast Admin” text from the header.
+- Add breadcrumbs in the header to display the file pathway/navigation trail. It should show minimally wehre we are , [create order, category name], etc etc
+
+**4. Navigation Panel**
+
+- Move the Logout option to the side navigation panel (bottom). 
+- The side navigation panel should be shrinkable/collapsible for better usability.
+
+**5. Item Card**
+
+- Each item card should include an “Add” button.(remove plus minus from order summary)
+
+**6. Item Addition Flow (Chronology)**
+We are changing how each item works , 
+
+1. Add Button/icon →
+after this ,each should be like floating windows sepearate
+2. Enter Quantity (large, small, 8 12 extra large etc etc) if item doesnt have then avoid this→
+3. Chef Tip (includes text input with suggestion text) →
+4. Select Number of Items →
+5. Place Order(one by one)
+
+**7. Order Summary**
+
+- All items in the order summary should be editable(insteaf of + or - add edit ).
+edit should lead to same kind of item adding flaoting window as above
+- Each item should have a cross (×) icon on the top-right corner to delete the order.
+- The rest of the layout and information should remain the same.
+
+**8. Order Confirmation**
+
+- Both confirmation and cancellation actions should appear after a confirmation alert.(pop up)(this is when placing an order or cancelling an order)
+
+**9. Search Functionality**
+
+- Add a search icon inside the search bar.
+
+**10. Menu Interface**
+
+- The Menu Interface should visually match the “Create Order” page.(like in figma)
+- It should include the following buttons and functionalities:
+    - Add More – to add more categories(top right)
+    - Delete Categories – to remove categories(bottom left)
+    - Save Changes – to save updates(bottom right)
+- 
+- Each category should include:
+    - Edit/View Button – to edit or view the category and its items

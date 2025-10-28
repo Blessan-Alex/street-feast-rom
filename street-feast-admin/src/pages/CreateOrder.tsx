@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMenuStore, Item } from '../store/menuStore';
 import { useOrdersStore } from '../store/ordersStore';
 import { OrderSummaryCard } from '../components/OrderSummaryCard';
-import { SizeSelector } from '../components/SizeSelector';
+import { ItemAdditionModal } from '../components/ItemAdditionModal';
 
 export const CreateOrder: React.FC = () => {
   const { categories, items, frequentItemIds } = useMenuStore();
   const { addDraftLine } = useOrdersStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -48,28 +51,41 @@ export const CreateOrder: React.FC = () => {
   }, [searchTerm]);
 
   const handleItemClick = (item: Item) => {
-    if (item.sizes.length > 0) {
-      // Show size selector
-      setItemToAdd(item);
-    } else {
-      // Add directly
-      addItemToOrder(item, null);
-    }
+    setItemToAdd(item);
   };
 
-  const addItemToOrder = (item: Item, size: 'Small' | 'Large' | null) => {
+  const handleAddItem = (data: { size: string | null; chefTip: string; quantity: number }) => {
+    if (!itemToAdd) return;
+    
     addDraftLine({
       id: crypto.randomUUID(),
-      itemId: item.id,
-      nameSnapshot: item.name,
-      size,
-      vegFlagSnapshot: item.vegFlag,
-      qty: 1
+      itemId: itemToAdd.id,
+      nameSnapshot: itemToAdd.name,
+      size: data.size,
+      vegFlagSnapshot: itemToAdd.vegFlag,
+      qty: data.quantity,
+      chefTip: data.chefTip
     });
+    
+    setItemToAdd(null);
   };
 
   const getCategoryById = (id: string) => {
     return categories.find(c => c.id === id);
+  };
+
+  const handleSelectCategory = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    const category = getCategoryById(categoryId);
+    if (category) {
+      navigate('/create-order', { state: { categoryName: category.name } });
+    }
+  };
+
+  const handleBackToCategories = () => {
+    setSelectedCategory(null);
+    // Clear breadcrumb state
+    navigate('/create-order', { replace: true });
   };
 
   return (
@@ -78,13 +94,18 @@ export const CreateOrder: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Search Bar */}
         <div className="px-6 py-4 bg-white border-b">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search items or categories..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary text-base"
+              className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary text-base"
             />
             {searchTerm && (
               <button
@@ -101,23 +122,30 @@ export const CreateOrder: React.FC = () => {
         {frequentItems.length > 0 && !searchTerm && (
           <div className="px-6 py-4 bg-gray-50 border-b">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Frequent Items</h3>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2">
               {frequentItems.map(item => (
-                <button
+                <div
                   key={item.id}
-                  onClick={() => handleItemClick(item)}
-                  className="flex-shrink-0 w-32 p-3 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-action-primary"
+                  className="flex-shrink-0 w-48 h-16 p-2 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-md transition-all flex items-center justify-between"
                 >
-                  <div className="text-sm font-medium text-gray-900 truncate">{item.name}</div>
-                  <div className="mt-1">
-                    <span className={`text-xs px-2 py-0.5 rounded ${
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{item.name}</div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
                       item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {item.vegFlag}
                     </span>
                   </div>
-                  <div className="mt-2 text-action-primary text-xl font-bold">+</div>
-                </button>
+                  <button
+                    onClick={() => handleItemClick(item)}
+                    className="ml-2 w-8 h-8 flex items-center justify-center bg-action-primary text-white rounded-full hover:bg-action-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    aria-label="Add item"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -140,14 +168,13 @@ export const CreateOrder: React.FC = () => {
                   {filteredItems.map(item => {
                     const category = getCategoryById(item.categoryId);
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        onClick={() => handleItemClick(item)}
-                        className="p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all text-left focus:outline-none focus:ring-2 focus:ring-action-primary"
+                        className="relative p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all"
                       >
-                        <div className="font-semibold text-gray-900">{item.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">{category?.name}</div>
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="font-semibold text-gray-900 mb-2">{item.name}</div>
+                        <div className="text-xs text-gray-500 mb-2">{category?.name}</div>
+                        <div className="flex items-center gap-2 mb-3">
                           <span className={`text-xs px-2 py-0.5 rounded ${
                             item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                           }`}>
@@ -157,7 +184,16 @@ export const CreateOrder: React.FC = () => {
                             <span className="text-xs text-gray-500">{item.sizes.join(', ')}</span>
                           )}
                         </div>
-                      </button>
+                        <button
+                          onClick={() => handleItemClick(item)}
+                          className="absolute bottom-3 right-3 w-8 h-8 flex items-center justify-center bg-action-primary text-white rounded-full hover:bg-action-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-action-primary shadow-md"
+                          aria-label="Add item"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -171,7 +207,7 @@ export const CreateOrder: React.FC = () => {
                   {getCategoryById(selectedCategory)?.name}
                 </h2>
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={handleBackToCategories}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
                 >
                   ← Back to Categories
@@ -179,13 +215,12 @@ export const CreateOrder: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {categoryItems.map(item => (
-                  <button
+                  <div
                     key={item.id}
-                    onClick={() => handleItemClick(item)}
-                    className="p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all text-left focus:outline-none focus:ring-2 focus:ring-action-primary"
+                    className="relative p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all"
                   >
-                    <div className="font-semibold text-gray-900">{item.name}</div>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="font-semibold text-gray-900 mb-2">{item.name}</div>
+                    <div className="flex items-center gap-2 mb-3">
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
@@ -195,7 +230,16 @@ export const CreateOrder: React.FC = () => {
                         <span className="text-xs text-gray-500">{item.sizes.join(', ')}</span>
                       )}
                     </div>
-                  </button>
+                    <button
+                      onClick={() => handleItemClick(item)}
+                      className="absolute bottom-3 right-3 w-8 h-8 flex items-center justify-center bg-action-primary text-white rounded-full hover:bg-action-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-action-primary shadow-md"
+                      aria-label="Add item"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -215,7 +259,7 @@ export const CreateOrder: React.FC = () => {
                     return (
                       <button
                         key={category.id}
-                        onClick={() => setSelectedCategory(category.id)}
+                        onClick={() => handleSelectCategory(category.id)}
                         className="p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all text-left focus:outline-none focus:ring-2 focus:ring-action-primary"
                       >
                         <div className="text-lg font-bold text-gray-900">{category.name}</div>
@@ -233,16 +277,13 @@ export const CreateOrder: React.FC = () => {
       {/* Right Sidebar - Order Summary */}
       <OrderSummaryCard />
 
-      {/* Size Selector Modal */}
+      {/* Item Addition Modal */}
       {itemToAdd && (
-        <SizeSelector
+        <ItemAdditionModal
           item={itemToAdd}
           isOpen={!!itemToAdd}
           onClose={() => setItemToAdd(null)}
-          onSelect={(size) => {
-            addItemToOrder(itemToAdd, size);
-            setItemToAdd(null);
-          }}
+          onAdd={handleAddItem}
         />
       )}
     </div>

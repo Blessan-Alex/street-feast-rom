@@ -58,6 +58,24 @@ export const Settings: React.FC = () => {
     setHasChanges(false);
   };
 
+  const downloadTemplate = () => {
+    const template = `Category,Item Name,Veg / Non-Veg,Portions (Half / Full),Flavours / Toppings
+Noodles/Rice,Hakka Noodles,Veg / Non Veg,,
+Pizza,Margherita Pizza,Veg,8'' / 12'',
+Burgers,Simply Veg Burger,Veg,,
+Drinks,Coke,,,
+Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spicy / Sweet Heat / High Spicy`;
+
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'menu-template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Template downloaded successfully');
+  };
+
   const getItemById = (id: string) => items.find(item => item.id === id);
   const selectedItems = selectedIds.map(id => getItemById(id)).filter(item => item !== undefined);
   const availableItems = items.filter(item => !selectedIds.includes(item.id));
@@ -67,6 +85,19 @@ export const Settings: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
         <p className="text-gray-600">Manage your restaurant settings and preferences.</p>
+      </div>
+
+      {/* Data Management Section */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Data Management</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Download CSV template for menu import or manage your data.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={downloadTemplate}>
+            Download CSV Template
+          </Button>
+        </div>
       </div>
 
       {/* Frequent Bought Section */}
@@ -105,7 +136,9 @@ export const Settings: React.FC = () => {
                       />
                       <span className="ml-2 text-sm text-gray-900">{item.name}</span>
                       <span className={`ml-auto text-xs px-2 py-0.5 rounded ${
-                        item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        item.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 
+                        item.vegFlag === 'NonVeg' ? 'bg-red-100 text-red-800' : 
+                        'bg-blue-100 text-blue-800'
                       }`}>
                         {item.vegFlag}
                       </span>
@@ -170,7 +203,9 @@ export const Settings: React.FC = () => {
                           )}
                         </div>
                         <span className={`text-xs px-2 py-1 rounded font-medium ${
-                          item!.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          item!.vegFlag === 'Veg' ? 'bg-green-100 text-green-800' : 
+                          item!.vegFlag === 'NonVeg' ? 'bg-red-100 text-red-800' : 
+                          'bg-blue-100 text-blue-800'
                         }`}>
                           {item!.vegFlag}
                         </span>

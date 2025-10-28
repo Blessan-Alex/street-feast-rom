@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ConditionalRedirect } from './components/ConditionalRedirect';
 import { Login } from './pages/Login';
 import { MenuChooser } from './pages/MenuChooser';
 import { MenuUpload } from './pages/MenuUpload';
@@ -68,7 +69,7 @@ function App() {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<ConditionalRedirect />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="manage-orders" element={<ManageOrders />} />
