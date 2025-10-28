@@ -234,6 +234,14 @@ export const ManageOrders: React.FC = () => {
                         }`}>
                           {item.vegFlagSnapshot}
                         </span>
+                        {/* Add chef tip display for individual items */}
+                        {item.chefTip && (
+                          <div className="mt-1">
+                            <span className="text-xs text-gray-600 italic">
+                              💡 {item.chefTip}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-lg font-semibold text-gray-900">× {item.qty}</div>
                     </div>

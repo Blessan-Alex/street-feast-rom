@@ -27,15 +27,15 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
   // Always declare add/edit wizard state hooks BEFORE any conditional returns
   const [categoryNameState, setCategoryNameState] = useState(category?.name || '');
   const [itemCount, setItemCount] = useState(1);
-  const [itemForms, setItemForms] = useState<Array<{ name: string; sizes: string[]; vegFlag: 'Veg' | 'NonVeg' }>>([
-    { name: '', sizes: [], vegFlag: 'Veg' }
+  const [itemForms, setItemForms] = useState<Array<{ name: string; sizes: string[]; sizesRaw?: string; vegFlag: 'Veg' | 'NonVeg' }>>([
+    { name: '', sizes: [], sizesRaw: '', vegFlag: 'Veg' }
   ]);
   useEffect(() => {
     if (itemCount < 1) setItemCount(1);
     setItemForms(prev => {
       const next = [...prev];
       if (itemCount > next.length) {
-        while (next.length < itemCount) next.push({ name: '', sizes: [], vegFlag: 'Veg' });
+        while (next.length < itemCount) next.push({ name: '', sizes: [], sizesRaw: '', vegFlag: 'Veg' });
       } else if (itemCount < next.length) {
         next.length = itemCount;
       }
@@ -140,6 +140,11 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
     const updateForm = (patch: Partial<typeof form>) => {
       setItemForms(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
     };
+    
+    const processSizesInput = (rawValue: string) => {
+      const sizes = rawValue.split(',').map(s => s.trim()).filter(s => s);
+      updateForm({ sizesRaw: rawValue, sizes: sizes });
+    };
     return (
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Item {idx + 1} of {itemCount}</h3>
@@ -156,8 +161,8 @@ export const MenuActionModal: React.FC<MenuActionModalProps> = ({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sizes (comma-separated)</label>
             <input
-              value={form.sizes.join(', ')}
-              onChange={(e) => updateForm({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+              value={form.sizesRaw || ''}
+              onChange={(e) => processSizesInput(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary"
               placeholder="Small, Medium, Large"
             />

@@ -8,6 +8,7 @@ interface ItemFormData {
   id: string;
   name: string;
   sizes: string[];
+  sizesRaw?: string; // Raw input for sizes field
   vegFlag: 'Veg' | 'NonVeg' | 'Both';
   flavors?: string;
 }
@@ -30,6 +31,7 @@ export const CategoryEditor: React.FC = () => {
         id: item.id,
         name: item.name,
         sizes: item.sizes,
+        sizesRaw: item.sizes.join(', '),
         vegFlag: item.vegFlag,
         flavors: item.flavors
       }));
@@ -38,6 +40,7 @@ export const CategoryEditor: React.FC = () => {
       id: `temp-${Date.now()}`,
       name: '',
       sizes: [],
+      sizesRaw: '',
       vegFlag: 'Veg' as const,
       flavors: ''
     }];
@@ -59,6 +62,7 @@ export const CategoryEditor: React.FC = () => {
       id: `temp-${Date.now()}-${Math.random()}`,
       name: '',
       sizes: [],
+      sizesRaw: '',
       vegFlag: 'Veg',
       flavors: ''
     }]);
@@ -79,6 +83,13 @@ export const CategoryEditor: React.FC = () => {
     // Clear error for this field
     delete errors[`${id}-${field}`];
     setErrors({ ...errors });
+  };
+
+  const processSizesInput = (id: string, rawValue: string) => {
+    const sizes = rawValue.split(',').map(s => s.trim()).filter(s => s);
+    setItems(items.map(item => 
+      item.id === id ? { ...item, sizesRaw: rawValue, sizes: sizes } : item
+    ));
   };
 
 
@@ -271,7 +282,7 @@ export const CategoryEditor: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor={`item-sizes-${item.id}`} className="block text-sm font-medium text-gray-700 mb-1">Available Sizes (optional)</label>
-                    <input id={`item-sizes-${item.id}`} type="text" value={item.sizes.join(', ')} onChange={(e) => { const sizes = e.target.value.split(',').map(s => s.trim()).filter(s => s); updateItem(item.id, 'sizes', sizes); }} placeholder="e.g., Small, Large or Half, Full or 8'', 12''" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-transparent text-base" />
+                    <input id={`item-sizes-${item.id}`} type="text" value={item.sizesRaw || ''} onChange={(e) => processSizesInput(item.id, e.target.value)} placeholder="e.g., Small, Large or Half, Full or 8'', 12''" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-action-primary focus:border-transparent text-base" />
                     <p className="mt-1 text-xs text-gray-500">Comma-separated sizes (leave blank for no size variants)</p>
                   </div>
                   <div>

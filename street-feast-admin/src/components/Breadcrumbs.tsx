@@ -5,7 +5,7 @@ import { useMenuStore } from '../store/menuStore';
 export const Breadcrumbs: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { categories } = useMenuStore();
+  const { } = useMenuStore();
 
   const getBreadcrumbs = () => {
     const pathSegments = location.pathname.split('/').filter(Boolean);

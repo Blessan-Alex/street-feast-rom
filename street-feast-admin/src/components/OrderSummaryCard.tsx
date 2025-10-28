@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrdersStore, OrderType } from '../store/ordersStore';
-import { useMenuStore } from '../store/menuStore';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
 import { toast } from './Toast';
 
 export const OrderSummaryCard: React.FC = () => {
   const navigate = useNavigate();
-  const { draft, setDraft, updateDraftLine, removeDraftLine, clearDraft, placeDraft } = useOrdersStore();
-  const { items } = useMenuStore();
+  const { draft, setDraft, removeDraftLine, clearDraft, placeDraft } = useOrdersStore();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPlaceOrderDialog, setShowPlaceOrderDialog] = useState(false);
 
@@ -41,22 +39,12 @@ export const OrderSummaryCard: React.FC = () => {
   };
 
   const handleEditItem = (item: any) => {
-    const menuItem = items.find(i => i.id === item.itemId);
-    if (menuItem) {
-      // Find the category for this item
-      const { categories } = useMenuStore.getState();
-      const category = categories.find(c => c.id === menuItem.categoryId);
-      
-      if (category) {
-        // Navigate to menu/create with category data
-        navigate('/menu/create', { 
-          state: { 
-            category: category,
-            editingItem: menuItem
-          } 
-        });
-      }
-    }
+    // Navigate to create-order page with the order item data for editing
+    navigate('/create-order', { 
+      state: { 
+        editingOrderItem: item
+      } 
+    });
   };
 
 
@@ -126,6 +114,15 @@ export const OrderSummaryCard: React.FC = () => {
                     </span>
                     <span className="text-xs text-gray-600 font-medium">Qty: {item.qty}</span>
                   </div>
+                  
+                  {/* Chef tip display */}
+                  {item.chefTip && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500 italic">
+                        💡 {item.chefTip.length > 30 ? `${item.chefTip.substring(0, 30)}...` : item.chefTip}
+                      </span>
+                    </div>
+                  )}
                   
                   {/* Edit button */}
                   <button

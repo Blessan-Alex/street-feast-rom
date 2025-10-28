@@ -33,9 +33,6 @@ export const MenuSummary: React.FC = () => {
     });
   };
 
-  const handleDelete = (category: Category) => {
-    setDeletingCategory(category);
-  };
 
   const handleAddCategory = () => {
     setShowAddModal(true);

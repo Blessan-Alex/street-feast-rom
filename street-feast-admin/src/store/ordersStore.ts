@@ -12,6 +12,7 @@ export interface OrderItem {
   size: string | null; // Now supports any size format
   vegFlagSnapshot: 'Veg' | 'NonVeg' | 'Both';
   qty: number;
+  chefTip: string; // Individual chef tip for this order item
 }
 
 // Order structure

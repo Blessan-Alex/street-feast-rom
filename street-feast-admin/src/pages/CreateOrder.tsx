@@ -7,13 +7,14 @@ import { ItemAdditionModal } from '../components/ItemAdditionModal';
 
 export const CreateOrder: React.FC = () => {
   const { categories, items, frequentItemIds } = useMenuStore();
-  const { addDraftLine } = useOrdersStore();
+  const { addDraftLine, updateDraftLine } = useOrdersStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [itemToAdd, setItemToAdd] = useState<Item | null>(null);
+  const [editingOrderItem, setEditingOrderItem] = useState<any>(null);
 
   // Frequent items
   const frequentItems = useMemo(() => {
@@ -50,6 +51,19 @@ export const CreateOrder: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Handle editing order items from navigation state
+  useEffect(() => {
+    const editingItem = location.state?.editingOrderItem;
+    if (editingItem) {
+      setEditingOrderItem(editingItem);
+      // Find the menu item and set it for editing
+      const menuItem = items.find(i => i.id === editingItem.itemId);
+      if (menuItem) {
+        setItemToAdd(menuItem);
+      }
+    }
+  }, [location.state, items]);
+
   const handleItemClick = (item: Item) => {
     setItemToAdd(item);
   };
@@ -57,15 +71,26 @@ export const CreateOrder: React.FC = () => {
   const handleAddItem = (data: { size: string | null; chefTip: string; quantity: number }) => {
     if (!itemToAdd) return;
     
-    addDraftLine({
-      id: crypto.randomUUID(),
-      itemId: itemToAdd.id,
-      nameSnapshot: itemToAdd.name,
-      size: data.size,
-      vegFlagSnapshot: itemToAdd.vegFlag,
-      qty: data.quantity,
-      chefTip: data.chefTip
-    });
+    if (editingOrderItem) {
+      // Update existing order item
+      updateDraftLine(editingOrderItem.id, {
+        size: data.size,
+        qty: data.quantity,
+        chefTip: data.chefTip
+      });
+      setEditingOrderItem(null);
+    } else {
+      // Add new order item
+      addDraftLine({
+        id: crypto.randomUUID(),
+        itemId: itemToAdd.id,
+        nameSnapshot: itemToAdd.name,
+        size: data.size,
+        vegFlagSnapshot: itemToAdd.vegFlag,
+        qty: data.quantity,
+        chefTip: data.chefTip
+      });
+    }
     
     setItemToAdd(null);
   };
@@ -291,8 +316,16 @@ export const CreateOrder: React.FC = () => {
         <ItemAdditionModal
           item={itemToAdd}
           isOpen={!!itemToAdd}
-          onClose={() => setItemToAdd(null)}
+          onClose={() => {
+            setItemToAdd(null);
+            setEditingOrderItem(null);
+          }}
           onAdd={handleAddItem}
+          editData={editingOrderItem ? {
+            size: editingOrderItem.size,
+            chefTip: editingOrderItem.chefTip || '',
+            quantity: editingOrderItem.qty
+          } : undefined}
         />
       )}
     </div>

@@ -35,7 +35,6 @@ export const Layout: React.FC = () => {
 
   // Check if menu is loaded (first-time user detection)
   const hasMenu = categories.length > 0;
-  const isMenuSetup = location.pathname.startsWith('/menu');
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', enabled: hasMenu },

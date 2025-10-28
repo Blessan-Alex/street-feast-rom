@@ -27,13 +27,6 @@ export const MenuChooser: React.FC = () => {
     }
   };
 
-  const handleManualClick = () => {
-    if (!hasMenu) {
-      setShowUploadModal(true);
-    } else {
-      navigate('/menu/create');
-    }
-  };
 
   // First-time user experience - show only Upload Menu card
   if (!hasMenu) {

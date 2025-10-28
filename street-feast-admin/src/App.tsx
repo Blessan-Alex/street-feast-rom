@@ -5,7 +5,6 @@ import { ToastContainer } from './components/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ConditionalRedirect } from './components/ConditionalRedirect';
 import { Login } from './pages/Login';
-import { MenuChooser } from './pages/MenuChooser';
 import { MenuUpload } from './pages/MenuUpload';
 import { CategoryEditor } from './pages/CategoryEditor';
 import { MenuSummary } from './pages/MenuSummary';
