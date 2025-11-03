@@ -22,3 +22,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
+
+// Expose electronAPI for notifications
+contextBridge.exposeInMainWorld('electronAPI', {
+  notify: (payload: { title: string; body: string }) => {
+    ipcRenderer.send('notify', payload)
+  }
+})

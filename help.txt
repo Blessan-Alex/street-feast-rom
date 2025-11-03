@@ -1,61 +1,348 @@
-We need to make some ui ux changes 
-**Application UI/UX Requirements**
+MVP (no Blaze, works today)
+Android
 
-**1. Data Loading**
+Foreground: Firestore snapshot listener → show notifications.
 
-- Data loading should be mandatory and rigid to ensure consistency.(should not navigate to other pages , only adding menu for first time user)
-by this we mean that for the first time user , after loging in it menu should come for the first time , there should be only one card saying Uplod menu, then after clicking that floating cards two should open up saying upload manually or import file , while this is happening the user should not be able to naviagte the other screens becasue menu uploading is the first and foremost thing, after it is done then normal , frits time user can be identified as if menu is not loaded
+Background/killed: WorkManager polling every 15 min → show missed notifications.
 
-**2. Default Page**
+Add updatedAt: serverTimestamp() and status to each order; poll with updatedAt > lastSeenAt.
 
-- After loading, the “Create Order” page should be set as the default landing page. this is for existing user(if menu is loaded already)
+Gradle
 
-**3. Header**
+// app/build.gradle.kts
+dependencies {
+  implementation("androidx.work:work-runtime-ktx:2.9.0")
+  implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
+  implementation("com.google.firebase:firebase-firestore-ktx")
+}
 
-- Remove “Street Feast Admin” text from the header.
-- Add breadcrumbs in the header to display the file pathway/navigation trail. It should show minimally wehre we are , [create order, category name], etc etc
 
-**4. Navigation Panel**
+Application
 
-- Move the Logout option to the side navigation panel (bottom). 
-- The side navigation panel should be shrinkable/collapsible for better usability.
+class StreetFeastApplication : Application() {
+  override fun onCreate() {
+    super.onCreate()
+    FirebaseApp.initializeApp(this)
 
-**5. Item Card**
+    // Foreground push watcher
+    OrderPushWatcher(this, STORE_ID).start()
 
-- Each item card should include an “Add” button.(remove plus minus from order summary)
+    // Background polling every 15 min
+    val req = PeriodicWorkRequestBuilder<OrderPollWorker>(15, TimeUnit.MINUTES)
+      .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+      .build()
+    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+      "order_poll", ExistingPeriodicWorkPolicy.UPDATE, req
+    )
+  }
+}
 
-**6. Item Addition Flow (Chronology)**
-We are changing how each item works , 
 
-1. Add Button/icon →
-after this ,each should be like floating windows sepearate
-2. Enter Quantity (large, small, 8 12 extra large etc etc) if item doesnt have then avoid this→
-3. Chef Tip (includes text input with suggestion text) →
-4. Select Number of Items →
-5. Place Order(one by one)
+Realtime watcher (foreground)
 
-**7. Order Summary**
+class OrderPushWatcher(
+  private val ctx: Context,
+  private val storeId: String
+) {
+  fun start(): ListenerRegistration {
+    val db = Firebase.firestore
+    return db.collection("stores").document(storeId).collection("orders")
+      .addSnapshotListener { snap, e ->
+        if (e != null || snap == null) return@addSnapshotListener
+        for (dc in snap.documentChanges) {
+          val data = dc.document.data
+          when (dc.type) {
+            DocumentChange.Type.ADDED -> NotificationHelper.showNewOrderNotification(ctx, data)
+            DocumentChange.Type.MODIFIED -> if (data["status"] == "Prepared")
+              NotificationHelper.showPreparedNotification(ctx, data)
+            else -> Unit
+          }
+        }
+      }
+  }
+}
 
-- All items in the order summary should be editable(insteaf of + or - add edit ).
-edit should lead to same kind of item adding flaoting window as above
-- Each item should have a cross (×) icon on the top-right corner to delete the order.
-- The rest of the layout and information should remain the same.
 
-**8. Order Confirmation**
+WorkManager poller (background/killed)
 
-- Both confirmation and cancellation actions should appear after a confirmation alert.(pop up)(this is when placing an order or cancelling an order)
+class OrderPollWorker(appCtx: Context, params: WorkerParameters) : CoroutineWorker(appCtx, params) {
+  override suspend fun doWork(): Result {
+    val prefs = applicationContext.getSharedPreferences("poll", Context.MODE_PRIVATE)
+    val last = prefs.getLong("lastSeen", 0L)
+    val since = Timestamp(Date(if (last == 0L) System.currentTimeMillis() - 60*60*1000 else last))
 
-**9. Search Functionality**
+    val snap = Firebase.firestore
+      .collection("stores").document(STORE_ID).collection("orders")
+      .whereGreaterThan("updatedAt", since)
+      .limit(50)
+      .get().await()
 
-- Add a search icon inside the search bar.
+    var newest = last
+    for (doc in snap.documents) {
+      val data = doc.data ?: continue
+      val ts = (data["updatedAt"] as? Timestamp)?.toDate()?.time ?: last
+      newest = maxOf(newest, ts)
+      val status = data["status"] as? String ?: ""
+      if (status == "Prepared") NotificationHelper.showPreparedNotification(applicationContext, data)
+      else NotificationHelper.showNewOrderNotification(applicationContext, data)
+    }
+    prefs.edit().putLong("lastSeen", newest).apply()
+    return Result.success()
+  }
+}
 
-**10. Menu Interface**
 
-- The Menu Interface should visually match the “Create Order” page.(like in figma)
-- It should include the following buttons and functionalities:
-    - Add More – to add more categories(top right)
-    - Delete Categories – to remove categories(bottom left)
-    - Save Changes – to save updates(bottom right)
-- 
-- Each category should include:
-    - Edit/View Button – to edit or view the category and its items
+Caveats for MVP: background delivery can be delayed or skipped (Doze/OEM). Good enough for demo; not production-grade.
+
+Electron
+
+Do not use Firestore from the main process.
+
+Use renderer Firestore Web SDK with long-poll fallback; send an IPC to main for native notifications.
+
+Renderer
+
+// src/renderer/orderWatcher.ts
+import { getFirestore, collection, onSnapshot, initializeFirestore } from "firebase/firestore";
+import { app } from "./firebaseApp";
+const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, useFetchStreams: false });
+
+export function watchOrders(storeId: string){
+  const ref = collection(db, "stores", storeId, "orders");
+  return onSnapshot(ref, (snap) => {
+    snap.docChanges().forEach((dc) => {
+      const data = dc.doc.data();
+      if (dc.type === "added") window.electronAPI.notify({ title: "New order", body: data.id });
+      if (dc.type === "modified" && data.status === "Prepared")
+        window.electronAPI.notify({ title: "Order prepared", body: data.id });
+    });
+  });
+}
+
+
+Preload → IPC
+
+// preload.ts
+const { contextBridge, ipcRenderer } = require("electron");
+contextBridge.exposeInMainWorld("electronAPI", {
+  notify: (payload) => ipcRenderer.send("notify", payload),
+});
+
+
+Main
+
+// main.ts
+import { ipcMain, Notification } from "electron";
+ipcMain.on("notify", (_evt, { title, body }) => {
+  new Notification({ title, body }).show();
+});
+
+Production path (reliable push)
+
+You still keep Firestore for data, but introduce FCM with your own tiny backend (so you don’t need Blaze or Cloud Functions).
+
+Why this works:
+
+FCM is free.
+
+You host a small server (Render/Fly.io/Cloud Run free tier) with the Firebase Admin SDK (holds the service account privately).
+
+Electron calls your webhook after writing an order.
+
+Server validates and sends FCM to Android (topic or token).
+
+Android receives instantly even when app is killed.
+
+Minimal backend (Node + Express)
+// server.js
+import express from "express";
+import admin from "firebase-admin";
+import cors from "cors";
+
+admin.initializeApp({ credential: admin.credential.applicationDefault() });
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// POST /notify {storeId, orderId, type}
+app.post("/notify", async (req, res) => {
+  const { storeId, orderId, type } = req.body;
+  // TODO: verify HMAC signature from Electron (store-level secret), rate-limit
+  const topic = `store_${storeId}`;
+  await admin.messaging().send({
+    topic,
+    data: { type, orderId, storeId }
+  });
+  res.json({ ok: true });
+});
+
+app.listen(process.env.PORT || 8080);
+
+
+Deploy on:
+
+Render free / Fly.io free / Cloud Run (has generous free).
+No Blaze needed—this isn’t a Firebase Function.
+
+
+
+Reviewing `help.txt` and preparing an implementation plan.
+
+
+[3 tools called]
+
+Creating an implementation plan based on `help.txt`:
+
+
+[1 tool called]
+
+Drafting the implementation plan based on `help.txt`:
+
+
+[2 tools called]
+
+## Implementation Plan: MVP Notifications (Android + Electron) per help.txt
+
+### Overview
+Implement client-side Firestore notifications for Android (foreground + background polling) and Electron (renderer-side + IPC), avoiding main-process Firestore to prevent GRPC errors.
+
+---
+
+## Part 1: Android MVP Implementation
+
+### Task 1.1: Add WorkManager Dependency
+- File: `street-feast-android/app/build.gradle.kts`
+- Add: `implementation("androidx.work:work-runtime-ktx:2.9.0")`
+- Verify Firebase BOM includes Firestore (already present)
+
+### Task 1.2: Create OrderPushWatcher Class
+- File: `street-feast-android/app/src/main/java/com/streatfeast/app/orders/OrderPushWatcher.kt`
+- Implementation:
+  - Class with `ctx: Context` and `storeId: String` parameters
+  - `start()` returns `ListenerRegistration`
+  - Listens to `stores/{storeId}/orders` collection
+  - On ADDED: calls `NotificationHelper.showNewOrderNotification(ctx, data)`
+  - On MODIFIED: if status == "Prepared", calls `NotificationHelper.showPreparedNotification(ctx, data)`
+- Uses Firebase.firestore (Firebase KTX syntax)
+
+### Task 1.3: Create OrderPollWorker Class
+- File: `street-feast-android/app/src/main/java/com/streatfeast/app/orders/OrderPollWorker.kt`
+- Implementation:
+  - Extends `CoroutineWorker`
+  - Reads `lastSeen` timestamp from SharedPreferences
+  - Queries `stores/{STORE_ID}/orders` where `updatedAt > since`
+  - For each order: shows notification and tracks newest timestamp
+  - Saves newest timestamp back to SharedPreferences
+- Handles edge case: if `lastSeen == 0L`, look back 1 hour
+
+### Task 1.4: Update NotificationHelper
+- File: `street-feast-android/app/src/main/java/com/streatfeast/app/utils/NotificationHelper.kt`
+- Add overloads:
+  - `showNewOrderNotification(ctx: Context, data: Map<String, Any>)`
+  - `showPreparedNotification(ctx: Context, data: Map<String, Any>)`
+- Extract `orderNumber` and other fields from Map
+- Keep existing Int-based methods for backward compatibility
+
+### Task 1.5: Update StreetFeastApplication
+- File: `street-feast-android/app/src/main/java/com/streatfeast/app/StreetFeastApplication.kt`
+- Changes:
+  - Uncomment Firebase initialization (lines 14-23)
+  - Add WorkManager imports
+  - Start `OrderPushWatcher(this, STORE_ID).start()`
+  - Schedule `OrderPollWorker` every 15 minutes with network constraint
+  - Use `ExistingPeriodicWorkPolicy.UPDATE`
+
+### Task 1.6: Update Constants for STORE_ID
+- File: `street-feast-android/app/src/main/java/com/streatfeast/app/utils/Constants.kt`
+- Ensure `STORE_ID` is available (should already be from BuildConfig)
+- Verify STORE_ID constant matches what's used in OrderPollWorker
+
+---
+
+## Part 2: Electron MVP Implementation
+
+### Task 2.1: Create Renderer-Side Order Watcher
+- File: `street-feast-admin/src/utils/orderWatcher.ts` (or `src/renderer/orderWatcher.ts` if that structure exists)
+- Implementation:
+  - Use `initializeFirestore` with `experimentalAutoDetectLongPolling: true, useFetchStreams: false`
+  - Export `watchOrders(storeId: string)` function
+  - Listen to `stores/{storeId}/orders` collection
+  - On ADDED: `window.electronAPI.notify({ title: "New order", body: data.id })`
+  - On MODIFIED (if status === "Prepared"): `window.electronAPI.notify({ title: "Order prepared", body: data.id })`
+
+### Task 2.2: Update Preload Script
+- File: `street-feast-admin/electron/preload.ts`
+- Add to `contextBridge.exposeInMainWorld`:
+  - Create `electronAPI` object with `notify` method
+  - `notify: (payload) => ipcRenderer.send("notify", payload)`
+
+### Task 2.3: Update Main Process IPC Handler
+- File: `street-feast-admin/electron/main.ts`
+- Add:
+  - Import `ipcMain` and `Notification` from electron
+  - `ipcMain.on("notify", (_evt, { title, body }) => { new Notification({ title, body }).show(); })`
+
+### Task 2.4: Wire Watcher in Renderer
+- File: `street-feast-admin/src/main.tsx`
+- Import and call `watchOrders(storeId)` after app initialization
+- Use `storeId` from `firebase.ts` (already exported)
+
+### Task 2.5: Ensure Order Store Writes updatedAt
+- File: `street-feast-admin/src/store/ordersStore.ts`
+- Verify `placeDraft()` writes `updatedAt: serverTimestamp()` to Firestore
+- Ensure all status updates write `updatedAt: serverTimestamp()`
+
+---
+
+## Part 3: Verification & Testing
+
+### Task 3.1: Path Verification
+- Verify all paths use `stores/{storeId}/orders` (not top-level `/orders`)
+- Android: OrderPushWatcher, OrderPollWorker, OrderRepository
+- Electron: orderWatcher.ts, ordersStore.ts
+
+### Task 3.2: TypeScript Type Definitions
+- File: `street-feast-admin/src/vite-env.d.ts` or similar
+- Add: `interface Window { electronAPI: { notify: (payload: { title: string; body: string }) => void } }`
+
+### Task 3.3: Testing Checklist
+- Android:
+  - App running: Create order in Firestore → notification appears
+  - App killed: Create order → notification appears within 15-20 min
+  - Status change to Prepared → notification appears
+- Electron:
+  - Create order → desktop notification appears
+  - Status change to Prepared → desktop notification appears
+  - Verify no GRPC errors in console
+
+---
+
+## Implementation Notes
+
+1. Android store ID: Use `Constants.STORE_ID` (from BuildConfig) consistently
+2. Electron store ID: Use `storeId` from `firebase.ts` (VITE_STORE_ID env var)
+3. NotificationHelper: Support both `Int orderNumber` and `Map<String, Any> data` signatures
+4. Error handling: Add try-catch in watchers to prevent crashes
+5. Firestore rules: Ensure reads are allowed for authenticated users (for background polling)
+
+---
+
+## Files to Create/Modify
+
+**Android (5 files):**
+1. `app/build.gradle.kts` - Add WorkManager dependency
+2. `app/src/main/java/.../orders/OrderPushWatcher.kt` - NEW
+3. `app/src/main/java/.../orders/OrderPollWorker.kt` - NEW
+4. `app/src/main/java/.../utils/NotificationHelper.kt` - UPDATE (add Map overloads)
+5. `app/src/main/java/.../StreetFeastApplication.kt` - UPDATE (enable Firebase, start watchers)
+
+**Electron (5 files):**
+1. `src/utils/orderWatcher.ts` - NEW
+2. `electron/preload.ts` - UPDATE (add electronAPI)
+3. `electron/main.ts` - UPDATE (add IPC handler)
+4. `src/main.tsx` - UPDATE (wire watcher)
+5. `src/store/ordersStore.ts` - VERIFY (updatedAt writes)
+
+---
+
+This plan implements the MVP notification system from `help.txt`, using client-side Firestore listeners to avoid Blaze plan requirements.

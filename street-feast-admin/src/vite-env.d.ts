@@ -6,5 +6,8 @@ interface Window {
     off: (channel: string, ...args: any[]) => void;
     send: (channel: string, ...args: any[]) => void;
     invoke: (channel: string, ...args: any[]) => void;
-  }
+  };
+  electronAPI: {
+    notify: (payload: { title: string; body: string }) => void;
+  };
 }

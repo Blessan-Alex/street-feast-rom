@@ -32,6 +32,19 @@ object NotificationHelper {
     }
     
     /**
+     * Show notification for new order (Map overload)
+     */
+    fun showNewOrderNotification(context: Context, data: Map<String, Any>) {
+        val orderNumber = when (val orderNum = data["orderNumber"]) {
+            is Long -> orderNum.toInt()
+            is Int -> orderNum
+            is Number -> orderNum.toInt()
+            else -> 0
+        }
+        showNewOrderNotification(context, orderNumber)
+    }
+    
+    /**
      * Show notification for new order
      */
     fun showNewOrderNotification(context: Context, orderNumber: Int) {
@@ -60,6 +73,19 @@ object NotificationHelper {
         
         // Play sound
         SoundManager.playSound(context, Constants.SOUND_PING)
+    }
+    
+    /**
+     * Show notification for prepared order (Map overload)
+     */
+    fun showPreparedNotification(context: Context, data: Map<String, Any>) {
+        val orderNumber = when (val orderNum = data["orderNumber"]) {
+            is Long -> orderNum.toInt()
+            is Int -> orderNum
+            is Number -> orderNum.toInt()
+            else -> 0
+        }
+        showPreparedNotification(context, orderNumber)
     }
     
     /**

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -70,4 +70,11 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  
+  // IPC handler for notifications from renderer
+  ipcMain.on('notify', (_evt, { title, body }: { title: string; body: string }) => {
+    new Notification({ title, body }).show()
+  })
+})

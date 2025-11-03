@@ -10,6 +10,7 @@ export const OrderSummaryCard: React.FC = () => {
   const { draft, setDraft, removeDraftLine, clearDraft, placeDraft } = useOrdersStore();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPlaceOrderDialog, setShowPlaceOrderDialog] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const handleTypeChange = (type: OrderType) => {
     setDraft({ type });
@@ -19,8 +20,10 @@ export const OrderSummaryCard: React.FC = () => {
     setShowPlaceOrderDialog(true);
   };
 
-  const handlePlaceOrder = () => {
-    const result = placeDraft();
+  const handlePlaceOrder = async () => {
+    setIsPlacingOrder(true);
+    try {
+      const result = await placeDraft();
     
     if (!result.ok) {
       toast.error(result.error || 'Failed to place order');
@@ -30,6 +33,12 @@ export const OrderSummaryCard: React.FC = () => {
     toast.success(`Order #${result.order?.orderNumber} created successfully!`);
     navigate('/dashboard');
     setShowPlaceOrderDialog(false);
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const handleCancelOrder = () => {
@@ -159,21 +168,21 @@ export const OrderSummaryCard: React.FC = () => {
         <Button
           variant="primary"
           onClick={handlePlaceOrderClick}
-          disabled={draft.orderItems.length === 0}
+          disabled={draft.orderItems.length === 0 || isPlacingOrder}
           className="w-full"
           size="medium"
         >
-          Place Order ({totalItems} items)
+          {isPlacingOrder ? 'Placing Order...' : `Place Order (${totalItems} items)`}
         </Button>
       </div>
 
       {/* Place Order Confirmation Dialog */}
       <Dialog
         isOpen={showPlaceOrderDialog}
-        onClose={() => setShowPlaceOrderDialog(false)}
+        onClose={() => !isPlacingOrder && setShowPlaceOrderDialog(false)}
         title="Place Order"
         message={`Ready to place this order with ${totalItems} items?`}
-        confirmText="Yes, Place Order"
+        confirmText={isPlacingOrder ? "Placing..." : "Yes, Place Order"}
         cancelText="Cancel"
         onConfirm={handlePlaceOrder}
         confirmVariant="primary"

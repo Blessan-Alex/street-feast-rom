@@ -23,6 +23,7 @@ export const ManageOrders: React.FC = () => {
     orderId: string;
     newStatus: OrderStatus;
   } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   const statuses = ['All', 'Created', 'Accepted', 'InKitchen', 'Prepared', 'Delivered', 'Closed', 'Canceled'];
 
@@ -58,13 +59,21 @@ export const ManageOrders: React.FC = () => {
     }
   };
 
-  const applyStatusChange = (orderId: string, newStatus: OrderStatus) => {
-    const success = updateStatus(orderId, newStatus);
-    if (success) {
-      toast.success(`Order status updated to ${newStatus}`);
-      setConfirmDialog(null);
-    } else {
-      toast.error('Failed to update order status');
+  const applyStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    setUpdatingStatus(orderId);
+    try {
+      const success = await updateStatus(orderId, newStatus);
+      if (success) {
+        toast.success(`Order status updated to ${newStatus}`);
+        setConfirmDialog(null);
+      } else {
+        toast.error('Failed to update order status');
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
@@ -258,8 +267,13 @@ export const ManageOrders: React.FC = () => {
                       key={nextStatus}
                       variant={nextStatus === 'Canceled' ? 'danger' : 'primary'}
                       onClick={() => handleStatusChange(selectedOrder.id, nextStatus)}
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      {nextStatus === 'Canceled' ? 'Cancel Order' : `Mark as ${nextStatus}`}
+                      {updatingStatus === selectedOrder.id 
+                        ? 'Updating...' 
+                        : nextStatus === 'Canceled' 
+                          ? 'Cancel Order' 
+                          : `Mark as ${nextStatus}`}
                     </Button>
                   ))}
                   {getAllowedTransitions(selectedOrder.status).length === 0 && (
