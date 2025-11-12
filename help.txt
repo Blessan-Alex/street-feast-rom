@@ -1,348 +1,59 @@
-MVP (no Blaze, works today)
-Android
-
-Foreground: Firestore snapshot listener → show notifications.
-
-Background/killed: WorkManager polling every 15 min → show missed notifications.
-
-Add updatedAt: serverTimestamp() and status to each order; poll with updatedAt > lastSeenAt.
-
-Gradle
-
-// app/build.gradle.kts
-dependencies {
-  implementation("androidx.work:work-runtime-ktx:2.9.0")
-  implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
-  implementation("com.google.firebase:firebase-firestore-ktx")
-}
-
-
-Application
-
-class StreetFeastApplication : Application() {
-  override fun onCreate() {
-    super.onCreate()
-    FirebaseApp.initializeApp(this)
-
-    // Foreground push watcher
-    OrderPushWatcher(this, STORE_ID).start()
-
-    // Background polling every 15 min
-    val req = PeriodicWorkRequestBuilder<OrderPollWorker>(15, TimeUnit.MINUTES)
-      .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-      .build()
-    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-      "order_poll", ExistingPeriodicWorkPolicy.UPDATE, req
-    )
-  }
-}
-
-
-Realtime watcher (foreground)
-
-class OrderPushWatcher(
-  private val ctx: Context,
-  private val storeId: String
-) {
-  fun start(): ListenerRegistration {
-    val db = Firebase.firestore
-    return db.collection("stores").document(storeId).collection("orders")
-      .addSnapshotListener { snap, e ->
-        if (e != null || snap == null) return@addSnapshotListener
-        for (dc in snap.documentChanges) {
-          val data = dc.document.data
-          when (dc.type) {
-            DocumentChange.Type.ADDED -> NotificationHelper.showNewOrderNotification(ctx, data)
-            DocumentChange.Type.MODIFIED -> if (data["status"] == "Prepared")
-              NotificationHelper.showPreparedNotification(ctx, data)
-            else -> Unit
-          }
-        }
-      }
-  }
-}
-
-
-WorkManager poller (background/killed)
-
-class OrderPollWorker(appCtx: Context, params: WorkerParameters) : CoroutineWorker(appCtx, params) {
-  override suspend fun doWork(): Result {
-    val prefs = applicationContext.getSharedPreferences("poll", Context.MODE_PRIVATE)
-    val last = prefs.getLong("lastSeen", 0L)
-    val since = Timestamp(Date(if (last == 0L) System.currentTimeMillis() - 60*60*1000 else last))
-
-    val snap = Firebase.firestore
-      .collection("stores").document(STORE_ID).collection("orders")
-      .whereGreaterThan("updatedAt", since)
-      .limit(50)
-      .get().await()
-
-    var newest = last
-    for (doc in snap.documents) {
-      val data = doc.data ?: continue
-      val ts = (data["updatedAt"] as? Timestamp)?.toDate()?.time ?: last
-      newest = maxOf(newest, ts)
-      val status = data["status"] as? String ?: ""
-      if (status == "Prepared") NotificationHelper.showPreparedNotification(applicationContext, data)
-      else NotificationHelper.showNewOrderNotification(applicationContext, data)
-    }
-    prefs.edit().putLong("lastSeen", newest).apply()
-    return Result.success()
-  }
-}
-
-
-Caveats for MVP: background delivery can be delayed or skipped (Doze/OEM). Good enough for demo; not production-grade.
-
-Electron
-
-Do not use Firestore from the main process.
-
-Use renderer Firestore Web SDK with long-poll fallback; send an IPC to main for native notifications.
-
-Renderer
-
-// src/renderer/orderWatcher.ts
-import { getFirestore, collection, onSnapshot, initializeFirestore } from "firebase/firestore";
-import { app } from "./firebaseApp";
-const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, useFetchStreams: false });
-
-export function watchOrders(storeId: string){
-  const ref = collection(db, "stores", storeId, "orders");
-  return onSnapshot(ref, (snap) => {
-    snap.docChanges().forEach((dc) => {
-      const data = dc.doc.data();
-      if (dc.type === "added") window.electronAPI.notify({ title: "New order", body: data.id });
-      if (dc.type === "modified" && data.status === "Prepared")
-        window.electronAPI.notify({ title: "Order prepared", body: data.id });
-    });
-  });
-}
-
-
-Preload → IPC
-
-// preload.ts
-const { contextBridge, ipcRenderer } = require("electron");
-contextBridge.exposeInMainWorld("electronAPI", {
-  notify: (payload) => ipcRenderer.send("notify", payload),
-});
-
-
-Main
-
-// main.ts
-import { ipcMain, Notification } from "electron";
-ipcMain.on("notify", (_evt, { title, body }) => {
-  new Notification({ title, body }).show();
-});
-
-Production path (reliable push)
-
-You still keep Firestore for data, but introduce FCM with your own tiny backend (so you don’t need Blaze or Cloud Functions).
-
-Why this works:
-
-FCM is free.
-
-You host a small server (Render/Fly.io/Cloud Run free tier) with the Firebase Admin SDK (holds the service account privately).
-
-Electron calls your webhook after writing an order.
-
-Server validates and sends FCM to Android (topic or token).
-
-Android receives instantly even when app is killed.
-
-Minimal backend (Node + Express)
-// server.js
-import express from "express";
-import admin from "firebase-admin";
-import cors from "cors";
-
-admin.initializeApp({ credential: admin.credential.applicationDefault() });
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// POST /notify {storeId, orderId, type}
-app.post("/notify", async (req, res) => {
-  const { storeId, orderId, type } = req.body;
-  // TODO: verify HMAC signature from Electron (store-level secret), rate-limit
-  const topic = `store_${storeId}`;
-  await admin.messaging().send({
-    topic,
-    data: { type, orderId, storeId }
-  });
-  res.json({ ok: true });
-});
-
-app.listen(process.env.PORT || 8080);
-
-
-Deploy on:
-
-Render free / Fly.io free / Cloud Run (has generous free).
-No Blaze needed—this isn’t a Firebase Function.
-
-
-
-Reviewing `help.txt` and preparing an implementation plan.
-
-
 [3 tools called]
 
-Creating an implementation plan based on `help.txt`:
+## Migration Overview
 
+- **Current state (Firebase/Firestore/FCM)**: `StreetFeastApplication` boots Firebase, enables Firestore persistence, creates a local notification channel, registers a foreground listener (`OrderPushWatcher`) for live order updates, and starts `OrderPollWorker` via WorkManager to poll every 15 min for background changes. Local notifications are rendered through `NotificationHelper`; a basic FCM service (`AppMessagingService`) handles remote pushes but depends on Firebase Cloud Messaging topics/triggers that currently don’t run in the background reliably.
+- **Proof-of-concept (Supabase + OneSignal)**: The `test_notifications` sandbox app initializes OneSignal in `ApplicationClass`, sets verbose logging, and requests POST_NOTIFICATION permission on launch. `MainActivity` is still a stock UI; no Supabase client or data sync is wired yet. It confirms we can prompt and receive OneSignal pushes when the SDK is initialized correctly.
 
-[1 tool called]
+## Should We Switch?
 
-Drafting the implementation plan based on `help.txt`:
+- **Pros**: Supabase provides SQL (Postgres) with row-level security, functions, and real-time channels that can replace Firestore’s real-time listeners. OneSignal offers richer, reliable background push delivery and segmentation; the free tiers cover moderate volumes without the FCM topic/trigger complexity we have now.
+- **Cons & risks**: Supabase free tier has row and bandwidth limits; we lose Firestore’s offline cache unless we add our own (Room/SQLite). We must rebuild auth (Supabase Auth or external IdP) and port Cloud Functions logic. OneSignal adds another vendor and client SDK; we must handle user/device registration explicitly.
 
+## Migration Roadmap
 
-[2 tools called]
+- **Phase 0 – Architecture**
+  - Data model mapping: translate `stores/{storeId}/orders` schema into normalized Postgres tables (`stores`, `orders`, `order_items`, etc.).
+  - Event flow: design Supabase `Realtime` subscriptions (channel per store) or use database triggers → Edge Functions → OneSignal REST to push background notifications.
+  - Security: define Supabase Row Level Security policies mirroring Firebase rules (roles: admin, chef, waiter).
+  - Auth strategy: decide between Supabase Auth (email/password, magic link) or existing identity provider; plan migration for current users.
 
-## Implementation Plan: MVP Notifications (Android + Electron) per help.txt
+- **Phase 1 – Supabase Backend Setup**
+  - Provision project, configure Postgres schema, seed dev/test data.
+  - Implement RLS policies and migrations under version control (SQL migrations).
+  - Create stored procedures or triggers for order status transitions that currently live in Firebase Cloud Functions (`createOrderNumber`, auto `InKitchen`, etc.).
+  - Build Edge Function to call OneSignal when `orders.status` enters `Prepared`/`Created`/`Canceled`, including payload shaping.
 
-### Overview
-Implement client-side Firestore notifications for Android (foreground + background polling) and Electron (renderer-side + IPC), avoiding main-process Firestore to prevent GRPC errors.
+- **Phase 2 – Android App Integration**
+  - Add Supabase Kotlin client, configure dependency injection, and replace Firestore repositories with Supabase implementations (REST/RPC or realtime channel).
+  - Implement offline caching (Room or local JSON) to replace Firestore persistence; define sync conflict resolution.
+  - Replace Firebase listeners: `OrderPushWatcher` becomes Supabase realtime subscription; background polling becomes optional fallback.
+  - Replace FCM service with OneSignal handlers: register devices with user roles, map OneSignal push payloads to existing `NotificationHelper`.
 
----
+- **Phase 3 – Notification Orchestration**
+  - Device registration: ensure OneSignal tags reflect store/role; update when user switches roles.
+  - Edge Function integration tests: simulate status changes, confirm pushes arrive in background/foreground.
+  - Update notification UX (sounds, deep links) to ensure parity with current behavior.
 
-## Part 1: Android MVP Implementation
+- **Phase 4 – Data Migration & Rollout**
+  - Build migration job (one-off script) to export Firestore to JSON → transform → insert into Supabase (respecting IDs, timestamps).
+  - Dual-write strategy during cutover: optionally sync Firestore + Supabase until confident.
+  - Monitoring/observability: set up Supabase logs, OneSignal delivery analytics, crashlytics adjustments.
 
-### Task 1.1: Add WorkManager Dependency
-- File: `street-feast-android/app/build.gradle.kts`
-- Add: `implementation("androidx.work:work-runtime-ktx:2.9.0")`
-- Verify Firebase BOM includes Firestore (already present)
+- **Phase 5 – Cleanup**
+  - Remove Firebase dependencies, WorkManager polling, and FCM-specific code.
+  - Update documentation, CI/CD, infrastructure, and environment variables (OneSignal App ID/Key, Supabase URL/anon key).
 
-### Task 1.2: Create OrderPushWatcher Class
-- File: `street-feast-android/app/src/main/java/com/streatfeast/app/orders/OrderPushWatcher.kt`
-- Implementation:
-  - Class with `ctx: Context` and `storeId: String` parameters
-  - `start()` returns `ListenerRegistration`
-  - Listens to `stores/{storeId}/orders` collection
-  - On ADDED: calls `NotificationHelper.showNewOrderNotification(ctx, data)`
-  - On MODIFIED: if status == "Prepared", calls `NotificationHelper.showPreparedNotification(ctx, data)`
-- Uses Firebase.firestore (Firebase KTX syntax)
+## Edge Cases & Considerations
 
-### Task 1.3: Create OrderPollWorker Class
-- File: `street-feast-android/app/src/main/java/com/streatfeast/app/orders/OrderPollWorker.kt`
-- Implementation:
-  - Extends `CoroutineWorker`
-  - Reads `lastSeen` timestamp from SharedPreferences
-  - Queries `stores/{STORE_ID}/orders` where `updatedAt > since`
-  - For each order: shows notification and tracks newest timestamp
-  - Saves newest timestamp back to SharedPreferences
-- Handles edge case: if `lastSeen == 0L`, look back 1 hour
+- Background reliability: confirm OneSignal background pushes work under Doze/Android 13+. Handle notification permission prompts gracefully.
+- Offline: without Firestore caching, ensure Room cache sync handles network loss, deduplicates orders, and reconciles server timestamps.
+- Security: RLS must prevent cross-store access; Edge Functions should verify payloads before hitting OneSignal.
+- Rate limits: Supabase free tier (500 MB storage, 8 GB egress) and OneSignal free notification quota—monitor usage to avoid throttling.
+- Testing: add instrumentation/unit tests for new repositories, integration tests hitting Supabase staging, and end-to-end notification flows.
 
-### Task 1.4: Update NotificationHelper
-- File: `street-feast-android/app/src/main/java/com/streatfeast/app/utils/NotificationHelper.kt`
-- Add overloads:
-  - `showNewOrderNotification(ctx: Context, data: Map<String, Any>)`
-  - `showPreparedNotification(ctx: Context, data: Map<String, Any>)`
-- Extract `orderNumber` and other fields from Map
-- Keep existing Int-based methods for backward compatibility
+## Next Steps
 
-### Task 1.5: Update StreetFeastApplication
-- File: `street-feast-android/app/src/main/java/com/streatfeast/app/StreetFeastApplication.kt`
-- Changes:
-  - Uncomment Firebase initialization (lines 14-23)
-  - Add WorkManager imports
-  - Start `OrderPushWatcher(this, STORE_ID).start()`
-  - Schedule `OrderPollWorker` every 15 minutes with network constraint
-  - Use `ExistingPeriodicWorkPolicy.UPDATE`
-
-### Task 1.6: Update Constants for STORE_ID
-- File: `street-feast-android/app/src/main/java/com/streatfeast/app/utils/Constants.kt`
-- Ensure `STORE_ID` is available (should already be from BuildConfig)
-- Verify STORE_ID constant matches what's used in OrderPollWorker
-
----
-
-## Part 2: Electron MVP Implementation
-
-### Task 2.1: Create Renderer-Side Order Watcher
-- File: `street-feast-admin/src/utils/orderWatcher.ts` (or `src/renderer/orderWatcher.ts` if that structure exists)
-- Implementation:
-  - Use `initializeFirestore` with `experimentalAutoDetectLongPolling: true, useFetchStreams: false`
-  - Export `watchOrders(storeId: string)` function
-  - Listen to `stores/{storeId}/orders` collection
-  - On ADDED: `window.electronAPI.notify({ title: "New order", body: data.id })`
-  - On MODIFIED (if status === "Prepared"): `window.electronAPI.notify({ title: "Order prepared", body: data.id })`
-
-### Task 2.2: Update Preload Script
-- File: `street-feast-admin/electron/preload.ts`
-- Add to `contextBridge.exposeInMainWorld`:
-  - Create `electronAPI` object with `notify` method
-  - `notify: (payload) => ipcRenderer.send("notify", payload)`
-
-### Task 2.3: Update Main Process IPC Handler
-- File: `street-feast-admin/electron/main.ts`
-- Add:
-  - Import `ipcMain` and `Notification` from electron
-  - `ipcMain.on("notify", (_evt, { title, body }) => { new Notification({ title, body }).show(); })`
-
-### Task 2.4: Wire Watcher in Renderer
-- File: `street-feast-admin/src/main.tsx`
-- Import and call `watchOrders(storeId)` after app initialization
-- Use `storeId` from `firebase.ts` (already exported)
-
-### Task 2.5: Ensure Order Store Writes updatedAt
-- File: `street-feast-admin/src/store/ordersStore.ts`
-- Verify `placeDraft()` writes `updatedAt: serverTimestamp()` to Firestore
-- Ensure all status updates write `updatedAt: serverTimestamp()`
-
----
-
-## Part 3: Verification & Testing
-
-### Task 3.1: Path Verification
-- Verify all paths use `stores/{storeId}/orders` (not top-level `/orders`)
-- Android: OrderPushWatcher, OrderPollWorker, OrderRepository
-- Electron: orderWatcher.ts, ordersStore.ts
-
-### Task 3.2: TypeScript Type Definitions
-- File: `street-feast-admin/src/vite-env.d.ts` or similar
-- Add: `interface Window { electronAPI: { notify: (payload: { title: string; body: string }) => void } }`
-
-### Task 3.3: Testing Checklist
-- Android:
-  - App running: Create order in Firestore → notification appears
-  - App killed: Create order → notification appears within 15-20 min
-  - Status change to Prepared → notification appears
-- Electron:
-  - Create order → desktop notification appears
-  - Status change to Prepared → desktop notification appears
-  - Verify no GRPC errors in console
-
----
-
-## Implementation Notes
-
-1. Android store ID: Use `Constants.STORE_ID` (from BuildConfig) consistently
-2. Electron store ID: Use `storeId` from `firebase.ts` (VITE_STORE_ID env var)
-3. NotificationHelper: Support both `Int orderNumber` and `Map<String, Any> data` signatures
-4. Error handling: Add try-catch in watchers to prevent crashes
-5. Firestore rules: Ensure reads are allowed for authenticated users (for background polling)
-
----
-
-## Files to Create/Modify
-
-**Android (5 files):**
-1. `app/build.gradle.kts` - Add WorkManager dependency
-2. `app/src/main/java/.../orders/OrderPushWatcher.kt` - NEW
-3. `app/src/main/java/.../orders/OrderPollWorker.kt` - NEW
-4. `app/src/main/java/.../utils/NotificationHelper.kt` - UPDATE (add Map overloads)
-5. `app/src/main/java/.../StreetFeastApplication.kt` - UPDATE (enable Firebase, start watchers)
-
-**Electron (5 files):**
-1. `src/utils/orderWatcher.ts` - NEW
-2. `electron/preload.ts` - UPDATE (add electronAPI)
-3. `electron/main.ts` - UPDATE (add IPC handler)
-4. `src/main.tsx` - UPDATE (wire watcher)
-5. `src/store/ordersStore.ts` - VERIFY (updatedAt writes)
-
----
-
-This plan implements the MVP notification system from `help.txt`, using client-side Firestore listeners to avoid Blaze plan requirements.
+- Finalize architecture doc with ER diagrams and event sequencing.
+- Stand up Supabase staging project, implement schema + RLS, and prototype Edge Function → OneSignal push.
+- Begin Android integration in a feature branch, keeping Firebase as fallback until parity achieved.
