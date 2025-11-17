@@ -1,22 +1,21 @@
 package com.streatfeast.app.utils
 
-import com.google.firebase.Timestamp
+import android.os.Build
+import androidx.annotation.RequiresApi
 import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object DateTimeUtils {
-    
-    /**
-     * Format timestamp to "X min ago" or "Just now"
-     */
-    fun getTimeAgo(timestamp: Timestamp): String {
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun getTimeAgo(timestampMillis: Instant): String {
         val now = System.currentTimeMillis()
-        val then = timestamp.toDate().time
-        val diffMillis = now - then
-        
+        val diffMillis = now-timestampMillis.toEpochMilli()
+
         val minutes = TimeUnit.MILLISECONDS.toMinutes(diffMillis)
-        
         return when {
             minutes < 1 -> "Just now"
             minutes < 60 -> "$minutes min ago"
@@ -26,29 +25,16 @@ object DateTimeUtils {
             }
         }
     }
-    
-    /**
-     * Format timestamp to 12-hour format (e.g., "2:30 PM")
-     */
-    fun format12Hour(timestamp: Timestamp): String {
+
+    fun format12Hour(timestampMillis: Long): String {
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-        return sdf.format(timestamp.toDate())
+        return sdf.format(Date(timestampMillis))
     }
-    
-    /**
-     * Format timestamp to date and time (e.g., "Jan 15, 2:30 PM")
-     */
-    fun formatDateTime(timestamp: Timestamp): String {
+
+    fun formatDateTime(timestampMillis: Long): String {
         val sdf = SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault())
-        return sdf.format(timestamp.toDate())
+        return sdf.format(Date(timestampMillis))
     }
-    
-    /**
-     * Get current timestamp
-     */
-    fun now(): Timestamp {
-        return Timestamp.now()
-    }
+
+    fun now(): Long = System.currentTimeMillis()
 }
-
-

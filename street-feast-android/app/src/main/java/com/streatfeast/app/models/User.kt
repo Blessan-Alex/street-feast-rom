@@ -24,7 +24,7 @@ enum class UserRole {
         }
     }
     
-    fun toFirestoreString(): String = when(this) {
+    fun toRemoteValue(): String = when(this) {
         ADMIN -> "admin"
         CHEF -> "chef"
         WAITER -> "waiter"

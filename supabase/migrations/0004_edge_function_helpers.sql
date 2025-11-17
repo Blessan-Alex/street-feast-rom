@@ -1,0 +1,114 @@
+-- Helper RPCs for Edge Functions & client integrations.
+set search_path = public;
+
+create or replace function register_device(player_id text, platform text default 'android')
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    update users
+    set onesignal_player_id = player_id,
+        updated_at = now()
+    where id = auth.uid();
+end;
+$$;
+
+grant execute on function register_device(text, text) to authenticated;
+
+create or replace function orders_upsert(
+    p_store_id uuid,
+    p_order jsonb,
+    p_items jsonb default '[]'::jsonb,
+    p_actor_id uuid default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_order_id uuid := coalesce((p_order->>'id')::uuid, gen_random_uuid());
+    v_total numeric(10,2) := nullif(p_order->>'total', '')::numeric;
+    v_created_at timestamptz := coalesce((p_order->>'created_at')::timestamptz, now());
+    v_updated_at timestamptz := coalesce((p_order->>'updated_at')::timestamptz, now());
+    v_status text := coalesce(p_order->>'status', 'Created');
+    v_type text := p_order->>'type';
+    v_chef_tip text := p_order->>'chef_tip';
+    v_created_by uuid := nullif((p_order->>'created_by')::uuid, null);
+    v_parent_order_id uuid := nullif((p_order->>'parent_order_id')::uuid, null);
+    item jsonb;
+begin
+    if p_actor_id is not null then
+        perform set_config('app.current_user_id', p_actor_id::text, true);
+        -- Use actor_id as created_by if not specified
+        if v_created_by is null then
+            v_created_by := p_actor_id;
+        end if;
+    elsif auth.uid() is not null then
+        perform set_config('app.current_user_id', auth.uid()::text, true);
+        -- Use auth.uid() as created_by if not specified
+        if v_created_by is null then
+            v_created_by := auth.uid();
+        end if;
+    end if;
+
+    insert into orders (id, store_id, number, status, type, chef_tip, created_by, parent_order_id, customer, total, source, notes, created_at, updated_at)
+    values (
+        v_order_id,
+        p_store_id,
+        nullif(p_order->>'number', '')::integer,
+        v_status,
+        v_type,
+        v_chef_tip,
+        v_created_by,
+        v_parent_order_id,
+        p_order->'customer',
+        v_total,
+        p_order->>'source',
+        p_order->>'notes',
+        v_created_at,
+        v_updated_at
+    )
+    on conflict (id) do update set
+        status = excluded.status,
+        type = excluded.type,
+        chef_tip = excluded.chef_tip,
+        parent_order_id = excluded.parent_order_id,
+        customer = excluded.customer,
+        total = excluded.total,
+        source = excluded.source,
+        notes = excluded.notes,
+        updated_at = excluded.updated_at,
+        store_id = excluded.store_id
+    returning id into v_order_id;
+
+    delete from order_items where order_id = v_order_id;
+
+    for item in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) loop
+        insert into order_items (id, order_id, sku, name, size, veg_flag, quantity, price, modifiers, created_at, updated_at)
+        values (
+            coalesce((item->>'id')::uuid, gen_random_uuid()),
+            v_order_id,
+            item->>'sku',
+            coalesce(item->>'name', 'Unnamed Item'),
+            item->>'size',
+            item->>'veg_flag',
+            coalesce((item->>'quantity')::integer, 1),
+            nullif(item->>'price', '')::numeric,
+            item->'modifiers',
+            coalesce((item->>'created_at')::timestamptz, now()),
+            coalesce((item->>'updated_at')::timestamptz, now())
+        );
+    end loop;
+
+    perform set_config('app.current_user_id', null, true);
+    return v_order_id;
+end;
+$$;
+
+grant execute on function orders_upsert(uuid, jsonb, jsonb, uuid) to service_role;
+
+
+
+

@@ -1,89 +1,95 @@
 package com.streatfeast.app.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.streatfeast.app.models.User
-import com.streatfeast.app.repositories.MockAuthRepository
+import com.streatfeast.app.repositories.AuthRepository
 import kotlinx.coroutines.launch
 
-class AuthViewModel : ViewModel() {
-    
-    private val repository = MockAuthRepository()
-    
-    // Current user
+class AuthViewModel(
+    private val repository: AuthRepository
+) : ViewModel() {
+
     private val _currentUser = MutableLiveData<User?>()
     val currentUser: LiveData<User?> = _currentUser
-    
-    // Authentication state
+
     private val _isAuthenticated = MutableLiveData<Boolean>()
     val isAuthenticated: LiveData<Boolean> = _isAuthenticated
-    
-    // Loading state
-    private val _isLoading = MutableLiveData<Boolean>(false)
+
+    private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
-    
-    // Error state
+
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
-    
+
     init {
-        checkAuthState()
+        viewModelScope.launch { checkAuthState() }
     }
-    
-    /**
-     * Check if user is already logged in
-     */
-    private fun checkAuthState() {
-        _isAuthenticated.value = repository.isLoggedIn()
+
+    private suspend fun checkAuthState() {
+        val loggedIn = repository.isLoggedIn()
+        _isAuthenticated.value = loggedIn
+        if (loggedIn) {
+            _currentUser.value = repository.getCurrentUser()
+        }
     }
-    
-    /**
-     * Login with email and password
-     */
+
     fun login(email: String, password: String) {
+        Log.d("AuthViewModel", "login called for: $email")
+        
         if (email.isBlank() || password.isBlank()) {
+            Log.w("AuthViewModel", "Login failed: Email or password is blank")
             _error.value = "Email and password are required"
             return
         }
-        
-        println("DEBUG: AuthViewModel - Starting login process")
-        
-        _isLoading.value = true
-        _error.value = null
-        
-        println("DEBUG: AuthViewModel - Calling repository.login()")
-        val result = repository.login(email, password)
-        _isLoading.value = false
-        
-        result.onSuccess { user ->
-            println("DEBUG: AuthViewModel - Login successful, user: $user")
-            _currentUser.value = user
-            _isAuthenticated.value = true
-            println("DEBUG: AuthViewModel - isAuthenticated set to true")
-        }.onFailure { exception ->
-            println("DEBUG: AuthViewModel - Login failed: ${exception.message}")
-            _error.value = exception.message ?: "Login failed"
+
+        viewModelScope.launch {
+            Log.d("AuthViewModel", "Starting login process")
+            _isLoading.value = true
+            _error.value = null
+
+            val result = repository.login(email, password)
+            _isLoading.value = false
+
+            result.onSuccess { user ->
+                Log.d("AuthViewModel", "Login success - User: ${user.email}, Role: ${user.role}")
+                _currentUser.value = user
+                _isAuthenticated.value = true
+            }.onFailure { exception ->
+                Log.e("AuthViewModel", "Login failure", exception)
+                Log.e("AuthViewModel", "Error message: ${exception.message}")
+                Log.e("AuthViewModel", "Error type: ${exception.javaClass.simpleName}")
+                _error.value = exception.message ?: "Login failed"
+                _isAuthenticated.value = false
+            }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.logout()
+            _currentUser.value = null
             _isAuthenticated.value = false
         }
     }
-    
-    /**
-     * Logout current user
-     */
-    fun logout() {
-        repository.logout()
-        _currentUser.value = null
-        _isAuthenticated.value = false
-    }
-    
-    /**
-     * Clear error message
-     */
+
     fun clearError() {
         _error.value = null
     }
 }
 
-
+class AuthViewModelFactory(
+    private val repository: AuthRepository
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
+            return AuthViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}

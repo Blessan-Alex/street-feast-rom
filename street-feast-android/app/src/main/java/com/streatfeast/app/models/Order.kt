@@ -1,20 +1,22 @@
 package com.streatfeast.app.models
 
+import android.os.Build
 import android.os.Parcelable
+import androidx.annotation.RequiresApi
 import com.streatfeast.app.R
-import com.google.firebase.Timestamp
 import kotlinx.parcelize.Parcelize
+import java.time.Instant
 
 @Parcelize
-data class Order(
+data class Order @RequiresApi(Build.VERSION_CODES.O) constructor(
     val id: String = "",
     val orderNumber: Int = 0,
     val type: OrderType = OrderType.DINE_IN,
     val chefTip: String = "",
     val status: OrderStatus = OrderStatus.CREATED,
     val createdBy: String = "",
-    val createdAt: Timestamp = Timestamp.now(),
-    val updatedAt: Timestamp = Timestamp.now(),
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now(),
     val parentOrderId: String? = null,
     var items: List<OrderItem> = emptyList() // populated from subcollection
 ) : Parcelable
@@ -37,7 +39,7 @@ enum class OrderType {
         DELIVERY -> "Delivery"
     }
     
-    fun toFirestoreString(): String = when(this) {
+    fun toRemoteValue(): String = when(this) {
         DINE_IN -> "DineIn"
         PARCEL -> "Parcel"
         DELIVERY -> "Delivery"
@@ -66,7 +68,7 @@ enum class OrderStatus(val colorRes: Int) {
         }
     }
     
-    fun toFirestoreString(): String = when(this) {
+    fun toRemoteValue(): String = when(this) {
         CREATED -> "Created"
         ACCEPTED -> "Accepted"
         IN_KITCHEN -> "InKitchen"

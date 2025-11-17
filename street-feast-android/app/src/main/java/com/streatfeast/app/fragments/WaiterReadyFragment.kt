@@ -9,15 +9,21 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.adapters.ReadyOrdersAdapter
+import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.databinding.FragmentWaiterReadyBinding
 import com.streatfeast.app.viewmodels.OrdersViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModelFactory
 
 class WaiterReadyFragment : Fragment() {
     
     private var _binding: FragmentWaiterReadyBinding? = null
     private val binding get() = _binding!!
     
-    private val viewModel: OrdersViewModel by viewModels()
+    private val viewModel: OrdersViewModel by viewModels {
+        OrdersViewModelFactory(
+            ServiceLocator.provideOrderRepository(requireContext().applicationContext)
+        )
+    }
     private lateinit var adapter: ReadyOrdersAdapter
     
     override fun onCreateView(
@@ -37,8 +43,7 @@ class WaiterReadyFragment : Fragment() {
         observeOrders()
         observeMessages()
         
-        // Load mock data
-        viewModel.loadReadyOrders()
+        viewModel.refresh()
     }
     
     private fun setupRecyclerView() {
@@ -54,8 +59,7 @@ class WaiterReadyFragment : Fragment() {
     
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Reload mock data
-            viewModel.loadReadyOrders()
+            viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
         }
     }

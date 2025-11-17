@@ -1,155 +1,106 @@
 package com.streatfeast.app.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.streatfeast.app.models.Order
-import com.streatfeast.app.repositories.MockOrderRepository
+import com.streatfeast.app.models.OrderStatus
+import com.streatfeast.app.repositories.SupabaseOrderRepository
 import kotlinx.coroutines.launch
 
-class OrdersViewModel : ViewModel() {
-    
-    private val repository = MockOrderRepository()
-    
-    // LiveData for new orders
-    private val _newOrders = MutableLiveData<List<Order>>()
-    val newOrders: LiveData<List<Order>> = _newOrders
-    
-    // LiveData for preparing orders
-    private val _preparingOrders = MutableLiveData<List<Order>>()
-    val preparingOrders: LiveData<List<Order>> = _preparingOrders
-    
-    // LiveData for ready orders
-    private val _readyOrders = MutableLiveData<List<Order>>()
-    val readyOrders: LiveData<List<Order>> = _readyOrders
-    
-    // Loading states
-    private val _isLoading = MutableLiveData<Boolean>(false)
+class OrdersViewModel(
+    private val repository: SupabaseOrderRepository
+) : ViewModel() {
+
+    val newOrders: LiveData<List<Order>> =
+        repository.observeOrders(OrderStatus.CREATED).asLiveData()
+
+    val preparingOrders: LiveData<List<Order>> =
+        repository.observeOrders(OrderStatus.IN_KITCHEN).asLiveData()
+
+    val readyOrders: LiveData<List<Order>> =
+        repository.observeOrders(OrderStatus.PREPARED).asLiveData()
+
+    private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
-    
-    // Error states
+
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
-    
-    // Success messages
+
     private val _successMessage = MutableLiveData<String?>()
     val successMessage: LiveData<String?> = _successMessage
-    
-    /**
-     * Load new orders (Created status)
-     */
-    fun loadNewOrders() {
+
+    private val _newOrderDetected = MutableLiveData<Pair<String, Int?>>()
+    val newOrderDetected: LiveData<Pair<String, Int?>> = _newOrderDetected
+
+    init {
+        // Start realtime subscription with callback for new orders
+        Log.d("OrdersViewModel", "Initializing OrdersViewModel - starting realtime subscription")
         viewModelScope.launch {
-            try {
-                val orders = repository.getNewOrders()
-                _newOrders.value = orders
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load new orders"
+            repository.startRealtime(viewModelScope) { orderId, orderNumber ->
+                Log.d("OrdersViewModel", "New order callback invoked: orderId=$orderId, orderNumber=$orderNumber")
+                _newOrderDetected.postValue(Pair(orderId, orderNumber))
             }
+            Log.d("OrdersViewModel", "Realtime subscription started with callback")
         }
     }
-    
-    /**
-     * Load preparing orders (InKitchen status)
-     */
-    fun loadPreparingOrders() {
+
+    fun refresh() {
         viewModelScope.launch {
-            try {
-                val orders = repository.getPreparingOrders()
-                _preparingOrders.value = orders
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load preparing orders"
-            }
+            _isLoading.value = true
+            runCatching { repository.refresh() }
+                .onFailure { _error.value = it.message ?: "Failed to refresh orders" }
+            _isLoading.value = false
         }
     }
-    
-    /**
-     * Load ready orders (Prepared status)
-     */
-    fun loadReadyOrders() {
-        viewModelScope.launch {
-            try {
-                val orders = repository.getReadyOrders()
-                _readyOrders.value = orders
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load ready orders"
-            }
-        }
-    }
-    
-    /**
-     * Accept an order
-     */
+
     fun acceptOrder(orderId: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            val result = repository.acceptOrder(orderId)
-            _isLoading.value = false
-            
-            result.onSuccess {
-                _successMessage.value = "Order accepted"
-                // Refresh data after successful action
-                loadNewOrders()
-                loadPreparingOrders()
-            }.onFailure {
-                _error.value = it.message ?: "Failed to accept order"
-            }
-        }
+        performAction("Order accepted") { repository.acceptOrder(orderId) }
     }
-    
-    /**
-     * Mark order as prepared
-     */
+
     fun markPrepared(orderId: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            val result = repository.markPrepared(orderId)
-            _isLoading.value = false
-            
-            result.onSuccess {
-                _successMessage.value = "Order marked as prepared"
-                // Refresh data after successful action
-                loadPreparingOrders()
-                loadReadyOrders()
-            }.onFailure {
-                _error.value = it.message ?: "Failed to mark order as prepared"
-            }
-        }
+        performAction("Order marked as prepared") { repository.markPrepared(orderId) }
     }
-    
-    /**
-     * Mark order as delivered
-     */
+
     fun markDelivered(orderId: String) {
+        performAction("Order marked as delivered") { repository.markDelivered(orderId) }
+    }
+
+    private fun performAction(successMessage: String, block: suspend () -> Result<Unit>) {
         viewModelScope.launch {
             _isLoading.value = true
-            val result = repository.markDelivered(orderId)
+            val result = block()
             _isLoading.value = false
-            
+
             result.onSuccess {
-                _successMessage.value = "Order marked as delivered"
-                // Refresh data after successful action
-                loadReadyOrders()
+                _successMessage.value = successMessage
             }.onFailure {
-                _error.value = it.message ?: "Failed to mark order as delivered"
+                _error.value = it.message ?: "Operation failed"
             }
         }
     }
-    
-    /**
-     * Clear error message
-     */
+
     fun clearError() {
         _error.value = null
     }
-    
-    /**
-     * Clear success message
-     */
+
     fun clearSuccessMessage() {
         _successMessage.value = null
     }
 }
 
-
+class OrdersViewModelFactory(
+    private val repository: SupabaseOrderRepository
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(OrdersViewModel::class.java)) {
+            return OrdersViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}

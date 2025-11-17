@@ -1,0 +1,31 @@
+@url = {{SUPABASE_URL}}/rest/v1
+@apikey = {{SERVICE_ROLE_KEY}}
+
+### Upsert order to trigger status log + OneSignal webhook
+POST {{url}}/rpc/orders_upsert
+apikey: {{apikey}}
+Authorization: Bearer {{apikey}}
+Content-Type: application/json
+Prefer: return=representation
+
+{
+  "p_store_id": "{{STORE_ID}}",
+  "p_order": {
+    "status": "Prepared",
+    "customer": {"name": "Test Customer"},
+    "total": "15.50"
+  },
+  "p_items": [
+    {"name": "Fries", "quantity": 1, "price": "5.00"},
+    {"name": "Burger", "quantity": 1, "price": "10.50"}
+  ]
+}
+
+### Verify order events log
+GET {{url}}/order_events?order_id=eq.{{ORDER_ID}}
+apikey: {{apikey}}
+Authorization: Bearer {{apikey}}
+Prefer: count=exact
+
+
+

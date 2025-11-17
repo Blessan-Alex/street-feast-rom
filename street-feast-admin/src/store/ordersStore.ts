@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import { collection, updateDoc, doc, serverTimestamp, writeBatch, onSnapshot, Unsubscribe, DocumentChange, getDocs } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db, getOrdersCollectionPath, app } from '../utils/firebase';
+import { supabase, getStoreId } from '../utils/supabase';
 import { toast } from '../components/Toast';
 
 // Order types
@@ -66,8 +64,6 @@ export const clearOrderCounter = () => {
 interface OrdersStore {
   orders: Order[];
   draft: DraftOrder;
-  isSyncingFromFirestore: boolean;
-  firestoreUnsubscribe: Unsubscribe | null;
 
   // Draft management
   setDraft: (patch: Partial<DraftOrder>) => void;
@@ -80,10 +76,6 @@ interface OrdersStore {
   placeDraft: () => Promise<{ ok: boolean; error?: string; order?: Order }>;
   updateStatus: (orderId: string, newStatus: OrderStatus) => Promise<boolean>;
   addItemsToOrder: (orderId: string, items: OrderItem[]) => Promise<boolean>;
-
-  // Firestore sync
-  syncFromFirestore: () => void;
-  loadOrdersFromFirestore: () => Promise<void>;
   
   // Helpers
   getAllowedTransitions: (status: OrderStatus) => OrderStatus[];
@@ -103,8 +95,6 @@ const initialDraft: DraftOrder = {
 export const useOrdersStore = create<OrdersStore>((set, get) => ({
   orders: [],
   draft: { ...initialDraft },
-  isSyncingFromFirestore: false,
-  firestoreUnsubscribe: null,
 
   // Draft management
   setDraft: (patch) => set((state) => ({
@@ -144,79 +134,65 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       return { ok: false, error: 'Add at least one item to the order' };
     }
 
-    // Skip Firestore write if we're syncing from Firestore (to prevent loops)
-    if (state.isSyncingFromFirestore) {
-      // If syncing, just update local state - Firestore already has the data
-      const now = Date.now();
-      const order: Order = {
-        id: crypto.randomUUID(),
-        orderNumber: getNextOrderNumber(),
-        type: state.draft.type,
-        chefTip: state.draft.chefTip.trim(),
-        status: 'Created',
-        createdAt: now,
-        updatedAt: now,
-        orderItems: state.draft.orderItems.map(item => ({ ...item }))
-      };
-      set((state) => ({
-        orders: [order, ...state.orders]
-      }));
-      get().clearDraft();
-      return { ok: true, order };
-    }
-
     const orderNumber = getNextOrderNumber();
-    const auth = getAuth(app);
-    const currentUser = auth.currentUser;
+    const now = new Date().toISOString();
 
     try {
-      const batch = writeBatch(db);
-      
-      // Create order document
-      const ordersRef = collection(db, getOrdersCollectionPath());
-      const orderDocRef = doc(ordersRef);
-      
-      const orderData = {
-        orderNumber,
+      // Get store ID
+      const storeId = await getStoreId();
+
+      // Get current user from Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Map order items to Supabase format
+      const orderItemsJson = state.draft.orderItems.map(item => ({
+        id: item.id,
+        sku: item.itemId,
+        name: item.nameSnapshot,
+        size: item.size,
+        veg_flag: item.vegFlagSnapshot,
+        quantity: item.qty,
+        modifiers: {
+          chefTip: item.chefTip
+        }
+      }));
+
+      // Prepare order JSONB for RPC
+      const orderJson = {
+        number: orderNumber,
         type: state.draft.type,
-        chefTip: state.draft.chefTip.trim(),
-        status: 'Created' as OrderStatus,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: currentUser?.uid || null,
-        parentOrderId: null as string | null
+        chef_tip: state.draft.chefTip.trim(),
+        status: 'Created',
+        created_by: user?.id || null,
+        parent_order_id: null,
+        created_at: now,
+        updated_at: now
       };
 
-      batch.set(orderDocRef, orderData);
+      // Call orders_upsert RPC
+      const { data: orderId, error } = await supabase.rpc('orders_upsert', {
+        p_store_id: storeId,
+        p_order: orderJson,
+        p_items: orderItemsJson,
+        p_actor_id: user?.id || null
+      });
 
-      // Add orderItems to subcollection
-      const orderItemsRef = collection(db, getOrdersCollectionPath(), orderDocRef.id, 'orderItems');
-      for (const item of state.draft.orderItems) {
-        const itemDocRef = doc(orderItemsRef);
-        batch.set(itemDocRef, {
-          itemId: item.itemId,
-          nameSnapshot: item.nameSnapshot,
-          size: item.size,
-          vegFlagSnapshot: item.vegFlagSnapshot,
-          qty: item.qty,
-          chefTip: item.chefTip,
-          createdAt: serverTimestamp()
-        });
+      if (error) {
+        console.error('Failed to save order to Supabase:', error);
+        const errorMessage = error.message || 'Failed to save order';
+        toast.error(errorMessage);
+        return { ok: false, error: errorMessage };
       }
 
-      // Commit batch
-      await batch.commit();
-
-      // Update local state with Firestore document ID
-      const now = Date.now();
+      // Update local state
       const order: Order = {
-        id: orderDocRef.id,
+        id: orderId as string,
         orderNumber,
         type: state.draft.type,
         chefTip: state.draft.chefTip.trim(),
         status: 'Created',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
         orderItems: state.draft.orderItems.map(item => ({ ...item }))
       };
 
@@ -227,10 +203,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       get().clearDraft();
       return { ok: true, order };
     } catch (error: any) {
-      console.error('Failed to save order to Firestore:', error);
-      const errorMessage = error.code === 'permission-denied' 
-        ? 'Permission denied. Check Firestore rules.'
-        : error.message || 'Failed to save order';
+      console.error('Failed to save order:', error);
+      const errorMessage = error.message || 'Failed to save order';
       toast.error(errorMessage);
       return { ok: false, error: errorMessage };
     }
@@ -248,24 +222,21 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       return false;
     }
 
-    // Skip Firestore write if we're syncing from Firestore
-    if (state.isSyncingFromFirestore) {
-      set((state) => ({
-        orders: state.orders.map(o =>
-          o.id === orderId
-            ? { ...o, status: newStatus, updatedAt: Date.now() }
-            : o
-        )
-      }));
-      return true;
-    }
-
     try {
-      const orderRef = doc(db, getOrdersCollectionPath(), orderId);
-      await updateDoc(orderRef, {
-        status: newStatus,
-        updatedAt: serverTimestamp()
-      });
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('Failed to update order status in Supabase:', error);
+        const errorMessage = error.message || 'Failed to update order status';
+        toast.error(errorMessage);
+        return false;
+      }
 
       // Update local state
       set((state) => ({
@@ -278,10 +249,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
 
       return true;
     } catch (error: any) {
-      console.error('Failed to update order status in Firestore:', error);
-      const errorMessage = error.code === 'permission-denied' 
-        ? 'Permission denied. Check Firestore rules.'
-        : error.message || 'Failed to update order status';
+      console.error('Failed to update order status:', error);
+      const errorMessage = error.message || 'Failed to update order status';
       toast.error(errorMessage);
       return false;
     }
@@ -296,63 +265,63 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
     // Determine if this is an add-on (order already in kitchen)
     const isAddOn = order.status === 'InKitchen' || order.status === 'Prepared' || order.status === 'Delivered';
 
-    // Skip Firestore write if we're syncing from Firestore
-    if (state.isSyncingFromFirestore) {
-      set((state) => ({
-        orders: state.orders.map(o =>
-          o.id === orderId
-            ? { ...o, orderItems: [...o.orderItems, ...items], updatedAt: Date.now() }
-            : o
-        )
-      }));
-      return true;
-    }
-
     try {
-      const batch = writeBatch(db);
-      const orderRef = doc(db, getOrdersCollectionPath(), orderId);
-
-      // If add-on, create new order document with parentOrderId
       if (isAddOn) {
-        const newOrderRef = doc(collection(db, getOrdersCollectionPath()));
-        const auth = getAuth(app);
+        // Create new order with parent_order_id
         const addOnOrderNumber = getNextOrderNumber();
-        batch.set(newOrderRef, {
-          orderNumber: addOnOrderNumber,
+        const now = new Date().toISOString();
+        const storeId = await getStoreId();
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Map order items
+        const orderItemsJson = items.map(item => ({
+          id: item.id,
+          sku: item.itemId,
+          name: item.nameSnapshot,
+          size: item.size,
+          veg_flag: item.vegFlagSnapshot,
+          quantity: item.qty,
+          modifiers: {
+            chefTip: item.chefTip
+          }
+        }));
+
+        const orderJson = {
+          number: addOnOrderNumber,
           type: order.type,
-          chefTip: '',
-          status: 'Created' as OrderStatus,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: auth.currentUser?.uid || null,
-          parentOrderId: orderId
+          chef_tip: '',
+          status: 'Created',
+          created_by: user?.id || null,
+          parent_order_id: orderId,
+          created_at: now,
+          updated_at: now
+        };
+
+        // Create new order via RPC
+        const { data: newOrderId, error } = await supabase.rpc('orders_upsert', {
+          p_store_id: storeId,
+          p_order: orderJson,
+          p_items: orderItemsJson,
+          p_actor_id: user?.id || null
         });
 
-        // Add items to new order's subcollection
-        const newOrderItemsRef = collection(db, getOrdersCollectionPath(), newOrderRef.id, 'orderItems');
-        for (const item of items) {
-          const itemDocRef = doc(newOrderItemsRef);
-          batch.set(itemDocRef, {
-            itemId: item.itemId,
-            nameSnapshot: item.nameSnapshot,
-            size: item.size,
-            vegFlagSnapshot: item.vegFlagSnapshot,
-            qty: item.qty,
-            chefTip: item.chefTip,
-            createdAt: serverTimestamp()
-          });
+        if (error) {
+          console.error('Failed to add items to order:', error);
+          toast.error(error.message || 'Failed to add items to order');
+          return false;
         }
 
-        // Create new order locally
-        const now = Date.now();
+        // Update local state
         const newOrder: Order = {
-          id: newOrderRef.id,
+          id: newOrderId as string,
           orderNumber: addOnOrderNumber,
           type: order.type,
           chefTip: '',
           status: 'Created',
-          createdAt: now,
-          updatedAt: now,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
           orderItems: items.map(item => ({ ...item }))
         };
 
@@ -360,30 +329,87 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
           orders: [newOrder, ...state.orders]
         }));
 
-        await batch.commit();
         return true;
       } else {
-        // Regular add - add items to existing order
-        const orderItemsRef = collection(db, getOrdersCollectionPath(), orderId, 'orderItems');
-        for (const item of items) {
-          const itemDocRef = doc(orderItemsRef);
-          batch.set(itemDocRef, {
-            itemId: item.itemId,
-            nameSnapshot: item.nameSnapshot,
-            size: item.size,
-            vegFlagSnapshot: item.vegFlagSnapshot,
-            qty: item.qty,
-            chefTip: item.chefTip,
-            createdAt: serverTimestamp()
-          });
+        // Add items to existing order - need to fetch current items and update
+        const storeId = await getStoreId();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Fetch current order from Supabase
+        const { data: currentOrder, error: fetchError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .single();
+
+        if (fetchError || !currentOrder) {
+          console.error('Failed to fetch order:', fetchError);
+          toast.error('Failed to fetch order');
+          return false;
         }
 
-        // Update order timestamp
-        batch.update(orderRef, {
-          updatedAt: serverTimestamp()
+        // Fetch current items
+        const { data: currentItems, error: itemsError } = await supabase
+          .from('order_items')
+          .select('*')
+          .eq('order_id', orderId);
+
+        if (itemsError) {
+          console.error('Failed to fetch order items:', itemsError);
+          toast.error('Failed to fetch order items');
+          return false;
+        }
+
+        // Combine existing and new items
+        const existingItemsJson = (currentItems || []).map(item => ({
+          id: item.id,
+          sku: item.sku,
+          name: item.name,
+          size: item.size,
+          veg_flag: item.veg_flag,
+          quantity: item.quantity,
+          modifiers: item.modifiers || {}
+        }));
+
+        const newItemsJson = items.map(item => ({
+          id: item.id,
+          sku: item.itemId,
+          name: item.nameSnapshot,
+          size: item.size,
+          veg_flag: item.vegFlagSnapshot,
+          quantity: item.qty,
+          modifiers: {
+            chefTip: item.chefTip
+          }
+        }));
+
+        const allItemsJson = [...existingItemsJson, ...newItemsJson];
+
+        // Update order via RPC
+        const orderJson = {
+          id: orderId,
+          number: currentOrder.number,
+          type: currentOrder.type,
+          chef_tip: currentOrder.chef_tip || '',
+          status: currentOrder.status,
+          created_by: currentOrder.created_by,
+          parent_order_id: currentOrder.parent_order_id,
+          created_at: currentOrder.created_at,
+          updated_at: new Date().toISOString()
+        };
+
+        const { error: updateError } = await supabase.rpc('orders_upsert', {
+          p_store_id: storeId,
+          p_order: orderJson,
+          p_items: allItemsJson,
+          p_actor_id: user?.id || null
         });
 
-        await batch.commit();
+        if (updateError) {
+          console.error('Failed to add items to order:', updateError);
+          toast.error(updateError.message || 'Failed to add items to order');
+          return false;
+        }
 
         // Update local state
         set((state) => ({
@@ -397,11 +423,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         return true;
       }
     } catch (error: any) {
-      console.error('Failed to add items to order in Firestore:', error);
-      const errorMessage = error.code === 'permission-denied' 
-        ? 'Permission denied. Check Firestore rules.'
-        : error.message || 'Failed to add items to order';
-      toast.error(errorMessage);
+      console.error('Failed to add items to order:', error);
+      toast.error(error.message || 'Failed to add items to order');
       return false;
     }
   },
@@ -417,141 +440,10 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
     return state.orders.filter(o => o.status === statusFilter);
   },
 
-  // Firestore sync
-  syncFromFirestore: () => {
-    const state = get();
-    
-    // Cleanup existing listener
-    if (state.firestoreUnsubscribe) {
-      state.firestoreUnsubscribe();
-    }
-
-    const ordersRef = collection(db, getOrdersCollectionPath());
-    const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
-      set({ isSyncingFromFirestore: true });
-
-      snapshot.docChanges().forEach((change: DocumentChange) => {
-        const data = change.doc.data();
-        const orderId = change.doc.id;
-
-        if (change.type === 'added' || change.type === 'modified') {
-          // Check if order already exists locally
-          const existingOrder = get().orders.find(o => o.id === orderId);
-          
-          // Convert Firestore timestamps to numbers
-          const createdAt = data.createdAt?.toMillis?.() || Date.now();
-          const updatedAt = data.updatedAt?.toMillis?.() || Date.now();
-
-          // Fetch orderItems subcollection for this order
-          // Note: We'll do a simplified sync - orderItems from subcollection would need a separate listener
-          // For now, we'll keep the local orderItems if order exists, or empty array if new
-          const orderItems = existingOrder?.orderItems || [];
-
-          const order: Order = {
-            id: orderId,
-            orderNumber: data.orderNumber || 0,
-            type: (data.type || 'DineIn') as OrderType,
-            chefTip: data.chefTip || '',
-            status: (data.status || 'Created') as OrderStatus,
-            createdAt,
-            updatedAt,
-            orderItems
-          };
-
-          if (change.type === 'added') {
-            // Add new order if not exists
-            const currentOrders = get().orders;
-            if (!currentOrders.find(o => o.id === orderId)) {
-              set((state) => ({
-                orders: [order, ...state.orders]
-              }));
-            }
-          } else {
-            // Update existing order
-            set((state) => ({
-              orders: state.orders.map(o =>
-                o.id === orderId ? order : o
-              )
-            }));
-          }
-        } else if (change.type === 'removed') {
-          // Remove order
-          set((state) => ({
-            orders: state.orders.filter(o => o.id !== orderId)
-          }));
-        }
-      });
-
-      // Reset sync flag after processing
-      setTimeout(() => {
-        set({ isSyncingFromFirestore: false });
-      }, 100);
-    }, (error) => {
-      console.error('Firestore sync error:', error);
-      set({ isSyncingFromFirestore: false });
-    });
-
-    set({ firestoreUnsubscribe: unsubscribe });
-  },
-
-  loadOrdersFromFirestore: async () => {
-    try {
-      const ordersRef = collection(db, getOrdersCollectionPath());
-      const snapshot = await getDocs(ordersRef);
-      
-      const orders: Order[] = [];
-      
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        const createdAt = data.createdAt?.toMillis?.() || Date.now();
-        const updatedAt = data.updatedAt?.toMillis?.() || Date.now();
-
-        // Load orderItems from subcollection
-        const orderItemsRef = collection(db, getOrdersCollectionPath(), docSnap.id, 'orderItems');
-        const itemsSnapshot = await getDocs(orderItemsRef);
-        const orderItems: OrderItem[] = itemsSnapshot.docs.map(itemDoc => ({
-          id: itemDoc.id,
-          itemId: itemDoc.data().itemId || '',
-          nameSnapshot: itemDoc.data().nameSnapshot || '',
-          size: itemDoc.data().size || null,
-          vegFlagSnapshot: (itemDoc.data().vegFlagSnapshot || 'Veg') as 'Veg' | 'NonVeg' | 'Both',
-          qty: itemDoc.data().qty || 0,
-          chefTip: itemDoc.data().chefTip || ''
-        }));
-
-        orders.push({
-          id: docSnap.id,
-          orderNumber: data.orderNumber || 0,
-          type: (data.type || 'DineIn') as OrderType,
-          chefTip: data.chefTip || '',
-          status: (data.status || 'Created') as OrderStatus,
-          createdAt,
-          updatedAt,
-          orderItems
-        });
-      }
-
-      // Sort by createdAt descending (newest first)
-      orders.sort((a, b) => b.createdAt - a.createdAt);
-
-      set({ orders, isSyncingFromFirestore: false });
-      return;
-    } catch (error: any) {
-      console.error('Failed to load orders from Firestore:', error);
-      toast.error('Failed to load orders from server');
-      set({ isSyncingFromFirestore: false });
-    }
-  },
-
   // Store management
   setOrders: (orders) => set({ orders }),
 
   reset: () => {
-    const state = get();
-    if (state.firestoreUnsubscribe) {
-      state.firestoreUnsubscribe();
-    }
-    set({ orders: [], draft: { ...initialDraft }, firestoreUnsubscribe: null });
+    set({ orders: [], draft: { ...initialDraft } });
   }
 }));
-

@@ -9,15 +9,21 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.adapters.NewOrdersAdapter
+import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.databinding.FragmentChefNewOrdersBinding
 import com.streatfeast.app.viewmodels.OrdersViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModelFactory
 
 class ChefNewOrdersFragment : Fragment() {
     
     private var _binding: FragmentChefNewOrdersBinding? = null
     private val binding get() = _binding!!
     
-    private val viewModel: OrdersViewModel by viewModels()
+    private val viewModel: OrdersViewModel by viewModels {
+        OrdersViewModelFactory(
+            ServiceLocator.provideOrderRepository(requireContext().applicationContext)
+        )
+    }
     private lateinit var adapter: NewOrdersAdapter
     
     override fun onCreateView(
@@ -36,9 +42,9 @@ class ChefNewOrdersFragment : Fragment() {
         setupSwipeRefresh()
         observeOrders()
         observeMessages()
+        observeNewOrders()
         
-        // Load mock data
-        viewModel.loadNewOrders()
+        viewModel.refresh()
     }
     
     private fun setupRecyclerView() {
@@ -54,8 +60,7 @@ class ChefNewOrdersFragment : Fragment() {
     
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Reload mock data
-            viewModel.loadNewOrders()
+            viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
         }
     }
@@ -87,6 +92,24 @@ class ChefNewOrdersFragment : Fragment() {
             message?.let {
                 Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                 viewModel.clearSuccessMessage()
+            }
+        }
+    }
+    
+    private fun observeNewOrders() {
+        viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
+            orderNumber?.let { num ->
+                Toast.makeText(
+                    requireContext(),
+                    "New order #$num received!",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } ?: run {
+                Toast.makeText(
+                    requireContext(),
+                    "New order received!",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }

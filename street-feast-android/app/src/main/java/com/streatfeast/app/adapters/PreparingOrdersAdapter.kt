@@ -1,8 +1,10 @@
 package com.streatfeast.app.adapters
 
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -23,6 +25,7 @@ class PreparingOrdersAdapter(
         return ViewHolder(binding, onMarkPreparedClick)
     }
     
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         holder.bind(getItem(position))
     }
@@ -32,6 +35,7 @@ class PreparingOrdersAdapter(
         private val onMarkPreparedClick: (Order) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
         
+        @RequiresApi(Build.VERSION_CODES.O)
         fun bind(order: Order) {
             binding.apply {
                 // Order number
@@ -73,6 +77,7 @@ class PreparingOrdersAdapter(
             return oldItem.id == newItem.id
         }
         
+        @RequiresApi(Build.VERSION_CODES.O)
         override fun areContentsTheSame(oldItem: Order, newItem: Order): Boolean {
             return oldItem == newItem
         }

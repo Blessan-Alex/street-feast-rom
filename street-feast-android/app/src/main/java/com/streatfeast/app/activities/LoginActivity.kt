@@ -7,11 +7,15 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import com.streatfeast.app.databinding.ActivityLoginBinding
 import com.streatfeast.app.viewmodels.AuthViewModel
+import com.streatfeast.app.viewmodels.AuthViewModelFactory
+import com.streatfeast.app.di.ServiceLocator
 
 class LoginActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityLoginBinding
-    private val viewModel: AuthViewModel by viewModels()
+    private val viewModel: AuthViewModel by viewModels {
+        AuthViewModelFactory(ServiceLocator.provideAuthRepository(applicationContext))
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

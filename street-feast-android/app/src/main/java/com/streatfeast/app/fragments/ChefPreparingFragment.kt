@@ -9,15 +9,21 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.adapters.PreparingOrdersAdapter
+import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.databinding.FragmentChefPreparingBinding
 import com.streatfeast.app.viewmodels.OrdersViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModelFactory
 
 class ChefPreparingFragment : Fragment() {
     
     private var _binding: FragmentChefPreparingBinding? = null
     private val binding get() = _binding!!
     
-    private val viewModel: OrdersViewModel by viewModels()
+    private val viewModel: OrdersViewModel by viewModels {
+        OrdersViewModelFactory(
+            ServiceLocator.provideOrderRepository(requireContext().applicationContext)
+        )
+    }
     private lateinit var adapter: PreparingOrdersAdapter
     
     override fun onCreateView(
@@ -37,8 +43,7 @@ class ChefPreparingFragment : Fragment() {
         observeOrders()
         observeMessages()
         
-        // Load mock data
-        viewModel.loadPreparingOrders()
+        viewModel.refresh()
     }
     
     private fun setupRecyclerView() {
@@ -54,8 +59,7 @@ class ChefPreparingFragment : Fragment() {
     
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Reload mock data
-            viewModel.loadPreparingOrders()
+            viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
         }
     }

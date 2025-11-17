@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { getAuth } from 'firebase/auth';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -17,7 +16,6 @@ import { useMenuStore } from './store/menuStore';
 import { useOrdersStore } from './store/ordersStore';
 import { loadFromStorage, saveToStorage } from './utils/storage';
 import { loadOrdersFromStorage, saveOrdersToStorage } from './utils/ordersStorage';
-import { app } from './utils/firebase';
 
 function App() {
   // Load menu data from localStorage on mount
@@ -26,44 +24,10 @@ function App() {
     useMenuStore.setState(data);
   }, []);
 
-  // Initialize Firestore sync for orders
+  // Load orders from localStorage on mount (Supabase sync happens via API calls in ordersStore)
   useEffect(() => {
-    const auth = getAuth(app);
-    
-    // Wait for auth to be ready, then initialize Firestore sync
-    const initFirestore = async () => {
-      // Wait for auth to complete (with timeout)
-      let attempts = 0;
-      while (!auth.currentUser && attempts < 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-
-      const ordersStore = useOrdersStore.getState();
-      
-      // Load from Firestore first (source of truth)
-      try {
-        await ordersStore.loadOrdersFromFirestore();
-      } catch (error) {
-        console.error('Failed to load orders from Firestore, falling back to localStorage:', error);
-        // Fallback to localStorage if Firestore fails
     const data = loadOrdersFromStorage();
     useOrdersStore.setState(data);
-      }
-      
-      // Start real-time listener
-      ordersStore.syncFromFirestore();
-    };
-
-    initFirestore();
-
-    // Cleanup on unmount
-    return () => {
-      const ordersStore = useOrdersStore.getState();
-      if (ordersStore.firestoreUnsubscribe) {
-        ordersStore.firestoreUnsubscribe();
-      }
-    };
   }, []);
 
   // Persist menu store changes to localStorage
