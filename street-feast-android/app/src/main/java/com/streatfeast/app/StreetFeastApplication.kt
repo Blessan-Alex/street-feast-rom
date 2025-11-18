@@ -59,7 +59,7 @@ class StreetFeastApplication : Application() {
         // Don't request permission or register device here - let MainActivity handle it after user login
         // Only log current permission state
         maybeRequestPostNotificationsPermission()
-        
+
         // Device registration must happen AFTER OneSignal.login(user.id) in MainActivity
         // Application should only initialize OneSignal SDK, not register devices
     }

@@ -65,7 +65,8 @@ async function notifyOneSignal(subscriptionIds: string[], heading: string, conte
     headings: { en: heading },
     contents: { en: content },
     data,
-    android_channel_id: "order_updates",
+    // Temporarily commented out to test if notifications work without it
+    // android_channel_id: "order_updates",
   };
 
   const response = await fetch("https://onesignal.com/api/v1/notifications", {

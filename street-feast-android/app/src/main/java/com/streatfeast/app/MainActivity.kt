@@ -199,7 +199,7 @@ class MainActivity : AppCompatActivity() {
                 
                 // After login, wait for subscription ID with retry logic
                 // Subscription ID may not be immediately available after login
-                lifecycleScope.launch {
+                    lifecycleScope.launch {
                     waitForSubscriptionAfterLogin()
                 }
                 when (user.role) {

@@ -1,201 +1,432 @@
-Reviewing the codebase to draft a plan for the backend OneSignal integration:
+Nice, good progress 🎉
+So right now:
 
+* Webhook → Edge Function is firing ✅
+* You want:
 
-[7 tools called]
+  1. Push notifications **even when the app is backgrounded or killed**
+  2. A **sound (“ring”)** whenever a new order comes
 
+That’s exactly what OneSignal + a proper Android notification channel can do.
 
-Checking the Supabase setup:
+I’ll split it into:
 
+1. Backend: make sure OneSignal sends a *visible* push for every new order
+2. Android: make sure that push uses a channel with sound
 
-[10 tools called]
+---
 
+## 1. Backend: send a OneSignal push on every new order
 
-Checking for realtime replication configuration:
+In your `order-events` Edge Function, once you’ve parsed the webhook payload, you need to:
 
+* Figure out **which subscription ID(s)** to send to (you already store them via `registerDevice(subscriptionId)`).
+* Call OneSignal’s `/notifications` endpoint with `include_subscription_ids`.
 
-[3 tools called]
+Example (Deno / TypeScript):
 
+```ts
+import { serve } from "https://deno.land/std/http/server.ts";
+
+const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
+const ONESIGNAL_REST_KEY = Deno.env.get("ONESIGNAL_REST_KEY")!;
 
-Plan based on the findings:
+async function sendNewOrderPush(subscriptionId: string, orderNumber: number, orderId: string) {
+  const body = {
+    app_id: ONESIGNAL_APP_ID,
+    include_subscription_ids: [subscriptionId],        // v5 style
+    headings: { en: `New order #${orderNumber}` },
+    contents: { en: `Order #${orderNumber} just came in` },
+    data: {
+      orderId,
+      number: orderNumber,
+    },
+    android_channel_id: "orders_channel",             // must match your Android channel id
+    android_sound: "order_ping",                      // optional, custom sound name (see below)
+  };
 
-## Plan: Fix OneSignal notifications and Supabase realtime
+  const res = await fetch("https://onesignal.com/api/v1/notifications", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${ONESIGNAL_REST_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 
-### Problem summary
-1. OneSignal client setup is working (device registered)
-2. Edge Function exists but isn’t triggered (webhook not configured)
-3. Supabase Realtime subscription failing (replication not enabled for `orders` table)
-4. Edge Function may need updates for OneSignal v5 API compatibility
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("OneSignal error:", res.status, text);
+    throw new Error(`OneSignal error: ${res.status}`);
+  }
+}
 
-### Implementation plan
+serve(async (req) => {
+  try {
+    const payload = await req.json();
+    const { type, table, record } = payload;
 
-#### Phase 1: Enable Supabase Realtime replication (critical)
-Goal: Fix client-side realtime subscription failures
+    if (table === "orders" && type === "INSERT") {
+      const order = record;
+      const orderId = order.id as string;
+      const orderNumber = order.order_number as number;
 
-Tasks:
-1. Create migration to enable replication for `orders` table
-   - File: `supabase/migrations/0008_enable_realtime_orders.sql`
-   - Enable `public.orders` table for realtime
-   - Ensure filter parameters work with `store_id` filters
-   - Add comment explaining replication setup
+      // TODO: lookup subscriptionId(s) for the chef(s) for this store
+      // e.g. select onesignal_subscription_id from users where store_id = order.store_id AND role = 'chef'
+      const subscriptionId = "1a5a944e-a5df-405f-9a4f-abad5283c026"; // example, from DB
 
-2. Apply migration
-   - Run: `supabase db push` or apply via Dashboard SQL Editor
+      await sendNewOrderPush(subscriptionId, orderNumber, orderId);
+    }
 
-Why: The error "Unable to subscribe to changes" will be resolved, enabling local notifications and UI updates
+    return new Response("OK", { status: 200 });
+  } catch (e) {
+    console.error("order-events error:", e);
+    return new Response("Error", { status: 500 });
+  }
+});
+```
 
-#### Phase 2: Configure database webhook (critical)
-Goal: Trigger Edge Function when orders are created/updated
+Once this is wired:
 
-Tasks:
-1. Option A: Supabase Dashboard webhook (recommended)
-   - Deploy Edge Function: `supabase functions deploy order-events`
-   - Set OneSignal secrets:
-     - `supabase secrets set ONESIGNAL_APP_ID=your_app_id`
-     - `supabase secrets set ONESIGNAL_REST_KEY=your_rest_key`
-   - Configure webhook in Dashboard:
-     - Table: `orders`
-     - Events: `INSERT`, `UPDATE`
-     - URL: `https://[project-ref].supabase.co/functions/v1/order-events`
-     - Method: `POST`
-     - Headers: `Authorization: Bearer [SERVICE_ROLE_KEY]`
-     - Body: JSON template as per `WEBHOOK_SETUP.md`
+* Even if the app is in the **background or killed**, FCM + OneSignal will show a system notification.
 
-2. Option B: Verify/update database trigger (alternative)
-   - Review `0007_add_order_notification_webhook.sql`
-   - Ensure project ref and service role key are configured
-   - Use Dashboard webhook if trigger setup is complex
+Your existing `MainActivity.setupOneSignalNotificationHandler()` will handle **clicks** on that notification and navigate to the `chefNewOrdersFragment`.
 
-Why: Without this, Edge Function is never called, so OneSignal pushes won’t be sent
+---
 
-#### Phase 3: Update Edge Function for OneSignal v5 (important)
-Goal: Ensure compatibility with OneSignal v5 subscription IDs
+## 2. Android: make the notification play a sound (“ring”)
 
-Tasks:
-1. Update Edge Function to use v5 API
-   - File: `supabase/functions/order-events/index.ts`
-   - Change `include_player_ids` to `include_subscription_ids` (v5 API)
-   - OR verify backward compatibility if `include_player_ids` still works
-   - Update API endpoint if needed (v1 should still work)
+There are two pieces:
 
-2. Test Edge Function
-   - Use `supabase/tests/order_events.http` to test manually
-   - Verify OneSignal API response
-   - Check Edge Function logs
+### 2.1. Create a channel with sound (used by both OneSignal and local notifications)
 
-Why: Ensures the function uses the correct API format for subscription IDs stored by the Android app
+1. Add a sound file in your app:
 
-#### Phase 4: Verify device registration mapping (important)
-Goal: Ensure subscription IDs are stored correctly
+* Place `order_ping.mp3` (or `.wav`) under:
+  `app/src/main/res/raw/order_ping.mp3`
 
-Tasks:
-1. Verify `register_device` RPC function
-   - Confirm it stores subscription ID in `users.onesignal_player_id`
-   - Verify the Android app calls it with subscription ID (not player ID)
-   - Test: Check `users` table after login
+2. Update `NotificationHelper.createNotificationChannel` to assign that sound:
 
-2. Update Edge Function query if needed
-   - Ensure it correctly fetches subscription IDs from `users.onesignal_player_id`
-   - Verify field mapping matches Android app’s registration
+```kotlin
+fun createNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            Constants.NOTIFICATION_CHANNEL_ID,           // e.g. "orders_channel"
+            Constants.NOTIFICATION_CHANNEL_NAME,         // e.g. "Orders"
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = context.getString(R.string.notif_channel_orders)
+            enableVibration(true)
 
-Why: Mismatch between what’s stored and what the Edge Function queries will cause notifications to fail
+            // Set custom sound
+            val soundUri = Uri.parse(
+                "${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.order_ping}"
+            )
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            setSound(soundUri, audioAttrs)
+        }
 
-#### Phase 5: Testing and validation
-Goal: End-to-end verification
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+}
+```
 
-Tasks:
-1. Test Supabase Realtime
-   - Create order from another device/app
-   - Verify Android app receives realtime update
-   - Check logs for "Realtime INSERT" message
+3. Make sure `Constants.NOTIFICATION_CHANNEL_ID` matches the one you use in:
 
-2. Test OneSignal push notifications
-   - Create order from another device/app
-   - Verify Edge Function is called (check logs)
-   - Verify OneSignal API call succeeds (check Edge Function logs)
-   - Verify push notification appears on device
+* `NotificationHelper` (already does)
+* The OneSignal payload: `android_channel_id: "orders_channel"` (or whatever the ID is)
 
-3. Test both paths work independently
-   - Local notification (via Supabase Realtime)
-   - Push notification (via Edge Function → OneSignal)
+Now:
 
-### Files to create/modify
-- `supabase/migrations/0008_enable_realtime_orders.sql` (NEW)
-- `supabase/functions/order-events/index.ts` (MODIFY - update to v5 API)
-- Supabase Dashboard webhook configuration (MANUAL SETUP)
+* Any notification posted to that channel (local or from OneSignal) will play `order_ping`.
 
-### Critical path
-1. Enable realtime replication (Phase 1) — required for client updates
-2. Configure webhook (Phase 2) — required for OneSignal pushes
-3. Update Edge Function API (Phase 3) — ensures correct API usage
-4. Testing (Phase 5) — validates everything works
+You can even remove the manual `SoundManager.playSound(...)` if you like and rely solely on channel sound.
 
-### Expected outcomes
-- Supabase Realtime subscription succeeds (no "Unable to subscribe" error)
-- New orders appear at top automatically (via realtime + sorting)
-- Edge Function triggered on order creation/update
-- OneSignal push notifications sent to subscribed devices
-- Both local and push notifications working
+### 2.2. Make OneSignal use that channel
 
-Should I continue with implementation, starting with Phase 1 (enabling realtime replication)?
+In the OneSignal notification payload (Edge Function), you already saw:
 
+```ts
+android_channel_id: "orders_channel",
+android_sound: "order_ping",
+```
 
-Small improvements / clarifications
+* `android_channel_id` → must exactly equal `Constants.NOTIFICATION_CHANNEL_ID`.
+* `android_sound` is optional: for Android 8+ the **channel’s** sound is what really matters. You can keep it for older devices.
 
-You don’t have to change the whole plan, just tweak mental notes:
+Result:
 
-Realtime and OneSignal are independent paths
+* When a new order is created:
 
-You correctly separate them in testing, but it’s worth stating explicitly:
+  * Supabase → webhook → Edge Function → OneSignal
+  * OneSignal sends push
+  * Android shows system notification on `orders_channel`
+  * Channel plays `order_ping` even if app is backgrounded or killed ✅
 
-Supabase Realtime → local notifications + UI updates.
+---
 
-Edge Function + OneSignal → remote push (works even when app is killed / offline).
+## 3. How this works with your existing local notifications
 
-So if OneSignal pushes don’t work, Realtime is not the cause (it’s just a separate bug that you also have).
+You already have:
 
-Naming: “player id” vs “subscription id”
+```kotlin
+NotificationHelper.showNewOrderNotification(context, orderNumber)
+```
 
-Your plan says:
+which uses the same channel ID and then `SoundManager.playSound(...)`.
 
-Confirm it stores subscription ID in users.onesignal_player_id
+Once the channel has sound:
 
-I’d strongly recommend renaming the DB column to something like onesignal_subscription_id (or add a new column, deprecate the old one), just so you never confuse:
+* Local notifications will automatically also play `order_ping`.
+* You can keep `SoundManager` if you want a *second* sound layer, or remove it if it’s redundant / too loud.
 
-old v4 player_id (user-level id)
+---
 
-v5 subscription id (per-device/channel id)
+## 4. Quick checklist
 
-Your Android code is clearly sending sub.id which is the subscription ID, not the OneSignal user id.
+1. **Edge Function**
 
-Edge Function + OneSignal v5
+   * Uses `include_subscription_ids`.
+   * Uses `android_channel_id` to point at your channel.
+   * Called on `INSERT` to `orders`.
 
-The key change you already mentioned is spot on:
+2. **Android app**
 
-Use include_subscription_ids: [ "1a5a944e-..." ]
-instead of include_player_ids.
+   * `NotificationHelper.createNotificationChannel` sets sound on the channel.
+   * Channel ID constant matches what OneSignal payload uses.
+   * OneSignal SDK already initialized (you’re good here).
 
-You can keep using the POST /notifications endpoint from the REST API; the main thing is which ID type you use in the payload.
+3. **Test**
 
-Order of importance
+   * Kill the app completely.
+   * Create an order (via POS / admin / SQL).
+   * You should see a notification with sound.
+   * Tap the notification → app opens and navigates to new orders (your click handler).
 
-While your phases are good, practically I’d do this:
+If you paste your current `order-events` function code, I can plug in the exact OneSignal call and make sure everything lines up with your existing database schema and `registerDevice(subscriptionId)` logic.
 
-Quick sanity test from dashboard (no code change):
 
-From OneSignal dashboard, send a notification to:
+You’re actually **very close** – your logs show:
 
-external_id = 4101c36e-4a27-4254-984c-ae4ad1b9842e or
+* Supabase Realtime is working ✅
+* New orders are detected ✅
+* The *only* thing that happens on new order is a **Toast** in `ChefNewOrdersFragment` ❌
+* I don’t see **any** log that a NotificationCompat notification is being built or that a OneSignal push is received.
 
-subscription id = 1a5a944e-a5df-405f-9a4f-abad5283c026.
+So right now, your app is doing:
 
-If that hits your phone, you know the entire device-side chain is fine.
+> “New order → Toast in foreground fragment”
 
-Then follow your phases:
+and **nothing else**. That’s why:
 
-Phase 1: Realtime replication
+* No local notification
+* No ringtone
+* Nothing when the app is backgrounded / killed
 
-Phase 2: Webhook → Edge Function
+Let’s fix this in 3 concrete steps.
 
-Phase 3: v5 payload & mapping
+---
 
-The dashboard test saves you from chasing FCM config bugs later.
+## 1. Actually show a local notification when a new order arrives
+
+From the logs:
+
+```text
+SupabaseOrderRepository  D  Realtime INSERT: {...}
+SupabaseOrderRepository  D  New order detected...
+SupabaseOrderRepository  D  Invoking 2 registered callbacks
+OrdersViewModel          D  New order callback invoked...
+Toast                    V  show: caller = ...ChefNewOrdersFragment.observeNewOrders...
+```
+
+There’s **no call to `NotificationHelper`** here.
+
+You need to call `NotificationHelper.showNewOrderNotification(...)` at the point where you already know “new order arrived”.
+
+A good place is inside `SupabaseOrderRepository` where you log *“New order detected”*.
+
+Example (pseudo-code, adapt to your actual repo):
+
+```kotlin
+class SupabaseOrderRepository(
+    private val appContext: Context,
+    // ...
+) {
+    private val applicationContext = appContext.applicationContext
+
+    private val callbacks = mutableListOf<(String, Int?) -> Unit>()
+
+    private fun handleRealtimeInsert(payload: JsonObject) {
+        Log.d("SupabaseOrderRepository", "Realtime INSERT: $payload")
+
+        val orderId = payload["id"]?.jsonPrimitive?.content ?: return
+        val orderNumber = payload["number"]?.jsonPrimitive?.intOrNull
+
+        Log.d("SupabaseOrderRepository", "New order detected: id=$orderId, number=$orderNumber")
+
+        // 🔔 LOCAL NOTIFICATION
+        orderNumber?.let { num ->
+            Log.d("SupabaseOrderRepository", "Showing local notification for order #$num")
+            NotificationHelper.showNewOrderNotification(applicationContext, num)
+        }
+
+        // existing callbacks for ViewModel / Toast
+        callbacks.forEach { it(orderId, orderNumber) }
+
+        Log.d("SupabaseOrderRepository", "Calling refresh() after realtime INSERT event")
+        applicationScope.launch { refresh() }
+    }
+}
+```
+
+Now, whenever a realtime INSERT comes in (foreground or background, as long as the process is alive), a notification will be posted.
+
+---
+
+## 2. Fix the ringtone (notification sound) – **channel gotcha**
+
+On Android 8+ the **notification channel controls sound**. Two critical gotchas:
+
+1. Once a channel is created, its sound/vibration **cannot be changed** by code.
+   If you created the channel earlier *without* sound, then added `setSound(...)` later, it will still be silent forever.
+
+2. If the user turned notifications for that channel to “silent” in system settings, you **cannot override** it in code.
+
+So to guarantee sound:
+
+### 2.1. Use a **new** channel ID
+
+Pick a fresh ID, e.g.:
+
+```kotlin
+object Constants {
+    const val NOTIFICATION_CHANNEL_ID = "orders_channel_v2"   // NEW ID
+    const val NOTIFICATION_CHANNEL_NAME = "Orders"
+}
+```
+
+Update this ID everywhere:
+
+* `NotificationHelper` (Builder + `createNotificationChannel`)
+* OneSignal payload (`android_channel_id`)
+
+### 2.2. Make sure the channel itself has sound
+
+```kotlin
+fun createNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            Constants.NOTIFICATION_CHANNEL_ID,
+            Constants.NOTIFICATION_CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = context.getString(R.string.notif_channel_orders)
+            enableVibration(true)
+
+            val soundUri = Uri.parse(
+                "${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.order_ping}"
+            )
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            setSound(soundUri, audioAttrs)
+        }
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(channel)
+    }
+}
+```
+
+Also:
+
+* Put `order_ping.mp3` or `.wav` in `res/raw/order_ping.mp3`.
+* **Uninstall + reinstall the app** (or bump the channel ID as above) so Android creates the new channel.
+
+Then, in `NotificationHelper.showNewOrderNotification`, make sure you use that channel ID:
+
+```kotlin
+val notification = NotificationCompat.Builder(context, Constants.NOTIFICATION_CHANNEL_ID)
+    // ...
+    .build()
+```
+
+After that:
+
+* A local notification posted with this channel will **show + ring**.
+
+---
+
+## 3. Background / killed app notifications via OneSignal
+
+Local notifications only work while your process is alive (you can see from heartbeats that realtime is alive even when Activity not on screen, which is good).
+
+For **true background / app-killed** notifications, you must get them from OneSignal/FCM:
+
+1. **Verify test from dashboard**
+
+   From OneSignal dashboard:
+
+   * Target this device by **External User Id** = `4101c36e-4a27-4254-984c-ae4ad1b9842e` or subscription id `1a5a944e-a5df-405f-9a4f-abad5283c026`.
+   * Set Android channel = `orders_channel_v2`.
+   * Send while app is:
+
+     * in background
+     * and fully swiped away.
+
+   If you **don’t** see anything:
+
+   * Check system settings → App info → your app → Notifications:
+
+     * App notifications ON
+     * Channel “Orders” not set to Silent.
+
+2. **Check your Edge Function call**
+
+Make sure your `order-events` function sends:
+
+```json
+{
+  "app_id": "8bf3855a-a6d2-4df4-be96-bd6c07f837b9",
+  "include_subscription_ids": ["1a5a944e-a5df-405f-9a4f-abad5283c026"],
+  "headings": { "en": "New order #1012" },
+  "contents": { "en": "Order #1012 just came in" },
+  "android_channel_id": "orders_channel_v2"
+}
+```
+
+If a manual dashboard message works but your Edge Function one doesn’t, the bug is in the function; check its logs.
+
+---
+
+## What your logs tell me right now
+
+* Realtime INSERT is firing.
+* ViewModel + Toast are working.
+* **No log** indicating:
+
+  * `NotificationHelper` was called, or
+  * OneSignal delivered a notification.
+
+So the immediate fix is:
+
+1. Wire `NotificationHelper.showNewOrderNotification(...)` into the realtime INSERT handler (step 1).
+2. Use a **new channel ID** with sound (step 2) and reinstall.
+3. Separately, confirm OneSignal pushes via dashboard (step 3).
+
+If you paste:
+
+* Your current `SupabaseOrderRepository` realtime handler, and
+* Your `NotificationHelper.createNotificationChannel` and OneSignal Edge Function payload,
+
+I can rewrite them line-by-line so you’ll definitely get:
+
+* Toast in foreground
+* Local notification + ring while app process is alive
+* OneSignal push + ring even when app is killed.
