@@ -90,7 +90,13 @@ class MainActivity : AppCompatActivity() {
 
                 navController?.let { controller ->
                     val currentDestination = controller.currentDestination?.id
-                    if (currentDestination != R.id.chefNewOrdersFragment) {
+                    if (currentDestination == R.id.chefNewOrdersFragment) {
+                        // If already on new orders fragment, trigger refresh
+                        lifecycleScope.launch {
+                            val repository = ServiceLocator.provideOrderRepository(applicationContext)
+                            repository.refresh()
+                        }
+                    } else {
                         navigateToFragment(R.id.chefNewOrdersFragment)
                     }
                 }

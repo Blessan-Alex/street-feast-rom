@@ -59,14 +59,19 @@ async function notifyOneSignal(subscriptionIds: string[], heading: string, conte
     return;
   }
 
+  // Determine sound and channel based on status
+  const status = data.status as string;
+  const androidSound = status === "Canceled" ? "buzzer" : "ping";
+  const androidChannelId = "order_updates";
+
   const body = {
     app_id: ONESIGNAL_APP_ID,
     include_subscription_ids: subscriptionIds,
     headings: { en: heading },
     contents: { en: content },
     data,
-    // Temporarily commented out to test if notifications work without it
-    // android_channel_id: "order_updates",
+    android_channel_id: androidChannelId,
+    android_sound: androidSound,
   };
 
   const response = await fetch("https://onesignal.com/api/v1/notifications", {
@@ -84,7 +89,7 @@ async function notifyOneSignal(subscriptionIds: string[], heading: string, conte
     throw new Error(`OneSignal request failed: ${response.status}`);
   }
 
-  console.log(`Notified OneSignal for ${subscriptionIds.length} subscriptions`);
+  console.log(`Notified OneSignal for ${subscriptionIds.length} subscriptions with sound: ${androidSound}`);
 }
 
 function resolveNotificationCopy(status: string, orderNumber?: number) {

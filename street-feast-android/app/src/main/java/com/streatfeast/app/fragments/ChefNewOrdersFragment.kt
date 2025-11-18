@@ -67,10 +67,29 @@ class ChefNewOrdersFragment : Fragment() {
     
     private fun observeOrders() {
         viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
-            adapter.submitList(orders)
-            
+            // Debug log so we know it's actually firing
+            android.util.Log.d("ChefNewOrdersFragment", "newOrders changed, size=${orders.size}")
+
+            // Sort newest orders first (highest orderNumber on top)
+            val sorted = orders.sortedWith(
+                compareByDescending<com.streatfeast.app.models.Order> {
+                    // Put valid numbers first, invalid (0) at the end
+                    it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
+                }.thenByDescending {
+                    // If you have createdAt on the model, this gives stable ordering
+                    it.createdAt
+                }
+            )
+
+            adapter.submitList(sorted) {
+                // This callback runs *after* diff is applied, so now we can safely scroll to top
+                if (sorted.isNotEmpty()) {
+                    binding.rvNewOrders.scrollToPosition(0)
+                }
+            }
+
             // Show/hide empty state
-            if (orders.isEmpty()) {
+            if (sorted.isEmpty()) {
                 binding.emptyState.visibility = View.VISIBLE
                 binding.rvNewOrders.visibility = View.GONE
             } else {
@@ -98,19 +117,13 @@ class ChefNewOrdersFragment : Fragment() {
     
     private fun observeNewOrders() {
         viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
-            orderNumber?.let { num ->
-                Toast.makeText(
-                    requireContext(),
-                    "New order #$num received!",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } ?: run {
-                Toast.makeText(
-                    requireContext(),
-                    "New order received!",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+            android.util.Log.d("ChefNewOrdersFragment", "newOrderDetected: id=$orderId, number=$orderNumber")
+
+            val msg = orderNumber?.let { "New order #$it received!" } ?: "New order received!"
+            Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+
+            // Ask ViewModel to sync (this will eventually update Room)
+            viewModel.refresh()
         }
     }
     
