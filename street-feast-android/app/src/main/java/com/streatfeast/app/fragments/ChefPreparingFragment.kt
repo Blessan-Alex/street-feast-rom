@@ -66,15 +66,39 @@ class ChefPreparingFragment : Fragment() {
     
     private fun observeOrders() {
         viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
-            adapter.submitList(orders)
-            
-            // Show/hide empty state
-            if (orders.isEmpty()) {
-                binding.emptyState.visibility = View.VISIBLE
-                binding.rvPreparingOrders.visibility = View.GONE
+            val currentBinding = _binding ?: run {
+                android.util.Log.w(
+                    "ChefPreparingFragment",
+                    "observeOrders called after view destroyed, ignoring update"
+                )
+                return@observe
+            }
+
+            android.util.Log.d("ChefPreparingFragment", "preparingOrders changed, size=${orders.size}")
+
+            // Sort newest first (by order number, then by createdAt)
+            val sorted = orders.sortedWith(
+                compareByDescending<com.streatfeast.app.models.Order> {
+                    it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
+                }.thenByDescending {
+                    it.createdAt
+                }
+            )
+
+            val recyclerView = currentBinding.rvPreparingOrders
+
+            adapter.submitList(sorted) {
+                if (sorted.isNotEmpty()) {
+                    recyclerView.scrollToPosition(0)
+                }
+            }
+
+            if (sorted.isEmpty()) {
+                currentBinding.emptyState.visibility = View.VISIBLE
+                currentBinding.rvPreparingOrders.visibility = View.GONE
             } else {
-                binding.emptyState.visibility = View.GONE
-                binding.rvPreparingOrders.visibility = View.VISIBLE
+                currentBinding.emptyState.visibility = View.GONE
+                currentBinding.rvPreparingOrders.visibility = View.VISIBLE
             }
         }
     }

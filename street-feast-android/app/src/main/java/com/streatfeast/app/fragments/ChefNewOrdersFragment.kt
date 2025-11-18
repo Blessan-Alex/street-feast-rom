@@ -7,12 +7,14 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.adapters.NewOrdersAdapter
 import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.databinding.FragmentChefNewOrdersBinding
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
+import com.streatfeast.app.R
 
 class ChefNewOrdersFragment : Fragment() {
     
@@ -43,6 +45,7 @@ class ChefNewOrdersFragment : Fragment() {
         observeOrders()
         observeMessages()
         observeNewOrders()
+        observeOrderAccepted()
         
         viewModel.refresh()
     }
@@ -67,7 +70,15 @@ class ChefNewOrdersFragment : Fragment() {
     
     private fun observeOrders() {
         viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
-            // Debug log so we know it's actually firing
+            // View might already be destroyed when this arrives
+            val currentBinding = _binding ?: run {
+                android.util.Log.w(
+                    "ChefNewOrdersFragment",
+                    "observeOrders called after view destroyed, ignoring update"
+                )
+                return@observe
+            }
+
             android.util.Log.d("ChefNewOrdersFragment", "newOrders changed, size=${orders.size}")
 
             // Sort newest orders first (highest orderNumber on top)
@@ -81,20 +92,23 @@ class ChefNewOrdersFragment : Fragment() {
                 }
             )
 
+            // Capture the RecyclerView BEFORE submitList schedules its diff callback
+            val recyclerView = currentBinding.rvNewOrders
+
             adapter.submitList(sorted) {
-                // This callback runs *after* diff is applied, so now we can safely scroll to top
                 if (sorted.isNotEmpty()) {
-                    binding.rvNewOrders.scrollToPosition(0)
+                    // Use the captured view, not binding
+                    recyclerView.scrollToPosition(0)
                 }
             }
 
-            // Show/hide empty state
+            // Show/hide empty state using the safe binding reference
             if (sorted.isEmpty()) {
-                binding.emptyState.visibility = View.VISIBLE
-                binding.rvNewOrders.visibility = View.GONE
+                currentBinding.emptyState.visibility = View.VISIBLE
+                currentBinding.rvNewOrders.visibility = View.GONE
             } else {
-                binding.emptyState.visibility = View.GONE
-                binding.rvNewOrders.visibility = View.VISIBLE
+                currentBinding.emptyState.visibility = View.GONE
+                currentBinding.rvNewOrders.visibility = View.VISIBLE
             }
         }
     }
@@ -124,6 +138,13 @@ class ChefNewOrdersFragment : Fragment() {
 
             // Ask ViewModel to sync (this will eventually update Room)
             viewModel.refresh()
+        }
+    }
+    
+    private fun observeOrderAccepted() {
+        viewModel.orderAccepted.observe(viewLifecycleOwner) { orderId ->
+            // Move chef to Preparing page
+            findNavController().navigate(R.id.chefPreparingFragment)
         }
     }
     

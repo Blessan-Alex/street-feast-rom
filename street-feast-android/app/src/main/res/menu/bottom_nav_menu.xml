@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/nav_new_orders"
         android:icon="@drawable/ic_new_orders"
-        android:title="@string/nav_new_orders" />
+        android:title="@string/nav_new_orders"
+        app:destination="@id/chefNewOrdersFragment" />
     
     <item
         android:id="@+id/nav_preparing"
         android:icon="@drawable/ic_preparing"
-        android:title="@string/nav_preparing" />
+        android:title="@string/nav_preparing"
+        app:destination="@id/chefPreparingFragment" />
     
     <item
         android:id="@+id/nav_ready"
         android:icon="@drawable/ic_ready"
-        android:title="@string/nav_ready" />
+        android:title="@string/nav_ready"
+        app:destination="@id/waiterReadyFragment" />
 </menu>
 
 

@@ -59,10 +59,11 @@ async function notifyOneSignal(subscriptionIds: string[], heading: string, conte
     return;
   }
 
-  // Determine sound and channel based on status
+  // Determine sound based on status
   const status = data.status as string;
   const androidSound = status === "Canceled" ? "buzzer" : "ping";
-  const androidChannelId = "order_updates";
+  // Note: android_channel_id removed - OneSignal will use app's default channel
+  // The Android app already creates "order_updates" channel locally for local notifications
 
   const body = {
     app_id: ONESIGNAL_APP_ID,
@@ -70,7 +71,6 @@ async function notifyOneSignal(subscriptionIds: string[], heading: string, conte
     headings: { en: heading },
     contents: { en: content },
     data,
-    android_channel_id: androidChannelId,
     android_sound: androidSound,
   };
 
@@ -96,6 +96,11 @@ function resolveNotificationCopy(status: string, orderNumber?: number) {
   const numberSuffix = orderNumber ? ` #${orderNumber}` : "";
 
   switch (status) {
+    case "InKitchen":
+      return {
+        heading: `Order${numberSuffix} accepted by chef`,
+        content: "Order is now being prepared.",
+      };
     case "Prepared":
       return {
         heading: `Order${numberSuffix} ready`,

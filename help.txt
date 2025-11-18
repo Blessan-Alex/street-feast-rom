@@ -1,191 +1,161 @@
-Nice, thanks for pasting the fragment + activity. That helps a lot.
+Nice, thanks for pasting the logs — they explain exactly what’s going wrong.
 
-You’ve already got realtime wired up on the repository side, so for the Android app there are really **two separate problems**:
+Key line:
 
-1. **Ordering** – new orders should show at the **top**
-2. **Realtime UI update** – the new order should show **without you doing anything** (no manual pull-to-refresh)
+```text
+java.lang.NullPointerException
+    at com.streatfeast.app.fragments.ChefNewOrdersFragment.getBinding(ChefNewOrdersFragment.kt:22)
+    at com.streatfeast.app.fragments.ChefNewOrdersFragment.observeOrders$lambda$0$2(ChefNewOrdersFragment.kt:90)
+    ...
+    at androidx.recyclerview.widget.AsyncListDiffer.onCurrentListChanged(AsyncListDiffer.java:379)
+```
 
-Let’s fix both directly in the fragment and then double-check that the data is actually flowing.
+So:
 
----
+* The crash happens **after Accept**.
+* `OrdersViewModel` refreshes → `newOrders` changes → `adapter.submitList(...)` runs.
+* The **`submitList` completion callback** is executed **after** the Fragment’s view is destroyed (because we navigated to the Preparing screen).
+* At that moment `_binding == null`, but your `binding` getter (`_binding!!`) is still used inside the callback → 💥 NPE.
 
-## 1️⃣ Make new orders show at the **top**
-
-Right now you just do:
+Specifically, this bit is the problem:
 
 ```kotlin
-private fun observeOrders() {
-    viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
-        adapter.submitList(orders)
-        ...
+adapter.submitList(sorted) {
+    if (sorted.isNotEmpty()) {
+        binding.rvNewOrders.scrollToPosition(0)  // <- uses binding after onDestroyView
     }
 }
 ```
 
-This respects whatever order the list comes in (most likely **oldest first**), so the new one lands at the **bottom**.
+`AsyncListDiffer` posts this callback on the main thread, so it can easily fire *just after* `onDestroyView()`.
 
-Update this method to:
+---
 
-* Sort by `orderNumber` **descending**
-* Optionally secondary sort by `createdAt` (if it exists on your UI model)
-* Scroll to the top **after** the adapter has applied the diff
+## ✅ Fix: Don’t touch `binding` inside the `submitList` callback
+
+Two safe options; I’ll give you the **robust version** that also protects `observeOrders` from running when `binding` is null.
+
+### 1. Update `observeOrders()` in `ChefNewOrdersFragment`
+
+Replace your `observeOrders()` with this:
 
 ```kotlin
 private fun observeOrders() {
     viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
-        // Debug log so we know it's actually firing
+        // View might already be destroyed when this arrives
+        val currentBinding = _binding ?: run {
+            android.util.Log.w(
+                "ChefNewOrdersFragment",
+                "observeOrders called after view destroyed, ignoring update"
+            )
+            return@observe
+        }
+
         android.util.Log.d("ChefNewOrdersFragment", "newOrders changed, size=${orders.size}")
 
-        // Sort newest orders first (highest orderNumber on top)
-        val sorted = orders
-            .sortedWith(
-                compareByDescending<com.streatfeast.app.models.Order> {
-                    // Put valid numbers first, invalid (0) at the end
-                    it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
-                }.thenByDescending {
-                    // If you have createdAt on the model, this gives stable ordering
-                    it.createdAt
-                }
-            )
+        val sorted = orders.sortedWith(
+            compareByDescending<com.streatfeast.app.models.Order> {
+                it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
+            }.thenByDescending {
+                it.createdAt
+            }
+        )
+
+        // Capture the RecyclerView BEFORE submitList schedules its diff callback
+        val recyclerView = currentBinding.rvNewOrders
 
         adapter.submitList(sorted) {
-            // This callback runs *after* diff is applied, so now we can safely scroll to top
             if (sorted.isNotEmpty()) {
-                binding.rvNewOrders.scrollToPosition(0)
+                // Use the captured view, not binding
+                recyclerView.scrollToPosition(0)
             }
         }
 
-        // Show/hide empty state
+        // Show/hide empty state using the safe binding reference
         if (sorted.isEmpty()) {
-            binding.emptyState.visibility = View.VISIBLE
-            binding.rvNewOrders.visibility = View.GONE
+            currentBinding.emptyState.visibility = View.VISIBLE
+            currentBinding.rvNewOrders.visibility = View.GONE
         } else {
-            binding.emptyState.visibility = View.GONE
-            binding.rvNewOrders.visibility = View.VISIBLE
+            currentBinding.emptyState.visibility = View.GONE
+            currentBinding.rvNewOrders.visibility = View.VISIBLE
         }
     }
 }
 ```
 
-Key point: using the **`submitList(sorted) { ... }`** overload ensures the scroll happens **after** RecyclerView has applied the diff and knows about the new first item.
+What changed:
 
----
+* We **never** call the `binding` getter directly inside the observer.
+* We early-return if `_binding` is already null (view destroyed).
+* We **capture** `currentBinding` and `recyclerView` *before* `submitList` posts its callback.
+* The callback now only uses local `recyclerView`, so it doesn’t care if `_binding` later becomes null.
 
-## 2️⃣ Make sure new orders appear *without* manual refresh
+### 2. (Optional) Mirror the same pattern in `ChefPreparingFragment`
 
-You already have this:
+Your preparing list also uses `submitList`. To avoid the same crash there when you navigate away, use the same pattern:
 
 ```kotlin
-private fun observeNewOrders() {
-    viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
-        orderNumber?.let { num ->
-            Toast.makeText(
-                requireContext(),
-                "New order #$num received!",
-                Toast.LENGTH_SHORT
-            ).show()
-        } ?: run {
-            Toast.makeText(
-                requireContext(),
-                "New order received!",
-                Toast.LENGTH_SHORT
-            ).show()
+private fun observeOrders() {
+    viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
+        val currentBinding = _binding ?: run {
+            android.util.Log.w(
+                "ChefPreparingFragment",
+                "observeOrders called after view destroyed, ignoring update"
+            )
+            return@observe
         }
 
-        // Trigger refresh to ensure order appears on top immediately
-        viewModel.refresh()
+        android.util.Log.d("ChefPreparingFragment", "preparingOrders changed, size=${orders.size}")
+
+        val sorted = orders.sortedWith(
+            compareByDescending<com.streatfeast.app.models.Order> {
+                it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
+            }.thenByDescending {
+                it.createdAt
+            }
+        )
+
+        val recyclerView = currentBinding.rvPreparingOrders
+
+        adapter.submitList(sorted) {
+            if (sorted.isNotEmpty()) {
+                recyclerView.scrollToPosition(0)
+            }
+        }
+
+        if (sorted.isEmpty()) {
+            currentBinding.emptyState.visibility = View.VISIBLE
+            currentBinding.rvPreparingOrders.visibility = View.GONE
+        } else {
+            currentBinding.emptyState.visibility = View.GONE
+            currentBinding.rvPreparingOrders.visibility = View.VISIBLE
+        }
     }
 }
 ```
 
-This means:
-
-* Realtime → ViewModel sets `newOrderDetected`
-* Fragment shows toast
-* You call `viewModel.refresh()` (network → Supabase → Room → Flow emit → LiveData → observeOrders)
-
-If **you see the toast** for the new order but **don’t see the row until a manual swipe refresh** then one of these is wrong:
-
-1. `observeOrders()` is not getting called after refresh
-2. Or it is being called, but the list **looks the same** to DiffUtil (e.g. same objects / same order), so the UI doesn’t visually update.
-
-The change above (sorting + `submitList(sorted) { ... }`) fixes #2 most of the time, because:
-
-* Sorting by `orderNumber` descending guarantees the new order ends up at index 0
-* DiffUtil sees a new item and a re-ordered list and updates the UI
-* We then scroll to position 0 so it’s visible
-
-You can also tighten `observeNewOrders()` a little:
-
-```kotlin
-private fun observeNewOrders() {
-    viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
-        android.util.Log.d("ChefNewOrdersFragment", "newOrderDetected: id=$orderId, number=$orderNumber")
-
-        val msg = orderNumber?.let { "New order #$it received!" } ?: "New order received!"
-        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
-
-        // Ask ViewModel to sync (this will eventually update Room)
-        viewModel.refresh()
-    }
-}
-```
-
-If after these changes:
-
-* You see `newOrderDetected` log
-* You see `newOrders changed, size=...` log in logcat
-* But UI doesn’t change until swipe refresh → then we know it’s **purely an adapter / RecyclerView issue** (not data flow).
-
-If you **don’t** see the `"newOrders changed"` log when a realtime insert happens, then the bug is **upstream** (ViewModel / Repository / DAO), not in this fragment.
-
 ---
 
-## 3️⃣ Quick sanity checklist (no extra code, just things to confirm)
+## ✅ About the Accept → Preparing flow
 
-If it’s *still* not working after the fragment changes, check these things in your code (you don’t need to paste them, just compare mentally):
+From your logs:
 
-1. **DAO query**
-   For “new orders” it should be something like:
+* `newOrders changed, size=37` → then `size=36` ✅ order is removed from new list.
+* Then you see `observeOrders: status=InKitchen` for the repository, so it **is** streaming preparing orders.
+* The app crashes **before** the chef sees the Preparing screen because of the NPE above.
 
-   ```sql
-   SELECT ... 
-   FROM orders 
-   WHERE storeId = :storeId AND status = 'Created'
-   ORDER BY createdAt DESC;
-   ```
+Once you apply this binding fix:
 
-2. **ViewModel**
-   `newOrders` should be coming from a **Flow→LiveData** chain, not a one-shot fetch:
+* Tap **Accept**
+* Status updates (`InKitchen`)
+* New-orders list shrinks
+* Preparing list gets the order via realtime/refresh
+* Navigation to `ChefPreparingFragment` runs without crashing
+* Preparing UI should show the order at the top (with the sorting we already added).
 
-   ```kotlin
-   val newOrders: LiveData<List<Order>> =
-       repository.observeOrders(status = OrderStatus.CREATED).asLiveData()
-   ```
+If after this the order *still* doesn’t appear in the Preparing tab, then we’ll inspect:
 
-3. **Repository realtime handler**
-   On Supabase Realtime INSERT, it should either:
+* What `OrdersViewModel.preparingOrders` is filtering on (`OrderStatus.IN_KITCHEN` vs `ACCEPTED`)
+* What status you’re actually writing in `SupabaseOrderRepository.acceptOrder`.
 
-   * write the new order into Room directly, **or**
-   * call `refresh()` which then writes to Room via `replaceStoreData()`.
-
-   You already have logs like `Realtime INSERT: {...}` and `Calling refresh() after realtime INSERT event`, so this is probably OK.
-
----
-
-### What to expect after the fragment change
-
-After you update `observeOrders()` as above, the behavior should be:
-
-* When a new order comes in:
-
-  * Realtime logs show the INSERT
-  * `newOrderDetected` triggers → toast appears
-  * `viewModel.refresh()` runs
-  * Room Flow emits new list → `newOrders changed, size=...` log
-  * Adapter gets a new sorted list, puts the new order at the **top**
-  * RecyclerView scrolls to position 0
-* You **do not** need to pull to refresh to see the new order.
-
-Go ahead and change `observeOrders()` to the sorted + scroll version.
-If it still misbehaves, the next file I’d look at is `OrdersViewModel` and the `NewOrdersAdapter` DiffUtil callback, because that’s the only thing left between “data changed” and “UI updated”.
+But first, this crash is the blocker, and the code above will remove it.

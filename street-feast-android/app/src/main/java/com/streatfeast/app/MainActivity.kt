@@ -292,7 +292,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.bottomNavigation.setupWithNavController(navController)
 
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
+        // Store reference to listener so we can temporarily remove it
+        val itemSelectedListener = com.google.android.material.navigation.NavigationBarView.OnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_new_orders -> {
                     navController.navigate(R.id.chefNewOrdersFragment)
@@ -308,6 +309,27 @@ class MainActivity : AppCompatActivity() {
                 }
                 else -> false
             }
+        }
+
+        binding.bottomNavigation.setOnItemSelectedListener(itemSelectedListener)
+
+        // Manually sync bottom navigation selection when destination changes programmatically
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            // Temporarily remove listener to prevent infinite loop when setting selectedItemId
+            binding.bottomNavigation.setOnItemSelectedListener(null)
+            when (destination.id) {
+                R.id.chefNewOrdersFragment -> {
+                    binding.bottomNavigation.selectedItemId = R.id.nav_new_orders
+                }
+                R.id.chefPreparingFragment -> {
+                    binding.bottomNavigation.selectedItemId = R.id.nav_preparing
+                }
+                R.id.waiterReadyFragment -> {
+                    binding.bottomNavigation.selectedItemId = R.id.nav_ready
+                }
+            }
+            // Re-add listener after setting selected item
+            binding.bottomNavigation.setOnItemSelectedListener(itemSelectedListener)
         }
     }
 }

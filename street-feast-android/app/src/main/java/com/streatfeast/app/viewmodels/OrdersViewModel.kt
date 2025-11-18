@@ -37,6 +37,9 @@ class OrdersViewModel(
     private val _newOrderDetected = MutableLiveData<Pair<String, Int?>>()
     val newOrderDetected: LiveData<Pair<String, Int?>> = _newOrderDetected
 
+    private val _orderAccepted = MutableLiveData<String>()   // order ID
+    val orderAccepted: LiveData<String> get() = _orderAccepted
+
     init {
         // Start realtime subscription with callback for new orders
         Log.d("OrdersViewModel", "Initializing OrdersViewModel - starting realtime subscription")
@@ -59,7 +62,13 @@ class OrdersViewModel(
     }
 
     fun acceptOrder(orderId: String) {
-        performAction("Order accepted") { repository.acceptOrder(orderId) }
+        performAction("Order accepted") {
+            val result = repository.acceptOrder(orderId)
+            result.onSuccess {
+                _orderAccepted.postValue(orderId)
+            }
+            result
+        }
     }
 
     fun markPrepared(orderId: String) {
