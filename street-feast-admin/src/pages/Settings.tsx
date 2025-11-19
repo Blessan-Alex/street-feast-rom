@@ -264,7 +264,7 @@ const DangerZone: React.FC = () => {
   const [showSecondDialog, setShowSecondDialog] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
-  const handleDeleteAll = () => {
+  const handleDeleteAll = async () => {
     // Clear all stores
     resetMenu();
     resetOrders();
@@ -275,7 +275,7 @@ const DangerZone: React.FC = () => {
     clearOrderCounter();
     
     // Logout
-    logout();
+    await logout();
     
     toast.success('All data has been deleted');
     navigate('/login');

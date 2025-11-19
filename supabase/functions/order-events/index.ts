@@ -22,8 +22,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const ROLE_TARGETS: Record<string, Array<"chef" | "waiter" | "admin">> = {
   Created: ["chef"],
   Accepted: ["chef"],
-  InKitchen: ["chef"],
-  Prepared: ["waiter"],
+  InKitchen: ["chef", "admin"],
+  Prepared: ["waiter", "admin"],
   Delivered: [],
   Canceled: ["chef", "waiter"],
 };

@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Breadcrumbs } from './Breadcrumbs';
 import { useMenuStore } from '../store/menuStore';
-import { STORAGE_KEYS } from '../utils/storage';
+import { logout } from '../utils/auth';
 
 export const Layout: React.FC = () => {
   const location = useLocation();
@@ -24,8 +24,8 @@ export const Layout: React.FC = () => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
-  const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEYS.USER);
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

@@ -1,161 +1,201 @@
-Nice, thanks for pasting the logs — they explain exactly what’s going wrong.
+Reviewing the current files and preparing fixes for the realtime subscription issue:
 
-Key line:
 
-```text
-java.lang.NullPointerException
-    at com.streatfeast.app.fragments.ChefNewOrdersFragment.getBinding(ChefNewOrdersFragment.kt:22)
-    at com.streatfeast.app.fragments.ChefNewOrdersFragment.observeOrders$lambda$0$2(ChefNewOrdersFragment.kt:90)
-    ...
-    at androidx.recyclerview.widget.AsyncListDiffer.onCurrentListChanged(AsyncListDiffer.java:379)
+[4 tools called]
+
+
+Here are the exact code changes to fix the realtime subscription issue:
+
+## Fix 1: Update Supabase client with realtime configuration
+
+```typescript:street-feast-admin/src/utils/supabase.ts
+// Create Supabase client instance
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  }
+});
 ```
 
-So:
+## Fix 2: Update realtime subscription with error handling and auth check
 
-* The crash happens **after Accept**.
-* `OrdersViewModel` refreshes → `newOrders` changes → `adapter.submitList(...)` runs.
-* The **`submitList` completion callback** is executed **after** the Fragment’s view is destroyed (because we navigated to the Preparing screen).
-* At that moment `_binding == null`, but your `binding` getter (`_binding!!`) is still used inside the callback → 💥 NPE.
-
-Specifically, this bit is the problem:
-
-```kotlin
-adapter.submitList(sorted) {
-    if (sorted.isNotEmpty()) {
-        binding.rvNewOrders.scrollToPosition(0)  // <- uses binding after onDestroyView
+```typescript:street-feast-admin/src/store/ordersStore.ts
+// Realtime subscription function
+export function initOrdersRealtime(storeId: string): () => void {
+  console.log('[initOrdersRealtime] Initializing realtime subscription for store:', storeId);
+  
+  // Check if user is authenticated
+  supabase.auth.getSession().then(({ data: { session }, error }) => {
+    if (error) {
+      console.error('[initOrdersRealtime] Auth error:', error);
+    } else {
+      console.log('[initOrdersRealtime] User session:', session ? 'Authenticated' : 'Not authenticated');
+      if (!session) {
+        console.warn('[initOrdersRealtime] No user session - realtime may fail due to RLS');
+      }
     }
+  });
+  
+  const channel = supabase
+    .channel(`realtime:admin-orders:${storeId}`, {
+      config: {
+        broadcast: { self: true },
+        presence: { key: '' }
+      }
+    })
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // INSERT | UPDATE | DELETE
+        schema: 'public',
+        table: 'orders',
+        filter: `store_id=eq.${storeId}`,
+      },
+      async (payload) => {
+        console.log('[Realtime] Event received:', {
+          eventType: payload.eventType,
+          new: payload.new,
+          old: payload.old,
+          timestamp: new Date().toISOString()
+        });
+
+        const { eventType, new: newRow, old: oldRow } = payload;
+
+        switch (eventType) {
+          case 'INSERT':
+            console.log('[Realtime] INSERT event - new order:', newRow);
+            if (newRow) {
+              await useOrdersStore.getState().upsertOrder(newRow);
+            }
+            break;
+            
+          case 'UPDATE':
+            console.log('[Realtime] UPDATE event:', {
+              oldStatus: oldRow?.status,
+              newStatus: newRow?.status,
+              orderId: newRow?.id
+            });
+            if (newRow) {
+              await useOrdersStore.getState().upsertOrder(newRow);
+              
+              // Optional: Show browser notification for status changes
+              if (newRow.status) {
+                const status = newRow.status as string;
+                if (status === 'InKitchen' || status === 'Prepared') {
+                  console.log('[Realtime] Showing browser notification for status:', status);
+                  showBrowserNotification(newRow);
+                }
+              }
+            }
+            break;
+
+          case 'DELETE':
+            console.log('[Realtime] DELETE event - removing order:', oldRow?.id);
+            if (oldRow) {
+              useOrdersStore.getState().removeOrder(oldRow.id as string);
+            }
+            break;
+            
+          default:
+            console.log('[Realtime] Unknown event type:', eventType);
+        }
+      }
+    )
+    .subscribe((status, err) => {
+      console.log('[Realtime] Subscription status changed:', status);
+      if (err) {
+        console.error('[Realtime] Subscription error details:', {
+          error: err,
+          message: err?.message,
+          status: err?.status,
+          details: err
+        });
+      }
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] Successfully subscribed to orders changes');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('[Realtime] Channel error occurred - check RLS policies and authentication');
+        // Try to get more details
+        channel.on('error', (error) => {
+          console.error('[Realtime] Channel error event:', error);
+        });
+      } else if (status === 'TIMED_OUT') {
+        console.error('[Realtime] Subscription timed out');
+      } else if (status === 'CLOSED') {
+        console.warn('[Realtime] Channel closed');
+      }
+    });
+
+  // Return cleanup function
+  return () => {
+    console.log('[initOrdersRealtime] Cleaning up realtime subscription');
+    supabase.removeChannel(channel);
+  };
 }
 ```
 
-`AsyncListDiffer` posts this callback on the main thread, so it can easily fire *just after* `onDestroyView()`.
+## Fix 3: Add authentication check in App.tsx
 
----
+```typescript:street-feast-admin/src/App.tsx
+import { supabase } from './utils/supabase';
 
-## ✅ Fix: Don’t touch `binding` inside the `submitList` callback
+// ... existing imports ...
 
-Two safe options; I’ll give you the **robust version** that also protects `observeOrders` from running when `binding` is null.
+  // Initialize realtime subscription for orders
+  useEffect(() => {
+    console.log('[App] Setting up realtime subscription...');
+    let cleanup: (() => void) | null = null;
 
-### 1. Update `observeOrders()` in `ChefNewOrdersFragment`
-
-Replace your `observeOrders()` with this:
-
-```kotlin
-private fun observeOrders() {
-    viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
-        // View might already be destroyed when this arrives
-        val currentBinding = _binding ?: run {
-            android.util.Log.w(
-                "ChefNewOrdersFragment",
-                "observeOrders called after view destroyed, ignoring update"
-            )
-            return@observe
+    const setupRealtime = async () => {
+      try {
+        // Check authentication first
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        if (authError) {
+          console.error('[App] Auth check error:', authError);
         }
-
-        android.util.Log.d("ChefNewOrdersFragment", "newOrders changed, size=${orders.size}")
-
-        val sorted = orders.sortedWith(
-            compareByDescending<com.streatfeast.app.models.Order> {
-                it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
-            }.thenByDescending {
-                it.createdAt
-            }
-        )
-
-        // Capture the RecyclerView BEFORE submitList schedules its diff callback
-        val recyclerView = currentBinding.rvNewOrders
-
-        adapter.submitList(sorted) {
-            if (sorted.isNotEmpty()) {
-                // Use the captured view, not binding
-                recyclerView.scrollToPosition(0)
-            }
+        console.log('[App] Current session:', session ? 'Authenticated' : 'Not authenticated');
+        
+        if (!session) {
+          console.warn('[App] No user session - realtime subscription may fail due to RLS policies');
         }
-
-        // Show/hide empty state using the safe binding reference
-        if (sorted.isEmpty()) {
-            currentBinding.emptyState.visibility = View.VISIBLE
-            currentBinding.rvNewOrders.visibility = View.GONE
+        
+        console.log('[App] Getting store ID...');
+        const storeId = await getStoreId();
+        console.log('[App] Store ID:', storeId);
+        if (storeId) {
+          cleanup = initOrdersRealtime(storeId);
+          console.log('[App] Orders realtime subscription initialized for store:', storeId);
         } else {
-            currentBinding.emptyState.visibility = View.GONE
-            currentBinding.rvNewOrders.visibility = View.VISIBLE
+          console.warn('[App] No store ID found, skipping realtime subscription');
         }
-    }
-}
+      } catch (error) {
+        console.error('[App] Failed to initialize orders realtime subscription:', error);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (cleanup) {
+        console.log('[App] Cleaning up realtime subscription on unmount');
+        cleanup();
+      }
+    };
+  }, []);
 ```
 
-What changed:
+## Summary of changes
 
-* We **never** call the `binding` getter directly inside the observer.
-* We early-return if `_binding` is already null (view destroyed).
-* We **capture** `currentBinding` and `recyclerView` *before* `submitList` posts its callback.
-* The callback now only uses local `recyclerView`, so it doesn’t care if `_binding` later becomes null.
+1. Supabase client: Add realtime configuration
+2. Realtime subscription: Add auth check, error handling, and detailed logging
+3. App.tsx: Add auth check before initializing realtime
 
-### 2. (Optional) Mirror the same pattern in `ChefPreparingFragment`
+After applying these changes:
+- Check the console for `[initOrdersRealtime] User session: Authenticated`
+- If not authenticated, the admin needs to log in
+- Look for detailed error messages if `CHANNEL_ERROR` persists
+- The subscription should show `SUBSCRIBED` status when working
 
-Your preparing list also uses `submitList`. To avoid the same crash there when you navigate away, use the same pattern:
-
-```kotlin
-private fun observeOrders() {
-    viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
-        val currentBinding = _binding ?: run {
-            android.util.Log.w(
-                "ChefPreparingFragment",
-                "observeOrders called after view destroyed, ignoring update"
-            )
-            return@observe
-        }
-
-        android.util.Log.d("ChefPreparingFragment", "preparingOrders changed, size=${orders.size}")
-
-        val sorted = orders.sortedWith(
-            compareByDescending<com.streatfeast.app.models.Order> {
-                it.orderNumber.takeIf { num -> num > 0 } ?: Int.MIN_VALUE
-            }.thenByDescending {
-                it.createdAt
-            }
-        )
-
-        val recyclerView = currentBinding.rvPreparingOrders
-
-        adapter.submitList(sorted) {
-            if (sorted.isNotEmpty()) {
-                recyclerView.scrollToPosition(0)
-            }
-        }
-
-        if (sorted.isEmpty()) {
-            currentBinding.emptyState.visibility = View.VISIBLE
-            currentBinding.rvPreparingOrders.visibility = View.GONE
-        } else {
-            currentBinding.emptyState.visibility = View.GONE
-            currentBinding.rvPreparingOrders.visibility = View.VISIBLE
-        }
-    }
-}
-```
-
----
-
-## ✅ About the Accept → Preparing flow
-
-From your logs:
-
-* `newOrders changed, size=37` → then `size=36` ✅ order is removed from new list.
-* Then you see `observeOrders: status=InKitchen` for the repository, so it **is** streaming preparing orders.
-* The app crashes **before** the chef sees the Preparing screen because of the NPE above.
-
-Once you apply this binding fix:
-
-* Tap **Accept**
-* Status updates (`InKitchen`)
-* New-orders list shrinks
-* Preparing list gets the order via realtime/refresh
-* Navigation to `ChefPreparingFragment` runs without crashing
-* Preparing UI should show the order at the top (with the sorting we already added).
-
-If after this the order *still* doesn’t appear in the Preparing tab, then we’ll inspect:
-
-* What `OrdersViewModel.preparingOrders` is filtering on (`OrderStatus.IN_KITCHEN` vs `ACCEPTED`)
-* What status you’re actually writing in `SupabaseOrderRepository.acceptOrder`.
-
-But first, this crash is the blocker, and the code above will remove it.
+If it still fails after these changes, share the console error details so we can diagnose further.

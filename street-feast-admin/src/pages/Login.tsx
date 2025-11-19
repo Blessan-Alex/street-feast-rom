@@ -23,8 +23,8 @@ export const Login: React.FC = () => {
       return;
     }
 
-    // Attempt login
-    const result = login(email, password);
+    // Attempt login (now async)
+    const result = await login(email, password);
     
     if (result.success) {
       navigate('/menu');

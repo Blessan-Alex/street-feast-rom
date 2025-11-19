@@ -14,8 +14,10 @@ import { CreateOrder } from './pages/CreateOrder';
 import { ManageOrders } from './pages/ManageOrders';
 import { useMenuStore } from './store/menuStore';
 import { useOrdersStore } from './store/ordersStore';
+import { initOrdersRealtime } from './store/ordersStore';
 import { loadFromStorage, saveToStorage } from './utils/storage';
 import { loadOrdersFromStorage, saveOrdersToStorage } from './utils/ordersStorage';
+import { getStoreId, supabase } from './utils/supabase';
 
 function App() {
   // Load menu data from localStorage on mount
@@ -55,6 +57,77 @@ function App() {
     return () => {
       isActive = false;
       unsubscribe();
+    };
+  }, []);
+
+  // Initialize realtime subscription for orders
+  useEffect(() => {
+    console.log('[App] Setting up realtime subscription...');
+    let cleanup: (() => void) | null = null;
+
+    const setupRealtime = async (): Promise<void> => {
+      try {
+        // Wait a bit for auth session to be established after login
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check authentication first
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        if (authError) {
+          console.error('[App] Auth check error:', authError);
+        }
+        console.log('[App] Current session:', session ? 'Authenticated' : 'Not authenticated');
+        
+        if (!session) {
+          console.warn('[App] No user session - realtime subscription may fail due to RLS policies');
+          console.warn('[App] Please ensure you are logged in via the login page');
+          return; // Don't initialize realtime if not authenticated
+        }
+        
+        console.log('[App] Getting store ID...');
+        const storeId = await getStoreId();
+        console.log('[App] Store ID:', storeId);
+        if (storeId) {
+          // Clean up existing subscription if any
+          if (cleanup) {
+            cleanup();
+          }
+          cleanup = initOrdersRealtime(storeId);
+          console.log('[App] Orders realtime subscription initialized for store:', storeId);
+        } else {
+          console.warn('[App] No store ID found, skipping realtime subscription');
+        }
+      } catch (error) {
+        console.error('[App] Failed to initialize orders realtime subscription:', error);
+      }
+    };
+
+    setupRealtime();
+
+    // Listen for auth state changes (e.g., when user logs in)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[App] Auth state changed:', event, session ? 'Authenticated' : 'Not authenticated');
+      
+      if (event === 'SIGNED_IN' && session) {
+        console.log('[App] User signed in, reinitializing realtime subscription...');
+        // Setup new subscription (cleanup happens inside setupRealtime)
+        setupRealtime();
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[App] User signed out, cleaning up realtime subscription...');
+        if (cleanup) {
+          cleanup();
+          cleanup = null;
+        }
+      }
+    });
+
+    return () => {
+      // Cleanup auth listener
+      subscription.unsubscribe();
+      // Cleanup realtime subscription
+      if (cleanup) {
+        console.log('[App] Cleaning up realtime subscription on unmount');
+        cleanup();
+      }
     };
   }, []);
 

@@ -84,6 +84,10 @@ interface OrdersStore {
   // Store management
   setOrders: (orders: Order[]) => void;
   reset: () => void;
+  
+  // Realtime methods
+  upsertOrder: (supabaseOrder: any) => Promise<void>;
+  removeOrder: (orderId: string) => void;
 }
 
 const initialDraft: DraftOrder = {
@@ -445,5 +449,209 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
 
   reset: () => {
     set({ orders: [], draft: { ...initialDraft } });
+  },
+
+  // Realtime methods
+  upsertOrder: async (supabaseOrder: any) => {
+    try {
+      // Fetch order items for this order
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', supabaseOrder.id);
+
+      if (itemsError) {
+        console.error('Failed to fetch order items for realtime update:', itemsError);
+        return;
+      }
+
+      // Convert Supabase order to local Order format
+      const order: Order = {
+        id: supabaseOrder.id,
+        orderNumber: supabaseOrder.number || 0,
+        type: (supabaseOrder.type || 'DineIn') as OrderType,
+        chefTip: supabaseOrder.chef_tip || '',
+        status: (supabaseOrder.status || 'Created') as OrderStatus,
+        createdAt: supabaseOrder.created_at ? new Date(supabaseOrder.created_at).getTime() : Date.now(),
+        updatedAt: supabaseOrder.updated_at ? new Date(supabaseOrder.updated_at).getTime() : Date.now(),
+        orderItems: (orderItems || []).map((item: any) => ({
+          id: item.id,
+          itemId: item.sku || '',
+          nameSnapshot: item.name || '',
+          size: item.size || null,
+          vegFlagSnapshot: (item.veg_flag || 'Both') as 'Veg' | 'NonVeg' | 'Both',
+          qty: item.quantity || 1,
+          chefTip: (item.modifiers?.chefTip || '') as string
+        }))
+      };
+
+      // Upsert into store
+      set((state) => {
+        const existingIndex = state.orders.findIndex(o => o.id === order.id);
+        if (existingIndex >= 0) {
+          // Update existing order
+          const updatedOrders = [...state.orders];
+          updatedOrders[existingIndex] = order;
+          return { orders: updatedOrders };
+        } else {
+          // Add new order at the beginning
+          return { orders: [order, ...state.orders] };
+        }
+      });
+    } catch (error: any) {
+      console.error('Failed to upsert order from realtime:', error);
+    }
+  },
+
+  removeOrder: (orderId: string) => {
+    set((state) => ({
+      orders: state.orders.filter(o => o.id !== orderId)
+    }));
   }
 }));
+
+// Realtime subscription function
+export function initOrdersRealtime(storeId: string): () => void {
+  console.log('[initOrdersRealtime] Initializing realtime subscription for store:', storeId);
+  
+  // Check if user is authenticated
+  supabase.auth.getSession().then(({ data: { session }, error }) => {
+    if (error) {
+      console.error('[initOrdersRealtime] Auth error:', error);
+    } else {
+      console.log('[initOrdersRealtime] User session:', session ? 'Authenticated' : 'Not authenticated');
+      if (!session) {
+        console.warn('[initOrdersRealtime] No user session - realtime may fail due to RLS');
+      }
+    }
+  });
+  
+  const channel = supabase
+    .channel(`realtime:admin-orders:${storeId}`, {
+      config: {
+        broadcast: { self: true },
+        presence: { key: '' }
+      }
+    })
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // INSERT | UPDATE | DELETE
+        schema: 'public',
+        table: 'orders',
+        filter: `store_id=eq.${storeId}`,
+      },
+      async (payload) => {
+        console.log('[Realtime] Event received:', {
+          eventType: payload.eventType,
+          new: payload.new,
+          old: payload.old,
+          timestamp: new Date().toISOString()
+        });
+
+        const { eventType, new: newRow, old: oldRow } = payload;
+
+        switch (eventType) {
+          case 'INSERT':
+            console.log('[Realtime] INSERT event - new order:', newRow);
+            if (newRow) {
+              await useOrdersStore.getState().upsertOrder(newRow);
+            }
+            break;
+            
+          case 'UPDATE':
+            console.log('[Realtime] UPDATE event:', {
+              oldStatus: oldRow?.status,
+              newStatus: newRow?.status,
+              orderId: newRow?.id
+            });
+            if (newRow) {
+              await useOrdersStore.getState().upsertOrder(newRow);
+              
+              // Optional: Show browser notification for status changes
+              if (newRow.status) {
+                const status = newRow.status as string;
+                if (status === 'InKitchen' || status === 'Prepared') {
+                  console.log('[Realtime] Showing browser notification for status:', status);
+                  showBrowserNotification(newRow);
+                }
+              }
+            }
+            break;
+
+          case 'DELETE':
+            console.log('[Realtime] DELETE event - removing order:', oldRow?.id);
+            if (oldRow) {
+              useOrdersStore.getState().removeOrder(oldRow.id as string);
+            }
+            break;
+            
+          default:
+            console.log('[Realtime] Unknown event type:', eventType);
+        }
+      }
+    )
+    .subscribe((status, err) => {
+      console.log('[Realtime] Subscription status changed:', status);
+      if (err) {
+        console.error('[Realtime] Subscription error details:', {
+          error: err,
+          message: err?.message,
+          status: err?.status,
+          details: err
+        });
+      }
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] Successfully subscribed to orders changes');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('[Realtime] Channel error occurred - check RLS policies and authentication');
+        // Try to get more details
+        channel.on('error', (error) => {
+          console.error('[Realtime] Channel error event:', error);
+        });
+      } else if (status === 'TIMED_OUT') {
+        console.error('[Realtime] Subscription timed out');
+      } else if (status === 'CLOSED') {
+        console.warn('[Realtime] Channel closed');
+      }
+    });
+
+  // Return cleanup function
+  return () => {
+    console.log('[initOrdersRealtime] Cleaning up realtime subscription');
+    supabase.removeChannel(channel);
+  };
+}
+
+// Optional: Browser notification helper
+function showBrowserNotification(order: any): void {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    const orderNumber = order.number || 'N/A';
+    const status = order.status;
+    let title = '';
+    let body = '';
+
+    if (status === 'InKitchen') {
+      title = `Order #${orderNumber} accepted`;
+      body = 'Order is now being prepared.';
+    } else if (status === 'Prepared') {
+      title = `Order #${orderNumber} ready`;
+      body = 'Order is ready to serve.';
+    }
+
+    if (title && body) {
+      new Notification(title, { body });
+    }
+  } else if (Notification.permission !== 'denied') {
+    // Request permission
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        showBrowserNotification(order);
+      }
+    });
+  }
+}

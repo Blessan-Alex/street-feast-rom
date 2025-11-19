@@ -8,8 +8,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
 }
 
-// Create Supabase client instance
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+// Create Supabase client instance with realtime configuration
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  }
+});
 
 // Get current store ID (fetch from stores table - first active store)
 export async function getCurrentStoreId(): Promise<string | null> {
