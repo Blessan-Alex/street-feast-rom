@@ -671,7 +671,6 @@ export function initOrdersRealtime(storeId: string): () => void {
         console.error('[Realtime] Subscription error details:', {
           error: err,
           message: err?.message,
-          status: err?.status,
           details: err
         });
       }
@@ -679,10 +678,6 @@ export function initOrdersRealtime(storeId: string): () => void {
         console.log('[Realtime] Successfully subscribed to orders changes');
       } else if (status === 'CHANNEL_ERROR') {
         console.error('[Realtime] Channel error occurred - check RLS policies and authentication');
-        // Try to get more details
-        channel.on('error', (error) => {
-          console.error('[Realtime] Channel error event:', error);
-        });
       } else if (status === 'TIMED_OUT') {
         console.error('[Realtime] Subscription timed out');
       } else if (status === 'CLOSED') {
