@@ -79,6 +79,18 @@ class OrdersViewModel(
         performAction("Order marked as delivered") { repository.markDelivered(orderId) }
     }
 
+    fun acceptAllOrders() {
+        performBulkAction("All orders accepted") {
+            repository.acceptAllOrders()
+        }
+    }
+
+    fun markAllPrepared() {
+        performBulkAction("All orders marked as prepared") {
+            repository.markAllPrepared()
+        }
+    }
+
     private fun performAction(successMessage: String, block: suspend () -> Result<Unit>) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -99,6 +111,24 @@ class OrdersViewModel(
 
     fun clearSuccessMessage() {
         _successMessage.value = null
+    }
+
+    private fun performBulkAction(successMessage: String, block: suspend () -> Result<Int>) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = block()
+            _isLoading.value = false
+
+            result.onSuccess { count ->
+                if (count > 0) {
+                    _successMessage.value = successMessage
+                } else {
+                    _error.value = "No orders to update"
+                }
+            }.onFailure {
+                _error.value = it.message ?: "Operation failed"
+            }
+        }
     }
 }
 

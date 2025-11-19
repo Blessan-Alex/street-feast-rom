@@ -42,6 +42,7 @@ class ChefNewOrdersFragment : Fragment() {
         
         setupRecyclerView()
         setupSwipeRefresh()
+        setupAcceptAllButton()
         observeOrders()
         observeMessages()
         observeNewOrders()
@@ -65,6 +66,21 @@ class ChefNewOrdersFragment : Fragment() {
         binding.swipeRefresh.setOnRefreshListener {
             viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
+        }
+    }
+    
+    private fun setupAcceptAllButton() {
+        binding.btnAcceptAll.setOnClickListener {
+            viewModel.acceptAllOrders()
+        }
+        
+        // Show/hide button based on order count
+        viewModel.newOrders.observe(viewLifecycleOwner) { orders ->
+            binding.btnAcceptAll.visibility = if (orders.isNotEmpty()) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
     }
     

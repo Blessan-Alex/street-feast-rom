@@ -40,6 +40,7 @@ class ChefPreparingFragment : Fragment() {
         
         setupRecyclerView()
         setupSwipeRefresh()
+        setupMarkAllPreparedButton()
         observeOrders()
         observeMessages()
         
@@ -61,6 +62,21 @@ class ChefPreparingFragment : Fragment() {
         binding.swipeRefresh.setOnRefreshListener {
             viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
+        }
+    }
+    
+    private fun setupMarkAllPreparedButton() {
+        binding.btnMarkAllPrepared.setOnClickListener {
+            viewModel.markAllPrepared()
+        }
+        
+        // Show/hide button based on order count
+        viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
+            binding.btnMarkAllPrepared.visibility = if (orders.isNotEmpty()) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
     }
     

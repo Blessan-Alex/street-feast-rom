@@ -2,6 +2,7 @@ package com.streatfeast.app.repositories
 
 import android.content.Context
 import android.util.Log
+import com.streatfeast.app.BuildConfig
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.network.SupabaseOrderDto
@@ -13,6 +14,18 @@ import com.streatfeast.app.storage.OrderLocalDataSource
 import com.streatfeast.app.utils.Constants
 import com.streatfeast.app.utils.NotificationHelper
 import io.github.jan.supabase.SupabaseClient
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.headers
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 
 // PostgREST
 import io.github.jan.supabase.postgrest.postgrest
@@ -26,6 +39,7 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import io.ktor.http.append
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -317,6 +331,115 @@ class SupabaseOrderRepository(
 
     suspend fun markDelivered(orderId: String): Result<Unit> =
         updateStatus(orderId, OrderStatus.DELIVERED)
+
+    suspend fun acceptAllOrders(): Result<Int> =
+        bulkUpdateStatus(OrderStatus.CREATED, OrderStatus.IN_KITCHEN)
+
+    suspend fun markAllPrepared(): Result<Int> =
+        bulkUpdateStatus(OrderStatus.IN_KITCHEN, OrderStatus.PREPARED)
+
+    private suspend fun bulkUpdateStatus(
+        fromStatus: OrderStatus,
+        toStatus: OrderStatus
+    ): Result<Int> = runCatching {
+        withContext(Dispatchers.IO) {
+            val currentStoreId = getStoreId()
+            Log.d("SupabaseOrderRepository", "Bulk update: $fromStatus -> $toStatus for store: $currentStoreId")
+            
+            // First, get the orders that will be updated (for notification)
+            val ordersToUpdate = client.postgrest["orders"].select {
+                filter {
+                    eq("store_id", currentStoreId)
+                    eq("status", fromStatus.toRemoteValue())
+                }
+            }.decodeList<SupabaseOrderDto>()
+            
+            val count = ordersToUpdate.size
+            Log.d("SupabaseOrderRepository", "Found $count orders to update")
+            
+            if (count == 0) {
+                return@withContext 0
+            }
+            
+            // Update all matching orders
+            client.postgrest["orders"].update(
+                {
+                    set("status", toStatus.toRemoteValue())
+                    set("updated_at", isoNowUtc())
+                }
+            ) {
+                filter {
+                    eq("store_id", currentStoreId)
+                    eq("status", fromStatus.toRemoteValue())
+                }
+            }
+            
+            Log.d("SupabaseOrderRepository", "Bulk update completed: $count orders updated")
+            
+            // Manually invoke Edge Function for bulk notification
+            try {
+                invokeBulkNotification(currentStoreId, toStatus, count)
+            } catch (e: Exception) {
+                Log.e("SupabaseOrderRepository", "Failed to send bulk notification", e)
+                // Don't fail the update if notification fails
+            }
+            
+            // Refresh local data
+            refresh()
+            
+            count
+        }
+    }
+
+    private suspend fun invokeBulkNotification(
+        storeId: String,
+        status: OrderStatus,
+        count: Int
+    ) {
+        // Use HTTP client to invoke Edge Function directly
+        withContext(Dispatchers.IO) {
+            try {
+                val supabaseUrl = BuildConfig.SUPABASE_URL
+                val anonKey = BuildConfig.SUPABASE_ANON_KEY
+                
+                val payload = mapOf(
+                    "type" to "BULK_UPDATE",
+                    "table" to "orders",
+                    "storeId" to storeId,
+                    "toStatus" to status.toRemoteValue(),
+                    "count" to count
+                )
+                
+                val httpClient = HttpClient(OkHttp) {
+                    install(ContentNegotiation) {
+                        json(Json {
+                            ignoreUnknownKeys = true
+                        })
+                    }
+                }
+                
+                val response = httpClient.post("$supabaseUrl/functions/v1/order-events") {
+                    headers {
+                        append(HttpHeaders.ContentType, ContentType.Application.Json)
+                        append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    }
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
+                
+                val statusCode = response.status.value
+                if (statusCode in 200..299) {
+                    Log.d("SupabaseOrderRepository", "Bulk notification sent successfully")
+                } else {
+                    Log.e("SupabaseOrderRepository", "Bulk notification failed: $statusCode")
+                }
+                
+                httpClient.close()
+            } catch (e: Exception) {
+                Log.e("SupabaseOrderRepository", "Exception sending bulk notification", e)
+            }
+        }
+    }
 
     private suspend fun updateStatus(orderId: String, status: OrderStatus): Result<Unit> =
         runCatching {

@@ -84,6 +84,7 @@ interface OrdersStore {
   // Store management
   setOrders: (orders: Order[]) => void;
   reset: () => void;
+  fetchOrders: () => Promise<void>;
   
   // Realtime methods
   upsertOrder: (supabaseOrder: any) => Promise<void>;
@@ -449,6 +450,70 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
 
   reset: () => {
     set({ orders: [], draft: { ...initialDraft } });
+  },
+
+  fetchOrders: async () => {
+    try {
+      const storeId = await getStoreId();
+      console.log('[fetchOrders] Fetching orders for store:', storeId);
+      
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('[fetchOrders] Error fetching orders:', error);
+        return;
+      }
+      
+      if (!orders || orders.length === 0) {
+        console.log('[fetchOrders] No orders found for store');
+        set({ orders: [] });
+        return;
+      }
+      
+      // Fetch order items for all orders
+      const orderIds = orders.map(o => o.id);
+      const { data: items, error: itemsError } = await supabase
+        .from('order_items')
+        .select('*')
+        .in('order_id', orderIds);
+      
+      if (itemsError) {
+        console.error('[fetchOrders] Error fetching order items:', itemsError);
+        // Continue with orders even if items fetch fails
+      }
+      
+      // Convert to local Order format
+      const localOrders: Order[] = orders.map(order => {
+        const orderItems = (items || []).filter(item => item.order_id === order.id);
+        return {
+          id: order.id,
+          orderNumber: order.number || 0,
+          type: (order.type || 'DineIn') as OrderType,
+          chefTip: order.chef_tip || '',
+          status: (order.status || 'Created') as OrderStatus,
+          createdAt: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
+          updatedAt: order.updated_at ? new Date(order.updated_at).getTime() : Date.now(),
+          orderItems: orderItems.map((item: any) => ({
+            id: item.id,
+            itemId: item.sku || '',
+            nameSnapshot: item.name || '',
+            size: item.size || null,
+            vegFlagSnapshot: (item.veg_flag || 'Both') as 'Veg' | 'NonVeg' | 'Both',
+            qty: item.quantity || 1,
+            chefTip: (item.modifiers?.chefTip || '') as string
+          }))
+        };
+      });
+      
+      set({ orders: localOrders });
+      console.log('[fetchOrders] Loaded', localOrders.length, 'orders');
+    } catch (error: any) {
+      console.error('[fetchOrders] Exception:', error);
+    }
   },
 
   // Realtime methods

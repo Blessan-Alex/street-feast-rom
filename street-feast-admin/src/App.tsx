@@ -87,6 +87,11 @@ function App() {
         const storeId = await getStoreId();
         console.log('[App] Store ID:', storeId);
         if (storeId) {
+          // Fetch orders initially from Supabase to ensure fresh data
+          console.log('[App] Fetching orders from Supabase...');
+          await useOrdersStore.getState().fetchOrders();
+          console.log('[App] Orders fetched from Supabase');
+          
           // Clean up existing subscription if any
           if (cleanup) {
             cleanup();
@@ -109,7 +114,7 @@ function App() {
       
       if (event === 'SIGNED_IN' && session) {
         console.log('[App] User signed in, reinitializing realtime subscription...');
-        // Setup new subscription (cleanup happens inside setupRealtime)
+        // Fetch fresh orders and setup new subscription
         setupRealtime();
       } else if (event === 'SIGNED_OUT') {
         console.log('[App] User signed out, cleaning up realtime subscription...');

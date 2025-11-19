@@ -8,6 +8,14 @@ interface OrderPayload {
   old_record?: Record<string, unknown> | null;
 }
 
+interface BulkUpdatePayload {
+  type: "BULK_UPDATE";
+  table: "orders";
+  storeId: string;
+  toStatus: string;
+  count: number;
+}
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") ?? "";
@@ -124,14 +132,62 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const payload = (await req.json()) as OrderPayload;
+  const payload = (await req.json()) as OrderPayload | BulkUpdatePayload;
 
-  if (payload.table !== "orders") {
+  // Handle bulk update notifications
+  if (payload.type === "BULK_UPDATE") {
+    const bulkPayload = payload as BulkUpdatePayload;
+    const { storeId, toStatus, count } = bulkPayload;
+
+    if (!storeId || !toStatus || count === 0) {
+      return new Response("Bad payload", { status: 202 });
+    }
+
+    const roles = ROLE_TARGETS[toStatus] ?? [];
+    if (roles.length === 0) {
+      return new Response("No targets for status", { status: 200 });
+    }
+
+    try {
+      const subscriptionIds = await fetchSubscriptionIds(storeId, roles);
+      
+      let heading: string;
+      let content: string;
+      
+      if (toStatus === "InKitchen") {
+        heading = "All orders accepted";
+        content = `${count} order${count > 1 ? 's' : ''} have been accepted and are now being prepared.`;
+      } else if (toStatus === "Prepared") {
+        heading = "All orders ready";
+        content = `${count} order${count > 1 ? 's' : ''} have been marked as prepared and are ready to serve.`;
+      } else {
+        heading = "Orders updated";
+        content = `${count} order${count > 1 ? 's' : ''} have been updated.`;
+      }
+      
+      await notifyOneSignal(subscriptionIds, heading, content, {
+        bulkUpdate: true,
+        status: toStatus,
+        storeId,
+        count,
+      });
+    } catch (error) {
+      console.error("Bulk notification failed", error);
+      return new Response("Error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
+  }
+
+  // Handle regular order updates (from database triggers)
+  const orderPayload = payload as OrderPayload;
+
+  if (orderPayload.table !== "orders") {
     return new Response("Ignored", { status: 200 });
   }
 
-  const record = payload.record ?? {};
-  const oldRecord = payload.old_record ?? {};
+  const record = orderPayload.record ?? {};
+  const oldRecord = orderPayload.old_record ?? {};
 
   const storeId = record.store_id as string | undefined;
   const status = record.status as string | undefined;
