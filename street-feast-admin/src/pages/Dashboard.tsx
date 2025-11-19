@@ -9,10 +9,25 @@ export const Dashboard: React.FC = () => {
 
   // Compute KPIs
   const kpis = useMemo(() => {
-    const totalActive = orders.filter(o => !['Closed', 'Canceled'].includes(o.status)).length;
+    // Debug: Log order status breakdown
+    const statusBreakdown = orders.reduce((acc, order) => {
+      acc[order.status] = (acc[order.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log('[Dashboard] Order status breakdown:', statusBreakdown);
+    console.log('[Dashboard] Total orders:', orders.length);
+    
+    // Total Active should exclude Delivered, Closed, and Canceled
+    // Only count orders that are actually in progress: Created, Accepted, InKitchen, Prepared
+    const totalActive = orders.filter(o => 
+      !['Delivered', 'Closed', 'Canceled'].includes(o.status)
+    ).length;
+    
     const newCount = orders.filter(o => o.status === 'Created').length;
     const inKitchen = orders.filter(o => o.status === 'InKitchen').length;
     const ready = orders.filter(o => o.status === 'Prepared').length;
+    
+    console.log('[Dashboard] KPIs:', { totalActive, newCount, inKitchen, ready });
 
     return { totalActive, newCount, inKitchen, ready };
   }, [orders]);

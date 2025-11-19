@@ -338,6 +338,9 @@ class SupabaseOrderRepository(
     suspend fun markAllPrepared(): Result<Int> =
         bulkUpdateStatus(OrderStatus.IN_KITCHEN, OrderStatus.PREPARED)
 
+    suspend fun markAllDelivered(): Result<Int> =
+        bulkUpdateStatus(OrderStatus.PREPARED, OrderStatus.DELIVERED)
+
     private suspend fun bulkUpdateStatus(
         fromStatus: OrderStatus,
         toStatus: OrderStatus

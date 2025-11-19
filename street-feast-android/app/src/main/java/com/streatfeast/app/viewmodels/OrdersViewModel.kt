@@ -91,6 +91,12 @@ class OrdersViewModel(
         }
     }
 
+    fun markAllDelivered() {
+        performBulkAction("All orders marked as delivered") {
+            repository.markAllDelivered()
+        }
+    }
+
     private fun performAction(successMessage: String, block: suspend () -> Result<Unit>) {
         viewModelScope.launch {
             _isLoading.value = true

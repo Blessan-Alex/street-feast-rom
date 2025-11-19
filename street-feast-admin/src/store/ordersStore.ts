@@ -474,6 +474,15 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         return;
       }
       
+      // Debug: Log status breakdown
+      const statusBreakdown = orders.reduce((acc: any, order: any) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('[fetchOrders] Status breakdown:', statusBreakdown);
+      console.log('[fetchOrders] Total orders fetched:', orders.length);
+      console.log('[fetchOrders] Store ID:', storeId);
+      
       // Fetch order items for all orders
       const orderIds = orders.map(o => o.id);
       const { data: items, error: itemsError } = await supabase

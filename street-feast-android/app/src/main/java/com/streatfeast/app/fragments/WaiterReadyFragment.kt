@@ -40,6 +40,7 @@ class WaiterReadyFragment : Fragment() {
         
         setupRecyclerView()
         setupSwipeRefresh()
+        setupMarkAllDeliveredButton()
         observeOrders()
         observeMessages()
         
@@ -61,6 +62,21 @@ class WaiterReadyFragment : Fragment() {
         binding.swipeRefresh.setOnRefreshListener {
             viewModel.refresh()
             binding.swipeRefresh.isRefreshing = false
+        }
+    }
+    
+    private fun setupMarkAllDeliveredButton() {
+        binding.btnMarkAllDelivered.setOnClickListener {
+            viewModel.markAllDelivered()
+        }
+        
+        // Show/hide button based on order count
+        viewModel.readyOrders.observe(viewLifecycleOwner) { orders ->
+            binding.btnMarkAllDelivered.visibility = if (orders.isNotEmpty()) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
     }
     

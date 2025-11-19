@@ -19,6 +19,7 @@
     <string name="action_mark_prepared">Mark Prepared</string>
     <string name="action_accept_all">Mark All as Accepted</string>
     <string name="action_mark_all_prepared">Mark All as Prepared</string>
+    <string name="action_mark_all_delivered">Mark All as Delivered</string>
     <string name="action_mark_delivered">Mark Delivered</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_logout">Logout</string>

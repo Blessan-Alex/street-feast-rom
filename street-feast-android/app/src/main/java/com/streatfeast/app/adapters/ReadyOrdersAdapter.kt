@@ -45,7 +45,7 @@ class ReadyOrdersAdapter(
                 chipOrderType.setChipBackgroundColorResource(order.status.colorRes)
                 
                 // Time since prepared
-                tvTime.text = "Ready ${DateTimeUtils.getTimeAgo(order.updatedAt)}"
+                tvTime.text = DateTimeUtils.getTimeAgo(order.updatedAt)
                 
                 // Items summary
                 val itemsSummary = order.items.joinToString("\n") { item ->

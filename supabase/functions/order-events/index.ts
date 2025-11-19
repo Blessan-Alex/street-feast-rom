@@ -160,6 +160,9 @@ serve(async (req) => {
       } else if (toStatus === "Prepared") {
         heading = "All orders ready";
         content = `${count} order${count > 1 ? 's' : ''} have been marked as prepared and are ready to serve.`;
+      } else if (toStatus === "Delivered") {
+        heading = "All orders delivered";
+        content = `${count} order${count > 1 ? 's' : ''} have been marked as delivered.`;
       } else {
         heading = "Orders updated";
         content = `${count} order${count > 1 ? 's' : ''} have been updated.`;

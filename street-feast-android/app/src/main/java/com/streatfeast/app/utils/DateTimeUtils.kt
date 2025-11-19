@@ -12,16 +12,26 @@ object DateTimeUtils {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun getTimeAgo(timestampMillis: Instant): String {
-        val now = System.currentTimeMillis()
-        val diffMillis = now-timestampMillis.toEpochMilli()
+        val now = Instant.now()
+        val diffMillis = now.toEpochMilli() - timestampMillis.toEpochMilli()
+        
+        // Handle negative differences (future timestamps)
+        if (diffMillis < 0) {
+            return "Just now"
+        }
 
         val minutes = TimeUnit.MILLISECONDS.toMinutes(diffMillis)
         return when {
             minutes < 1 -> "Just now"
-            minutes < 60 -> "$minutes min ago"
+            minutes == 1L -> "1 min ago"
+            minutes < 60 -> "$minutes mins ago"
             else -> {
                 val hours = TimeUnit.MILLISECONDS.toHours(diffMillis)
-                "$hours hr ago"
+                if (hours == 1L) {
+                    "1 hr ago"
+                } else {
+                    "$hours hrs ago"
+                }
             }
         }
     }

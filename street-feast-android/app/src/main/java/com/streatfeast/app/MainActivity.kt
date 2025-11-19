@@ -23,6 +23,9 @@ import com.onesignal.notifications.INotificationClickListener
 import android.widget.Toast
 import com.onesignal.notifications.INotificationClickEvent
 import kotlinx.coroutines.launch
+import android.view.Menu
+import android.view.MenuItem
+import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
@@ -53,6 +56,9 @@ class MainActivity : AppCompatActivity() {
         NotificationHelper.createNotificationChannel(this)
         requestNotificationPermissionIfNeeded()
         setupOneSignalNotificationHandler()
+
+        // Set toolbar as action bar
+        setSupportActionBar(binding.toolbar)
 
         setupRoleBasedUI()
         setupNavigation()
@@ -330,6 +336,49 @@ class MainActivity : AppCompatActivity() {
             }
             // Re-add listener after setting selected item
             binding.bottomNavigation.setOnItemSelectedListener(itemSelectedListener)
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.menu_logout -> {
+                handleLogout()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun handleLogout() {
+        lifecycleScope.launch {
+            try {
+                // Stop realtime subscription to prevent memory leaks
+                ServiceLocator.provideOrderRepository(applicationContext).stopRealtime()
+                
+                // Logout from AuthViewModel
+                authViewModel.logout()
+                
+                // Clear ServiceLocator to reset repositories
+                ServiceLocator.clear()
+                
+                // Navigate to LoginActivity with flags to clear back stack
+                val intent = Intent(this@MainActivity, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error during logout", e)
+                // Even if there's an error, try to navigate to login
+                val intent = Intent(this@MainActivity, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
         }
     }
 }
