@@ -17,14 +17,18 @@ export const Dashboard: React.FC = () => {
     return { totalActive, newCount, inKitchen, ready };
   }, [orders]);
 
-  // Recent orders
+  // Recent orders - sorted by updatedAt (latest first)
   const newOrders = useMemo(() =>
-    orders.filter(o => o.status === 'Created').slice(0, 5),
+    orders
+      .filter(o => o.status === 'Created')
+      .sort((a, b) => b.updatedAt - a.updatedAt), // Latest first
     [orders]
   );
 
   const readyOrders = useMemo(() =>
-    orders.filter(o => o.status === 'Prepared').slice(0, 5),
+    orders
+      .filter(o => o.status === 'Prepared')
+      .sort((a, b) => b.updatedAt - a.updatedAt), // Latest first
     [orders]
   );
 
@@ -100,7 +104,7 @@ export const Dashboard: React.FC = () => {
               </span>
             )}
           </div>
-          <div className="p-6">
+          <div className="p-6 max-h-96 overflow-y-auto">
             {newOrders.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No new orders at the moment</p>
@@ -120,7 +124,7 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
                         <span>{order.orderItems.length} items</span>
                         <span>•</span>
-                        <span>{formatTimeAgo(order.createdAt)}</span>
+                        <span>{formatTimeAgo(order.updatedAt)}</span>
                       </div>
                     </div>
                     <Button
@@ -147,7 +151,7 @@ export const Dashboard: React.FC = () => {
               </span>
             )}
           </div>
-          <div className="p-6">
+          <div className="p-6 max-h-96 overflow-y-auto">
             {readyOrders.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No orders ready yet</p>
@@ -167,7 +171,7 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
                         <span>{order.orderItems.length} items</span>
                         <span>•</span>
-                        <span>{formatTimeAgo(order.createdAt)}</span>
+                        <span>{formatTimeAgo(order.updatedAt)}</span>
                       </div>
                     </div>
                     <Button
