@@ -11,7 +11,7 @@
         android:id="@+id/nav_preparing"
         android:icon="@drawable/ic_preparing"
         android:title="@string/nav_preparing"
-        app:destination="@id/chefPreparingFragment" />
+        app:destination="@id/chefPageFragment" />
     
     <item
         android:id="@+id/nav_ready"

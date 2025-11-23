@@ -16,7 +16,8 @@ data class OrderItemEntity(
     val name: String,
     val size: String?,
     val vegFlag: String?,
-    val quantity: Int
+    val quantity: Int,
+    val chefTip: String?
 )
 
 

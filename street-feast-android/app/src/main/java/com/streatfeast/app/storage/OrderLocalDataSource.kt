@@ -67,5 +67,6 @@ private fun OrderItemEntity.toModel(): OrderItem = OrderItem(
     nameSnapshot = name,
     size = size,
     vegFlagSnapshot = vegFlag ?: "Veg",
-    qty = quantity
+    qty = quantity,
+    chefTip = chefTip ?: ""
 )

@@ -24,7 +24,8 @@ data class SupabaseOrderItemDto(
     val name: String,
     val size: String? = null,
     @SerialName("veg_flag") val vegFlag: String? = null,
-    val quantity: Int = 1
+    val quantity: Int = 1,
+    val modifiers: Map<String, String>? = null  // JSONB field containing chefTip
 )
 
 @Serializable

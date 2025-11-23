@@ -1,0 +1,282 @@
+Reviewing the current chef page implementation to map existing functionality to the new frontend.
+
+
+[3 tools called]
+
+
+Reviewing the current fragment implementations to understand the backend logic:
+
+
+[5 tools called]
+
+
+Checking the adapters to understand how items are displayed:
+
+
+[4 tools called]
+
+
+Checking the Order model for table information and reviewing the navigation structure:
+
+
+[3 tools called]
+
+
+## Implementation plan: Chef page redesign
+
+### Current state
+- Two fragments: `ChefNewOrdersFragment` (CREATED) and `ChefPreparingFragment` (IN_KITCHEN)
+- RecyclerView lists with adapters
+- Shared `OrdersViewModel` with `newOrders` and `preparingOrders`
+- Functions: `acceptOrder()`, `markPrepared()`, `acceptAllOrders()`, `markAllPrepared()`
+- Order model: `id`, `orderNumber`, `type`, `chefTip`, `status`, `items[]`
+- OrderItem: `nameSnapshot`, `size`, `qty`, `vegFlagSnapshot`
+
+### New design requirements
+- Single page with tabs (one tab per order/table)
+- Single order view per tab
+- Per-item switches (new)
+- "Mark All Prepared" button
+- "Eat away" and "Parcel" buttons (map to order type)
+- Table number display (not in backend yet)
+- "RUNNING LATE" badge (new)
+- Last updated time
+
+### Implementation strategy
+
+#### Phase 1: Create new layout and drawables
+1. Create `chef_page.xml` from help.txt
+2. Create all drawable XMLs referenced
+3. Create placeholder icons (`ic_close`, `ic_cutlery`, `ic_bag`)
+
+#### Phase 2: Create new fragment
+1. Create `ChefPageFragment.kt` (replaces both fragments)
+2. Use the new layout
+3. Map existing ViewModel logic to new UI IDs
+
+#### Phase 3: Backend mapping strategy
+
+**ID mapping (old → new):**
+
+| Old Element | New ID | Mapping Strategy |
+|------------|--------|------------------|
+| `btnAcceptAll` | `btnMarkAllPrepared` | Map to `viewModel.markAllPrepared()` (for preparing orders) |
+| `btnMarkAllPrepared` | `btnMarkAllPrepared` | Keep same logic |
+| `rvNewOrders` / `rvPreparingOrders` | Dynamic tabs + card | Replace RecyclerView with tab-based single order view |
+| Order items in adapter | `tvItemXName`, `tvItemXQty`, etc. | Bind from `order.items` list |
+| Order number | `tvTableHeader`, `tvTabSelectedNumber` | Use `order.orderNumber` |
+| Time ago | `tvLastUpdated` | Use `DateTimeUtils.getTimeAgo(order.updatedAt)` |
+
+**New features (frontend only for now):**
+
+1. Table tabs
+   - Use `order.orderNumber` as tab identifier
+   - Format: "Table {orderNumber % 100}" (e.g., Table 05 for #1254)
+   - Backend: add `tableNumber` later
+
+2. Per-item switches
+   - Frontend: track prepared state per item
+   - Backend: keep `markPrepared(orderId)` for now
+   - Later: add `markItemPrepared(orderId, itemId)`
+
+3. "RUNNING LATE" badge
+   - Show if `order.updatedAt` is > 15 minutes old
+   - Backend: add `expectedTime` later
+
+4. "Eat away" / "Parcel" buttons
+   - Map to `order.type` (DINE_IN → "Eat away", PARCEL → "Parcel")
+   - Frontend: visual feedback only
+   - Backend: add `updateOrderType()` later
+
+5. Restaurant name / date
+   - Restaurant: hardcode "Street Feast" or fetch from store
+   - Date: format current date
+
+### Detailed implementation steps
+
+#### Step 1: Create layout files
+
+**File: `res/layout/chef_page.xml`**
+- Copy from help.txt (lines 9-623)
+
+**File: `res/drawable/bg_tab_selected.xml`** (lines 633-637)
+**File: `res/drawable/bg_tab_unselected.xml`** (lines 640-649)
+**File: `res/drawable/bg_card.xml`** (lines 652-665)
+**File: `res/drawable/bg_badge_running_late.xml`** (lines 669-676)
+**File: `res/drawable/bg_qty_badge.xml`** (lines 678-685)
+**File: `res/drawable/bg_green_cta.xml`** (lines 687-694)
+**File: `res/drawable/bg_black_pill.xml`** (lines 696-703)
+**File: `res/drawable/bg_white_outline_pill.xml`** (lines 705-715)
+
+**Icons needed:**
+- `ic_close.xml` (close/back icon)
+- `ic_cutlery.xml` (cutlery icon for dine-in)
+- `ic_bag.xml` (bag icon for parcel)
+
+#### Step 2: Create new fragment
+
+**File: `ChefPageFragment.kt`** (new)
+
+```kotlin
+class ChefPageFragment : Fragment() {
+    private var _binding: ChefPageBinding? = null
+    private val binding get() = _binding!!
+    
+    private val viewModel: OrdersViewModel by viewModels { ... }
+    
+    private var currentOrder: Order? = null
+    private val itemPreparedStates = mutableMapOf<String, Boolean>() // itemId -> isPrepared
+    
+    override fun onCreateView(...): View {
+        _binding = ChefPageBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+    
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        setupCloseButton()
+        setupTabs()
+        setupOrderCard()
+        setupBottomButtons()
+        observeOrders()
+        observeMessages()
+        viewModel.refresh()
+    }
+    
+    // Map to existing backend
+    private fun setupCloseButton() {
+        binding.btnClose.setOnClickListener {
+            findNavController().popBackStack()
+        }
+    }
+    
+    // Create tabs dynamically from preparingOrders
+    private fun setupTabs() {
+        viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
+            createTabs(orders)
+            if (orders.isNotEmpty()) {
+                selectTab(orders.first())
+            }
+        }
+    }
+    
+    // Bind order data to card UI
+    private fun setupOrderCard() {
+        // Map order.items to tvItem1Name, tvItem1Qty, etc.
+        // Handle switches for each item
+    }
+    
+    // Map to order.type
+    private fun setupBottomButtons() {
+        binding.btnEatAway.setOnClickListener {
+            // TODO: Update order type to DINE_IN (backend later)
+        }
+        binding.btnParcel.setOnClickListener {
+            // TODO: Update order type to PARCEL (backend later)
+        }
+    }
+    
+    // Use existing viewModel.markPrepared() when all items are prepared
+    private fun onItemSwitchChanged(itemId: String, isChecked: Boolean) {
+        itemPreparedStates[itemId] = isChecked
+        checkIfAllPrepared()
+    }
+    
+    private fun checkIfAllPrepared() {
+        val allPrepared = currentOrder?.items?.all { item ->
+            itemPreparedStates[item.id] == true
+        } ?: false
+        
+        if (allPrepared && currentOrder != null) {
+            viewModel.markPrepared(currentOrder!!.id)
+        }
+    }
+}
+```
+
+#### Step 3: Data binding logic
+
+**Order → UI mapping:**
+
+```kotlin
+fun bindOrderToCard(order: Order) {
+    // Header
+    binding.tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
+    binding.tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
+    
+    // Running late badge
+    val isLate = isOrderRunningLate(order)
+    binding.badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
+    
+    // Items (dynamically create or use existing item1-4)
+    order.items.forEachIndexed { index, item ->
+        bindItemToView(item, index + 1)
+    }
+    
+    // Mark All Prepared button
+    binding.btnMarkAllPrepared.setOnClickListener {
+        viewModel.markPrepared(order.id)
+    }
+    
+    // Bottom buttons based on order.type
+    updateBottomButtonsForOrderType(order.type)
+}
+
+fun bindItemToView(item: OrderItem, position: Int) {
+    // Map to tvItem{position}Name, tvItem{position}Qty, etc.
+    // Set switch state from itemPreparedStates
+    // Color bar: red if not prepared, green if prepared
+}
+```
+
+#### Step 4: Navigation update
+
+**Option A:** Replace both fragments with one
+- Update `nav_graph.xml` to use `ChefPageFragment`
+- Remove old fragments or keep for fallback
+
+**Option B:** Keep both, add new as separate route
+- Add `chefPageFragment` to nav graph
+- Update bottom nav to point to new fragment
+
+### Features to implement later (backend)
+
+1. Per-item preparation status
+   - Add `itemPreparedStatus` to OrderItem
+   - Add `markItemPrepared(orderId, itemId)` API
+
+2. Table number
+   - Add `tableNumber` to Order model
+   - Update database schema
+
+3. Running late calculation
+   - Add `expectedPreparationTime` to Order
+   - Calculate based on order complexity
+
+4. Order type update
+   - Add `updateOrderType(orderId, type)` API
+
+5. Restaurant name
+   - Fetch from `stores` table
+   - Store in ViewModel or SharedPreferences
+
+### Migration checklist
+
+- [ ] Create `chef_page.xml` layout
+- [ ] Create all drawable XMLs
+- [ ] Create placeholder icons
+- [ ] Create `ChefPageFragment.kt`
+- [ ] Map `btnClose` → navigation back
+- [ ] Map tabs → `preparingOrders` list
+- [ ] Map `tvTableHeader` → `order.orderNumber`
+- [ ] Map `tvLastUpdated` → `DateTimeUtils.getTimeAgo(order.updatedAt)`
+- [ ] Map `badgeRunningLate` → time-based logic
+- [ ] Map items → `order.items` array
+- [ ] Map `switchItemX` → per-item prepared state (frontend only)
+- [ ] Map `btnMarkAllPrepared` → `viewModel.markPrepared(order.id)`
+- [ ] Map `btnEatAway` / `btnParcel` → `order.type` display
+- [ ] Update navigation graph
+- [ ] Test with existing backend
+- [ ] Add empty state handling
+- [ ] Handle multiple orders (tab scrolling)
+
+Should I generate the code files for this implementation?

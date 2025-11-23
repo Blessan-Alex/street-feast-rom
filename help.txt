@@ -1,201 +1,739 @@
-Reviewing the current files and preparing fixes for the realtime subscription issue:
+You’re right to clean this up before feeding it to Cursor – the XML you pasted is *almost* good, but it has a few things that would break the layout (like comments inside tags) and it’s missing the shape drawables.
 
+Below is a **fully-self-contained version** you can drop into `res/layout/chef_page.xml` plus all the **drawable XMLs** it references. After that I’ll add a tiny note on how to map your existing functionality.
 
-[4 tools called]
+---
 
+## 1️⃣ Complete layout XML (fixed & ready to use)
 
-Here are the exact code changes to fix the realtime subscription issue:
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F6FA">
 
-## Fix 1: Update Supabase client with realtime configuration
+    <!-- TOP BAR ------------------------------------------------------------>
 
-```typescript:street-feast-admin/src/utils/supabase.ts
-// Create Supabase client instance
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  }
-});
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="4dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnClose"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_close"
+            android:tint="#555555" />
+
+        <TextView
+            android:id="@+id/tvRestaurantName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="Street Feast"
+            android:textColor="#111111"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mon, Nov 28"
+            android:textColor="#9AA0B5"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvPageTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="4dp"
+        android:text="Chef Page"
+        android:textColor="#111111"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- TABLE TABS --------------------------------------------------------->
+
+    <HorizontalScrollView
+        android:id="@+id/tabsScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:scrollbars="none"
+        app:layout_constraintTop_toBottomOf="@id/tvPageTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/tabsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- Selected tab -->
+            <LinearLayout
+                android:id="@+id/tabTable05"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_tab_selected"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp">
+
+                <ImageView
+                    android:id="@+id/iconTab05"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_cutlery"
+                    android:tint="@android:color/white" />
+
+                <TextView
+                    android:id="@+id/tvTabSelectedLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="Table 05"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvTabSelectedNumber"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="#1254"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Unselected tab example -->
+            <LinearLayout
+                android:id="@+id/tabTable06"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_tab_unselected"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp">
+
+                <ImageView
+                    android:id="@+id/iconTab06"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_bag"
+                    android:tint="#C3CADB" />
+
+                <TextView
+                    android:id="@+id/tvTabTable06"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="Table 06"
+                    android:textColor="#8D96AA"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvTabTable06Number"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="#1256"
+                    android:textColor="#8D96AA"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Add more tabs in code by inflating this pattern if needed -->
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- MAIN CONTENT (SCROLLABLE CARD AREA) ------------------------------->
+
+    <ScrollView
+        android:id="@+id/scrollContent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="18dp"
+        android:clipToPadding="false"
+        android:paddingBottom="24dp"
+        app:layout_constraintTop_toBottomOf="@id/tabsScroll"
+        app:layout_constraintBottom_toTopOf="@+id/bottomButtons"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Card ------------------------------------------------------->
+
+            <LinearLayout
+                android:id="@+id/orderCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <!-- Card header -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvTableHeader"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Table 05 - #1254"
+                        android:textColor="#111111"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/badgeRunningLate"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge_running_late"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:text="RUNNING LATE"
+                        android:textAllCaps="true"
+                        android:textColor="@android:color/white"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvLastUpdated"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="12 min ago"
+                    android:textColor="#A0A7BC"
+                    android:textSize="11sp" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="10dp"
+                    android:background="#EEF0F5" />
+
+                <!-- ORDER ITEMS --------------------------------------------->
+
+                <!-- Item 1 -->
+                <LinearLayout
+                    android:id="@+id/item1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <!-- Color bar -->
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#F5515F" />
+
+                    <!-- Texts -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:id="@+id/tvItem1Name"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Spicy Ramen Burger"
+                                android:textColor="#111111"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvItem1Qty"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_qty_badge"
+                                android:paddingStart="6dp"
+                                android:paddingEnd="6dp"
+                                android:paddingTop="2dp"
+                                android:paddingBottom="2dp"
+                                android:text="x2"
+                                android:textColor="#666A7A"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvItem1Size"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Size: Large"
+                            android:textColor="#6F7384"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvItem1Tips"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tips: Extra hot sauce, no onions"
+                            android:textColor="#A0A7BC"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchItem1"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Item 2 -->
+                <LinearLayout
+                    android:id="@+id/item2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#F5515F" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:id="@+id/tvItem2Name"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Truffle Fries"
+                                android:textColor="#111111"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvItem2Qty"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_qty_badge"
+                                android:paddingStart="6dp"
+                                android:paddingEnd="6dp"
+                                android:paddingTop="2dp"
+                                android:paddingBottom="2dp"
+                                android:text="x1"
+                                android:textColor="#666A7A"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvItem2Size"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Size: Mid"
+                            android:textColor="#6F7384"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvItem2Tips"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tips: Side of aioli"
+                            android:textColor="#A0A7BC"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchItem2"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Item 3 (green bar, ON switch) -->
+                <LinearLayout
+                    android:id="@+id/item3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#2ECC71" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:id="@+id/tvItem3Name"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Classic Milkshake"
+                                android:textColor="#111111"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvItem3Qty"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_qty_badge"
+                                android:paddingStart="6dp"
+                                android:paddingEnd="6dp"
+                                android:paddingTop="2dp"
+                                android:paddingBottom="2dp"
+                                android:text="x1"
+                                android:textColor="#666A7A"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvItem3Size"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Size: Small"
+                            android:textColor="#6F7384"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvItem3Tips"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tips: Vanilla"
+                            android:textColor="#A0A7BC"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchItem3"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
+                <!-- Item 4 -->
+                <LinearLayout
+                    android:id="@+id/item4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="40dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#2ECC71" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:id="@+id/tvItem4Name"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Avocado Toast"
+                                android:textColor="#111111"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvItem4Qty"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_qty_badge"
+                                android:paddingStart="6dp"
+                                android:paddingEnd="6dp"
+                                android:paddingTop="2dp"
+                                android:paddingBottom="2dp"
+                                android:text="x1"
+                                android:textColor="#666A7A"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvItem4Size"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Size: -"
+                            android:textColor="#6F7384"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvItem4Tips"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tips: Gluten-free bread"
+                            android:textColor="#A0A7BC"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchItem4"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Mark all prepared button -->
+                <Button
+                    android:id="@+id/btnMarkAllPrepared"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_green_cta"
+                    android:text="Mark All Prepared"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- BOTTOM BUTTONS ---------------------------------------------------->
+
+    <LinearLayout
+        android:id="@+id/bottomButtons"
+        android:layout_width="0dp"
+        android:layout_height="72dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="20dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btnEatAway"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_black_pill"
+            android:text="Eat away"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnParcel"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_white_outline_pill"
+            android:text="Parcel"
+            android:textAllCaps="false"
+            android:textColor="#111111"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
 ```
 
-## Fix 2: Update realtime subscription with error handling and auth check
+---
 
-```typescript:street-feast-admin/src/store/ordersStore.ts
-// Realtime subscription function
-export function initOrdersRealtime(storeId: string): () => void {
-  console.log('[initOrdersRealtime] Initializing realtime subscription for store:', storeId);
-  
-  // Check if user is authenticated
-  supabase.auth.getSession().then(({ data: { session }, error }) => {
-    if (error) {
-      console.error('[initOrdersRealtime] Auth error:', error);
-    } else {
-      console.log('[initOrdersRealtime] User session:', session ? 'Authenticated' : 'Not authenticated');
-      if (!session) {
-        console.warn('[initOrdersRealtime] No user session - realtime may fail due to RLS');
-      }
-    }
-  });
-  
-  const channel = supabase
-    .channel(`realtime:admin-orders:${storeId}`, {
-      config: {
-        broadcast: { self: true },
-        presence: { key: '' }
-      }
-    })
-    .on(
-      'postgres_changes',
-      {
-        event: '*', // INSERT | UPDATE | DELETE
-        schema: 'public',
-        table: 'orders',
-        filter: `store_id=eq.${storeId}`,
-      },
-      async (payload) => {
-        console.log('[Realtime] Event received:', {
-          eventType: payload.eventType,
-          new: payload.new,
-          old: payload.old,
-          timestamp: new Date().toISOString()
-        });
+## 2️⃣ Shape drawables used in the layout
 
-        const { eventType, new: newRow, old: oldRow } = payload;
+Put these in `res/drawable/`:
 
-        switch (eventType) {
-          case 'INSERT':
-            console.log('[Realtime] INSERT event - new order:', newRow);
-            if (newRow) {
-              await useOrdersStore.getState().upsertOrder(newRow);
-            }
-            break;
-            
-          case 'UPDATE':
-            console.log('[Realtime] UPDATE event:', {
-              oldStatus: oldRow?.status,
-              newStatus: newRow?.status,
-              orderId: newRow?.id
-            });
-            if (newRow) {
-              await useOrdersStore.getState().upsertOrder(newRow);
-              
-              // Optional: Show browser notification for status changes
-              if (newRow.status) {
-                const status = newRow.status as string;
-                if (status === 'InKitchen' || status === 'Prepared') {
-                  console.log('[Realtime] Showing browser notification for status:', status);
-                  showBrowserNotification(newRow);
-                }
-              }
-            }
-            break;
+### `bg_tab_selected.xml`
 
-          case 'DELETE':
-            console.log('[Realtime] DELETE event - removing order:', oldRow?.id);
-            if (oldRow) {
-              useOrdersStore.getState().removeOrder(oldRow.id as string);
-            }
-            break;
-            
-          default:
-            console.log('[Realtime] Unknown event type:', eventType);
-        }
-      }
-    )
-    .subscribe((status, err) => {
-      console.log('[Realtime] Subscription status changed:', status);
-      if (err) {
-        console.error('[Realtime] Subscription error details:', {
-          error: err,
-          message: err?.message,
-          status: err?.status,
-          details: err
-        });
-      }
-      if (status === 'SUBSCRIBED') {
-        console.log('[Realtime] Successfully subscribed to orders changes');
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error('[Realtime] Channel error occurred - check RLS policies and authentication');
-        // Try to get more details
-        channel.on('error', (error) => {
-          console.error('[Realtime] Channel error event:', error);
-        });
-      } else if (status === 'TIMED_OUT') {
-        console.error('[Realtime] Subscription timed out');
-      } else if (status === 'CLOSED') {
-        console.warn('[Realtime] Channel closed');
-      }
-    });
-
-  // Return cleanup function
-  return () => {
-    console.log('[initOrdersRealtime] Cleaning up realtime subscription');
-    supabase.removeChannel(channel);
-  };
-}
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#2D7DFF" />
+    <corners android:radius="22dp" />
+</shape>
 ```
 
-## Fix 3: Add authentication check in App.tsx
+### `bg_tab_unselected.xml`
 
-```typescript:street-feast-admin/src/App.tsx
-import { supabase } from './utils/supabase';
-
-// ... existing imports ...
-
-  // Initialize realtime subscription for orders
-  useEffect(() => {
-    console.log('[App] Setting up realtime subscription...');
-    let cleanup: (() => void) | null = null;
-
-    const setupRealtime = async () => {
-      try {
-        // Check authentication first
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
-        if (authError) {
-          console.error('[App] Auth check error:', authError);
-        }
-        console.log('[App] Current session:', session ? 'Authenticated' : 'Not authenticated');
-        
-        if (!session) {
-          console.warn('[App] No user session - realtime subscription may fail due to RLS policies');
-        }
-        
-        console.log('[App] Getting store ID...');
-        const storeId = await getStoreId();
-        console.log('[App] Store ID:', storeId);
-        if (storeId) {
-          cleanup = initOrdersRealtime(storeId);
-          console.log('[App] Orders realtime subscription initialized for store:', storeId);
-        } else {
-          console.warn('[App] No store ID found, skipping realtime subscription');
-        }
-      } catch (error) {
-        console.error('[App] Failed to initialize orders realtime subscription:', error);
-      }
-    };
-
-    setupRealtime();
-
-    return () => {
-      if (cleanup) {
-        console.log('[App] Cleaning up realtime subscription on unmount');
-        cleanup();
-      }
-    };
-  }, []);
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="22dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#E3E6F0" />
+</shape>
 ```
 
-## Summary of changes
+### `bg_card.xml`
 
-1. Supabase client: Add realtime configuration
-2. Realtime subscription: Add auth check, error handling, and detailed logging
-3. App.tsx: Add auth check before initializing realtime
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="20dp" />
+    <padding
+        android:left="0dp"
+        android:top="0dp"
+        android:right="0dp"
+        android:bottom="0dp" />
+    <shadowColor android:color="#22000000" />
+</shape>
+```
 
-After applying these changes:
-- Check the console for `[initOrdersRealtime] User session: Authenticated`
-- If not authenticated, the admin needs to log in
-- Look for detailed error messages if `CHANNEL_ERROR` persists
-- The subscription should show `SUBSCRIBED` status when working
+*(If `shadowColor` doesn’t work for you, just keep the solid + corners and rely on elevation in the parent view.)*
 
-If it still fails after these changes, share the console error details so we can diagnose further.
+### `bg_badge_running_late.xml`
+
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#F5515F" />
+    <corners android:radius="999dp" />
+</shape>
+```
+
+### `bg_qty_badge.xml`
+
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#EFF1F7" />
+    <corners android:radius="999dp" />
+</shape>
+```
+
+### `bg_green_cta.xml`
+
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#2ECC71" />
+    <corners android:radius="24dp" />
+</shape>
+```
+
+### `bg_black_pill.xml`
+
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#000000" />
+    <corners android:radius="24dp" />
+</shape>
+```
+
+### `bg_white_outline_pill.xml`
+
+```xml
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="24dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#111111" />
+</shape>
+```
+
+You’ll also need placeholders for these icons (vector or PNG):
+
+* `ic_close`
+* `ic_cutlery`
+* `ic_bag`
+
+---
+
+## 3️⃣ Mapping existing functionality (what to tell Cursor)
+
+Since you don’t want to touch backend, just map old IDs → new ones in your Activity/Fragment/ViewModel. For Cursor, you can say something like:
+
+> “This is the new layout `chef_page.xml`. Keep all existing backend logic but update the UI code to use these IDs:
+>
+> * Close button: `btnClose`
+> * Tabs: `tabTable05`, `tabTable06`, `tabsContainer`
+> * Order header: `tvTableHeader`, `badgeRunningLate`, `tvLastUpdated`
+> * Items: `tvItemXName`, `tvItemXQty`, `tvItemXSize`, `tvItemXTips`, `switchItemX`
+> * CTA: `btnMarkAllPrepared`
+> * Bottom: `btnEatAway`, `btnParcel`
+>   Use the existing ViewModel / API calls and bind their data into these views instead of the old layout.”
+
+That should give Cursor everything it needs: **complete, valid XML + clear IDs** to wire your current logic into this new design.

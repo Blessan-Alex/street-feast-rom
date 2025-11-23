@@ -10,7 +10,8 @@ data class OrderItem(
     val nameSnapshot: String = "",
     val size: String? = null, // "Small" or "Large" or null
     val vegFlagSnapshot: String = "Veg", // "Veg" or "NonVeg"
-    val qty: Int = 1
+    val qty: Int = 1,
+    val chefTip: String = "" // Chef tip for this specific item
 ) : Parcelable {
     
     val isVeg: Boolean

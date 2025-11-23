@@ -477,14 +477,22 @@ class SupabaseOrderRepository(
         parentOrderId = parentOrderId
     )
 
-    private fun SupabaseOrderItemDto.toEntity() = OrderItemEntity(
-        id = id,
-        orderId = orderId,
-        name = name,
-        size = size,
-        vegFlag = vegFlag,
-        quantity = quantity
-    )
+    private fun SupabaseOrderItemDto.toEntity(): OrderItemEntity {
+        val extractedChefTip = modifiers?.get("chefTip")
+        // Log to verify chefTip extraction from modifiers
+        if (extractedChefTip != null && extractedChefTip.isNotBlank()) {
+            Log.d("SupabaseOrderRepository", "Extracted chefTip from modifiers for item $name: '$extractedChefTip'")
+        }
+        return OrderItemEntity(
+            id = id,
+            orderId = orderId,
+            name = name,
+            size = size,
+            vegFlag = vegFlag,
+            quantity = quantity,
+            chefTip = extractedChefTip  // Extract chefTip from modifiers JSONB
+        )
+    }
 }
 
 /* =======================

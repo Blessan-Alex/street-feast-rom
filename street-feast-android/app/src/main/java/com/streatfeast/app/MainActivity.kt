@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import android.view.Menu
 import android.view.MenuItem
 import android.content.Intent
+import android.view.View
 
 class MainActivity : AppCompatActivity() {
 
@@ -96,14 +97,14 @@ class MainActivity : AppCompatActivity() {
 
                 navController?.let { controller ->
                     val currentDestination = controller.currentDestination?.id
-                    if (currentDestination == R.id.chefNewOrdersFragment) {
-                        // If already on new orders fragment, trigger refresh
+                    if (currentDestination == R.id.chefPageFragment) {
+                        // If already on chef page, trigger refresh
                         lifecycleScope.launch {
                             val repository = ServiceLocator.provideOrderRepository(applicationContext)
                             repository.refresh()
                         }
                     } else {
-                        navigateToFragment(R.id.chefNewOrdersFragment)
+                        navigateToFragment(R.id.chefPageFragment)
                     }
                 }
             }
@@ -218,7 +219,7 @@ class MainActivity : AppCompatActivity() {
                     UserRole.CHEF -> {
                         binding.bottomNavigation.menu.clear()
                         binding.bottomNavigation.inflateMenu(R.menu.chef_nav_menu)
-                        navigateToFragment(R.id.chefNewOrdersFragment)
+                        navigateToFragment(R.id.chefPageFragment)
                     }
                     UserRole.WAITER -> {
                         binding.bottomNavigation.menu.clear()
@@ -228,7 +229,7 @@ class MainActivity : AppCompatActivity() {
                     UserRole.ADMIN -> {
                         binding.bottomNavigation.menu.clear()
                         binding.bottomNavigation.inflateMenu(R.menu.bottom_nav_menu)
-                        navigateToFragment(R.id.chefNewOrdersFragment)
+                        navigateToFragment(R.id.chefPageFragment)
                     }
                 }
             } else {
@@ -302,11 +303,11 @@ class MainActivity : AppCompatActivity() {
         val itemSelectedListener = com.google.android.material.navigation.NavigationBarView.OnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_new_orders -> {
-                    navController.navigate(R.id.chefNewOrdersFragment)
+                    navController.navigate(R.id.chefPageFragment)
                     true
                 }
                 R.id.nav_preparing -> {
-                    navController.navigate(R.id.chefPreparingFragment)
+                    navController.navigate(R.id.chefPageFragment)
                     true
                 }
                 R.id.nav_ready -> {
@@ -323,17 +324,30 @@ class MainActivity : AppCompatActivity() {
         navController.addOnDestinationChangedListener { _, destination, _ ->
             // Temporarily remove listener to prevent infinite loop when setting selectedItemId
             binding.bottomNavigation.setOnItemSelectedListener(null)
+            
+            // Hide/show toolbar and bottom nav based on destination
             when (destination.id) {
-                R.id.chefNewOrdersFragment -> {
+                R.id.chefPageFragment -> {
+                    // Hide old UI elements - chef page has its own top bar and bottom buttons
+                    binding.toolbar.visibility = View.GONE
+                    binding.bottomNavigation.visibility = View.GONE
                     binding.bottomNavigation.selectedItemId = R.id.nav_new_orders
                 }
-                R.id.chefPreparingFragment -> {
-                    binding.bottomNavigation.selectedItemId = R.id.nav_preparing
-                }
-                R.id.waiterReadyFragment -> {
-                    binding.bottomNavigation.selectedItemId = R.id.nav_ready
+                else -> {
+                    // Show old UI elements for other fragments
+                    binding.toolbar.visibility = View.VISIBLE
+                    binding.bottomNavigation.visibility = View.VISIBLE
+                    when (destination.id) {
+                        R.id.chefPreparingFragment -> {
+                            binding.bottomNavigation.selectedItemId = R.id.nav_preparing
+                        }
+                        R.id.waiterReadyFragment -> {
+                            binding.bottomNavigation.selectedItemId = R.id.nav_ready
+                        }
+                    }
                 }
             }
+            
             // Re-add listener after setting selected item
             binding.bottomNavigation.setOnItemSelectedListener(itemSelectedListener)
         }
