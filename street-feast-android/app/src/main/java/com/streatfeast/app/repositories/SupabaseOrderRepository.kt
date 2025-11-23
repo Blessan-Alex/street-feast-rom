@@ -5,6 +5,7 @@ import android.util.Log
 import com.streatfeast.app.BuildConfig
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderStatus
+import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.network.SupabaseOrderDto
 import com.streatfeast.app.network.SupabaseOrderItemDto
 import com.streatfeast.app.network.SupabaseStoreDto
@@ -119,6 +120,12 @@ class SupabaseOrderRepository(
         emitAll(localDataSource.observeOrders(currentStoreId, status))
     }
 
+    fun observeOrdersByType(status: OrderStatus, type: OrderType): Flow<List<Order>> = flow {
+        val currentStoreId = getStoreId()
+        Log.d("SupabaseOrderRepository", "observeOrdersByType: storeId=$currentStoreId, status=${status.toRemoteValue()}, type=${type.toRemoteValue()}")
+        emitAll(localDataSource.observeOrdersByType(currentStoreId, status, type))
+    }
+
     suspend fun refresh() {
         Log.d("SupabaseOrderRepository", "refresh() called")
         runCatching {
@@ -152,6 +159,9 @@ class SupabaseOrderRepository(
                 localDataSource.replaceStoreData(currentStoreId, orderEntities, itemEntities)
 
                 Log.d("SupabaseOrderRepository", "refresh() completed - stored ${orderEntities.size} orders, ${itemEntities.size} items in Room")
+                // Log order types for debugging
+                val orderTypes = orders.groupBy { it.type }.mapKeys { it.key ?: "null" }
+                Log.d("SupabaseOrderRepository", "Order types in refresh: $orderTypes")
 
                 // Update previous order IDs set after refresh
                 orderIdsMutex.withLock {
@@ -224,9 +234,12 @@ class SupabaseOrderRepository(
                                 "Realtime INSERT: ${action.record}"
                             )
                             
-                            // Extract order ID and number from the insert record
+                            // Extract order ID, number, and type from the insert record
                             val orderId = action.record["id"]?.toString() ?: ""
                             val orderNumber = (action.record["number"] as? Number)?.toInt()
+                            val orderType = action.record["type"]?.toString() ?: "Unknown"
+                            
+                            Log.d("SupabaseOrderRepository", "New order details: id=$orderId, number=$orderNumber, type=$orderType")
                             
                             // Check if this is a genuinely new order
                             val isNewOrder = orderIdsMutex.withLock {
@@ -242,7 +255,7 @@ class SupabaseOrderRepository(
                             if (isNewOrder) {
                                 Log.d(
                                     "SupabaseOrderRepository",
-                                    "New order detected: id=$orderId, number=$orderNumber"
+                                    "New order detected: id=$orderId, number=$orderNumber, type=$orderType"
                                 )
                                 
                                 // Show local notification
@@ -263,17 +276,27 @@ class SupabaseOrderRepository(
                                 }
                             }
                             
-                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime INSERT event")
+                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime INSERT event for order type: $orderType")
                             refresh()
+                            Log.d("SupabaseOrderRepository", "Refresh() call completed for INSERT event")
                         }
-                        is PostgresAction.Update,
+                        is PostgresAction.Update -> {
+                            Log.d(
+                                "SupabaseOrderRepository",
+                                "Realtime UPDATE event received"
+                            )
+                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime UPDATE event")
+                            refresh()
+                            Log.d("SupabaseOrderRepository", "Refresh() call completed for UPDATE event")
+                        }
                         is PostgresAction.Delete -> {
                             Log.d(
                                 "SupabaseOrderRepository",
-                                "Realtime change: ${action::class.simpleName} for orders"
+                                "Realtime DELETE event received"
                             )
-                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime ${action::class.simpleName} event")
+                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime DELETE event")
                             refresh()
+                            Log.d("SupabaseOrderRepository", "Refresh() call completed for DELETE event")
                         }
                         is PostgresAction.Select -> {
                             // Usually can be ignored

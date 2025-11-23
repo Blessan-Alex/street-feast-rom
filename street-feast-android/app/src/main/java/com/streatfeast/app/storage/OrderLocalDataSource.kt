@@ -22,6 +22,11 @@ class OrderLocalDataSource(
             .map { list -> list.map { it.toModel() } }
     }
 
+    fun observeOrdersByType(storeId: String, status: OrderStatus, type: OrderType): Flow<List<Order>> {
+        return orderDao.observeByStatusAndType(storeId, status.toRemoteValue(), type.toRemoteValue())
+            .map { list -> list.map { it.toModel() } }
+    }
+
     suspend fun getOrder(orderId: String): Order? {
         return orderDao.getOrder(orderId)?.toModel()
     }

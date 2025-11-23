@@ -111,6 +111,7 @@ class ChefPageFragment : Fragment() {
         
         setupCloseButton()
         setupDate()
+        setupRefreshButton()
         setupTabs()
         setupViewPager()
         setupOrderCard()
@@ -129,6 +130,13 @@ class ChefPageFragment : Fragment() {
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
+    }
+    
+    private fun setupRefreshButton() {
+        binding.btnRefresh.setOnClickListener {
+            android.util.Log.d("ChefPageFragment", "Manual refresh triggered")
+            viewModel.refresh()
+        }
     }
     
     private fun setupTabs() {
@@ -221,6 +229,7 @@ class ChefPageFragment : Fragment() {
                 when (order.type) {
                     OrderType.DINE_IN -> com.streatfeast.app.R.drawable.ic_cutlery
                     OrderType.PARCEL -> com.streatfeast.app.R.drawable.ic_bag
+                    OrderType.DELIVERY -> com.streatfeast.app.R.drawable.ic_bag
                     else -> com.streatfeast.app.R.drawable.ic_cutlery
                 }
             )
@@ -457,7 +466,7 @@ class ChefPageFragment : Fragment() {
         }
         
         // Update bottom buttons
-        updateBottomButtonsForOrderType(order.type)
+        // Button styles are now managed by updateButtonStyles() based on selected filter
         
         // Update button visibility and text based on order status
         val btnMarkAllPrepared = cardView.findViewById<android.widget.Button>(com.streatfeast.app.R.id.btnMarkAllPrepared)
@@ -560,36 +569,55 @@ class ChefPageFragment : Fragment() {
     
     private fun setupBottomButtons() {
         binding.btnEatAway.setOnClickListener {
-            Toast.makeText(requireContext(), "Eat away selected", Toast.LENGTH_SHORT).show()
-            // TODO: Update order type to DINE_IN (backend later)
+            viewModel.setOrderTypeFilter(OrderType.DINE_IN)
+            updateButtonStyles(OrderType.DINE_IN)
         }
         
         binding.btnParcel.setOnClickListener {
-            Toast.makeText(requireContext(), "Parcel selected", Toast.LENGTH_SHORT).show()
-            // TODO: Update order type to PARCEL (backend later)
+            viewModel.setOrderTypeFilter(OrderType.PARCEL)
+            updateButtonStyles(OrderType.PARCEL)
         }
+        
+        binding.btnDelivery.setOnClickListener {
+            viewModel.setOrderTypeFilter(OrderType.DELIVERY)
+            updateButtonStyles(OrderType.DELIVERY)
+        }
+        
+        // Observe filter changes and update button styles
+        viewModel.selectedOrderTypeFilter.observe(viewLifecycleOwner) { filter ->
+            updateButtonStyles(filter)
+        }
+        
+        // Set initial button style
+        updateButtonStyles(OrderType.DINE_IN)
     }
     
-    private fun updateBottomButtonsForOrderType(type: OrderType) {
-        when (type) {
-            OrderType.DINE_IN -> {
-                binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
-                binding.btnEatAway.setTextColor(android.graphics.Color.WHITE)
-                binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-                binding.btnParcel.setTextColor(0xFF111111.toInt())
-            }
-            OrderType.PARCEL -> {
-                binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
-                binding.btnParcel.setTextColor(android.graphics.Color.WHITE)
-                binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-                binding.btnEatAway.setTextColor(0xFF111111.toInt())
-            }
-            else -> {
-                binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-                binding.btnEatAway.setTextColor(0xFF111111.toInt())
-                binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-                binding.btnParcel.setTextColor(0xFF111111.toInt())
-            }
+    private fun updateButtonStyles(selectedFilter: OrderType?) {
+        // Style Dine In button
+        if (selectedFilter == OrderType.DINE_IN) {
+            binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
+            binding.btnEatAway.setTextColor(android.graphics.Color.WHITE)
+        } else {
+            binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
+            binding.btnEatAway.setTextColor(0xFF111111.toInt())
+        }
+        
+        // Style Parcel button
+        if (selectedFilter == OrderType.PARCEL) {
+            binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
+            binding.btnParcel.setTextColor(android.graphics.Color.WHITE)
+        } else {
+            binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
+            binding.btnParcel.setTextColor(0xFF111111.toInt())
+        }
+        
+        // Style Delivery button
+        if (selectedFilter == OrderType.DELIVERY) {
+            binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
+            binding.btnDelivery.setTextColor(android.graphics.Color.WHITE)
+        } else {
+            binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
+            binding.btnDelivery.setTextColor(0xFF111111.toInt())
         }
     }
     
@@ -599,23 +627,24 @@ class ChefPageFragment : Fragment() {
         // Observe new order detection to refresh data immediately
         viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
             android.util.Log.d("ChefPageFragment", "New order detected: id=$orderId, number=$orderNumber - refreshing orders")
-            // Refresh to get the new order into the list
+            // Force refresh to get the new order into the list
             viewModel.refresh()
             
             // Auto-scroll to the new order after refresh completes
             viewLifecycleOwner.lifecycleScope.launch {
-                delay(500) // Wait for refresh to complete
+                delay(800) // Increased delay to ensure refresh completes
                 // Check if viewPager is initialized before using it
                 if (::viewPager.isInitialized) {
                     // Try to find and select the new order
                     val orders = combinedOrders.value ?: emptyList()
+                    android.util.Log.d("ChefPageFragment", "After refresh delay, checking for order $orderId in ${orders.size} orders")
                     val newOrderIndex = orders.indexOfFirst { it.id == orderId }
                     if (newOrderIndex >= 0) {
                         android.util.Log.d("ChefPageFragment", "Auto-scrolling to new order at index $newOrderIndex")
                         viewPager.setCurrentItem(newOrderIndex, true)
                         selectTab(orders[newOrderIndex])
                     } else {
-                        android.util.Log.d("ChefPageFragment", "New order not found in list yet, may need more time")
+                        android.util.Log.d("ChefPageFragment", "New order not found in list yet, may need more time. Current filter: ${viewModel.selectedOrderTypeFilter.value}")
                     }
                 }
             }
@@ -624,7 +653,18 @@ class ChefPageFragment : Fragment() {
         // Observe order acceptance to refresh data
         viewModel.orderAccepted.observe(viewLifecycleOwner) { orderId ->
             // Order was accepted, refresh to get updated status
+            android.util.Log.d("ChefPageFragment", "Order accepted: $orderId - refreshing")
             viewModel.refresh()
+        }
+        
+        // Observe loading state to know when refresh completes
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (!isLoading) {
+                // Refresh completed, ensure UI updates
+                android.util.Log.d("ChefPageFragment", "Refresh completed, checking for updates. Current orders count: ${combinedOrders.value?.size ?: 0}")
+            } else {
+                android.util.Log.d("ChefPageFragment", "Refresh started")
+            }
         }
     }
     

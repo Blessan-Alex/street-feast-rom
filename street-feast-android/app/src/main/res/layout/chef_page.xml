@@ -58,6 +58,16 @@
             android:textColor="#9AA0B5"
             android:textSize="12sp" />
 
+        <ImageButton
+            android:id="@+id/btnRefresh"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="12dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="Refresh orders"
+            app:tint="#555555" />
+
     </LinearLayout>
 
     <TextView
@@ -209,10 +219,10 @@
             android:id="@+id/btnEatAway"
             android:layout_width="0dp"
             android:layout_height="48dp"
-            android:layout_marginEnd="12dp"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_black_pill"
-            android:text="Eat away"
+            android:text="Dine In"
             android:textAllCaps="false"
             android:textColor="@android:color/white"
             android:textSize="15sp"
@@ -222,9 +232,22 @@
             android:id="@+id/btnParcel"
             android:layout_width="0dp"
             android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_white_outline_pill"
             android:text="Parcel"
+            android:textAllCaps="false"
+            android:textColor="#111111"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnDelivery"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_white_outline_pill"
+            android:text="Delivery"
             android:textAllCaps="false"
             android:textColor="#111111"
             android:textSize="15sp"

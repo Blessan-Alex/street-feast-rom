@@ -7,8 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.switchMap
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderStatus
+import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.repositories.SupabaseOrderRepository
 import kotlinx.coroutines.launch
 
@@ -16,11 +18,30 @@ class OrdersViewModel(
     private val repository: SupabaseOrderRepository
 ) : ViewModel() {
 
-    val newOrders: LiveData<List<Order>> =
-        repository.observeOrders(OrderStatus.CREATED).asLiveData()
+    private val _selectedOrderTypeFilter = MutableLiveData<OrderType?>(OrderType.DINE_IN)
+    val selectedOrderTypeFilter: LiveData<OrderType?> = _selectedOrderTypeFilter
 
-    val preparingOrders: LiveData<List<Order>> =
-        repository.observeOrders(OrderStatus.IN_KITCHEN).asLiveData()
+    val newOrders: LiveData<List<Order>> = _selectedOrderTypeFilter.switchMap { filter ->
+        Log.d("OrdersViewModel", "Filter changed for newOrders: $filter")
+        if (filter != null) {
+            Log.d("OrdersViewModel", "Observing filtered orders: status=CREATED, type=$filter")
+            repository.observeOrdersByType(OrderStatus.CREATED, filter).asLiveData()
+        } else {
+            Log.d("OrdersViewModel", "Observing all orders: status=CREATED")
+            repository.observeOrders(OrderStatus.CREATED).asLiveData()
+        }
+    }
+
+    val preparingOrders: LiveData<List<Order>> = _selectedOrderTypeFilter.switchMap { filter ->
+        Log.d("OrdersViewModel", "Filter changed for preparingOrders: $filter")
+        if (filter != null) {
+            Log.d("OrdersViewModel", "Observing filtered orders: status=IN_KITCHEN, type=$filter")
+            repository.observeOrdersByType(OrderStatus.IN_KITCHEN, filter).asLiveData()
+        } else {
+            Log.d("OrdersViewModel", "Observing all orders: status=IN_KITCHEN")
+            repository.observeOrders(OrderStatus.IN_KITCHEN).asLiveData()
+        }
+    }
 
     val readyOrders: LiveData<List<Order>> =
         repository.observeOrders(OrderStatus.PREPARED).asLiveData()
@@ -50,6 +71,10 @@ class OrdersViewModel(
             }
             Log.d("OrdersViewModel", "Realtime subscription started with callback")
         }
+    }
+
+    fun setOrderTypeFilter(type: OrderType?) {
+        _selectedOrderTypeFilter.value = type
     }
 
     fun refresh() {
