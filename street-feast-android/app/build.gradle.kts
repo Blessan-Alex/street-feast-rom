@@ -98,9 +98,10 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
 
-    // RecyclerView & SwipeRefresh
+    // RecyclerView & SwipeRefresh & ViewPager2
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.swiperefreshlayout)
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

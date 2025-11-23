@@ -94,8 +94,10 @@ function App() {
           
           // Clean up existing subscription if any
           if (cleanup) {
+            console.log('[App] Cleaning up existing realtime subscription');
             cleanup();
           }
+          console.log('[App] Initializing new realtime subscription for store:', storeId);
           cleanup = initOrdersRealtime(storeId);
           console.log('[App] Orders realtime subscription initialized for store:', storeId);
         } else {
@@ -103,6 +105,7 @@ function App() {
         }
       } catch (error) {
         console.error('[App] Failed to initialize orders realtime subscription:', error);
+        console.error('[App] Error details:', error instanceof Error ? error.message : String(error));
       }
     };
 

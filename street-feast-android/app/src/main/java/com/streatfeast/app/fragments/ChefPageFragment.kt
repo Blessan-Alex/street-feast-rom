@@ -12,7 +12,10 @@ import androidx.annotation.RequiresApi
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.MediatorLiveData
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.viewpager2.widget.ViewPager2
+import androidx.recyclerview.widget.RecyclerView
 import com.streatfeast.app.databinding.ChefPageBinding
 import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.models.Order
@@ -27,6 +30,8 @@ import java.time.Instant
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // Helper data class for item view configuration
 private data class ItemViewConfig(
@@ -55,6 +60,8 @@ class ChefPageFragment : Fragment() {
     private val itemPreparedStates = mutableMapOf<String, Boolean>() // itemId -> isPrepared
     private val tabViews = mutableMapOf<String, LinearLayout>() // orderId -> tab view
     private var selectedTabOrderId: String? = null
+    private lateinit var viewPager: ViewPager2
+    private var pagerAdapter: OrdersPagerAdapter? = null
     
     // Combine new orders and preparing orders into single list
     // Initialize in onViewCreated after fragment is attached
@@ -105,6 +112,7 @@ class ChefPageFragment : Fragment() {
         setupCloseButton()
         setupDate()
         setupTabs()
+        setupViewPager()
         setupOrderCard()
         setupBottomButtons()
         observeOrders()
@@ -156,15 +164,15 @@ class ChefPageFragment : Fragment() {
                 }
             }
             
-            // Show/hide tabs container and order card
+            // Show/hide tabs container and viewpager
             if (sorted.isEmpty()) {
                 currentBinding.tabsScroll.visibility = View.GONE
-                currentBinding.orderCard.visibility = View.GONE
+                currentBinding.viewPagerOrders.visibility = View.GONE
                 // Show empty state message in card area
                 showEmptyState()
             } else {
                 currentBinding.tabsScroll.visibility = View.VISIBLE
-                currentBinding.orderCard.visibility = View.VISIBLE
+                currentBinding.viewPagerOrders.visibility = View.VISIBLE
                 hideEmptyState()
             }
         }
@@ -310,15 +318,67 @@ class ChefPageFragment : Fragment() {
             }
         }
         
-        // Update order card
-        bindOrderToCard(order)
+        // Update order card (will be handled by ViewPager adapter)
+        // Sync ViewPager position
+        val orderIndex = allOrders.indexOfFirst { it.id == order.id }
+        if (orderIndex >= 0 && ::viewPager.isInitialized) {
+            if (viewPager.currentItem != orderIndex) {
+                viewPager.setCurrentItem(orderIndex, false)
+            }
+        }
+    }
+    
+    private fun setupViewPager() {
+        viewPager = binding.viewPagerOrders
+        
+        // Create adapter once with empty list if not already created
+        if (pagerAdapter == null) {
+            pagerAdapter = OrdersPagerAdapter(mutableListOf()) { order: Order, view: View ->
+                bindOrderToCard(order, view)
+            }
+            viewPager.adapter = pagerAdapter
+        }
+        
+        combinedOrders.observe(viewLifecycleOwner) { orders ->
+            // Get current order ID before updating to preserve position
+            val currentOrderId = combinedOrders.value?.getOrNull(viewPager.currentItem)?.id
+            
+            // Update adapter with new orders
+            pagerAdapter?.updateOrders(orders.toMutableList())
+            
+            // Preserve ViewPager position when updating
+            // Try to find current order by ID in new list
+            val newIndex = currentOrderId?.let { id -> orders.indexOfFirst { it.id == id } }
+            if (newIndex != null && newIndex >= 0 && viewPager.currentItem != newIndex) {
+                viewPager.setCurrentItem(newIndex, false)
+            } else {
+                // Fall back to selected tab position
+                val currentIndex = orders.indexOfFirst { it.id == selectedTabOrderId }
+                if (currentIndex >= 0 && viewPager.currentItem != currentIndex) {
+                    viewPager.setCurrentItem(currentIndex, false)
+                } else if (orders.isNotEmpty() && selectedTabOrderId == null) {
+                    viewPager.setCurrentItem(0, false)
+                }
+            }
+        }
+        
+        // Update selected tab when swiping
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                combinedOrders.value?.getOrNull(position)?.let { order ->
+                    if (order.id != selectedTabOrderId) {
+                        selectTab(order)
+                    }
+                }
+            }
+        })
     }
     
     private fun setupOrderCard() {
         // Button click handler will be set in bindOrderToCard based on order status
     }
     
-    private fun bindOrderToCard(order: Order) {
+    private fun bindOrderToCard(order: Order, cardView: View) {
         val currentBinding = _binding ?: return
         
         currentOrder = order
@@ -327,20 +387,56 @@ class ChefPageFragment : Fragment() {
         android.util.Log.d("ChefPageFragment", "Order #${order.orderNumber} chefTip: '${order.chefTip}'")
         
         // Header
-        binding.tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
-        binding.tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
+        val tvTableHeader = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvTableHeader)
+        val tvLastUpdated = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvLastUpdated)
+        val badgeRunningLate = cardView.findViewById<TextView>(com.streatfeast.app.R.id.badgeRunningLate)
+        
+        tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
+        tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
         
         // Running late badge
         val isLate = isOrderRunningLate(order)
-        binding.badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
+        badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
         
         // Items - show up to 4 items
         val itemsToShow = order.items.take(4)
         val itemConfigs = listOf(
-            ItemViewConfig(binding.item1, binding.tvItem1Name, binding.tvItem1Qty, binding.tvItem1Size, binding.tvItem1Tips, binding.switchItem1, binding.colorBar1),
-            ItemViewConfig(binding.item2, binding.tvItem2Name, binding.tvItem2Qty, binding.tvItem2Size, binding.tvItem2Tips, binding.switchItem2, binding.colorBar2),
-            ItemViewConfig(binding.item3, binding.tvItem3Name, binding.tvItem3Qty, binding.tvItem3Size, binding.tvItem3Tips, binding.switchItem3, binding.colorBar3),
-            ItemViewConfig(binding.item4, binding.tvItem4Name, binding.tvItem4Qty, binding.tvItem4Size, binding.tvItem4Tips, binding.switchItem4, binding.colorBar4)
+            ItemViewConfig(
+                cardView.findViewById(com.streatfeast.app.R.id.item1),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Name),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Qty),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Size),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Tips),
+                cardView.findViewById(com.streatfeast.app.R.id.switchItem1),
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar1)
+            ),
+            ItemViewConfig(
+                cardView.findViewById(com.streatfeast.app.R.id.item2),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Name),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Qty),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Size),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Tips),
+                cardView.findViewById(com.streatfeast.app.R.id.switchItem2),
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar2)
+            ),
+            ItemViewConfig(
+                cardView.findViewById(com.streatfeast.app.R.id.item3),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Name),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Qty),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Size),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Tips),
+                cardView.findViewById(com.streatfeast.app.R.id.switchItem3),
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar3)
+            ),
+            ItemViewConfig(
+                cardView.findViewById(com.streatfeast.app.R.id.item4),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Name),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Qty),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Size),
+                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Tips),
+                cardView.findViewById(com.streatfeast.app.R.id.switchItem4),
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar4)
+            )
         )
         
         itemsToShow.forEachIndexed { index, item ->
@@ -364,12 +460,13 @@ class ChefPageFragment : Fragment() {
         updateBottomButtonsForOrderType(order.type)
         
         // Update button visibility and text based on order status
+        val btnMarkAllPrepared = cardView.findViewById<android.widget.Button>(com.streatfeast.app.R.id.btnMarkAllPrepared)
         when (order.status) {
             OrderStatus.CREATED -> {
                 // New order - show accept button
-                binding.btnMarkAllPrepared.visibility = View.VISIBLE
-                binding.btnMarkAllPrepared.text = "Accept Order"
-                binding.btnMarkAllPrepared.setOnClickListener {
+                btnMarkAllPrepared.visibility = View.VISIBLE
+                btnMarkAllPrepared.text = "Accept Order"
+                btnMarkAllPrepared.setOnClickListener {
                     viewModel.acceptOrder(order.id)
                 }
                 // Hide item switches for new orders (can't mark items prepared until accepted)
@@ -379,9 +476,9 @@ class ChefPageFragment : Fragment() {
             }
             OrderStatus.IN_KITCHEN -> {
                 // Preparing order - show mark prepared button
-                binding.btnMarkAllPrepared.visibility = View.VISIBLE
-                binding.btnMarkAllPrepared.text = "Mark All Prepared"
-                binding.btnMarkAllPrepared.setOnClickListener {
+                btnMarkAllPrepared.visibility = View.VISIBLE
+                btnMarkAllPrepared.text = "Mark All Prepared"
+                btnMarkAllPrepared.setOnClickListener {
                     viewModel.markPrepared(order.id)
                 }
                 // Show item switches for preparing orders
@@ -390,7 +487,7 @@ class ChefPageFragment : Fragment() {
                 }
             }
             else -> {
-                binding.btnMarkAllPrepared.visibility = View.GONE
+                btnMarkAllPrepared.visibility = View.GONE
             }
         }
     }
@@ -499,6 +596,31 @@ class ChefPageFragment : Fragment() {
     private fun observeOrders() {
         // Already handled in setupTabs() via combinedOrders
         
+        // Observe new order detection to refresh data immediately
+        viewModel.newOrderDetected.observe(viewLifecycleOwner) { (orderId, orderNumber) ->
+            android.util.Log.d("ChefPageFragment", "New order detected: id=$orderId, number=$orderNumber - refreshing orders")
+            // Refresh to get the new order into the list
+            viewModel.refresh()
+            
+            // Auto-scroll to the new order after refresh completes
+            viewLifecycleOwner.lifecycleScope.launch {
+                delay(500) // Wait for refresh to complete
+                // Check if viewPager is initialized before using it
+                if (::viewPager.isInitialized) {
+                    // Try to find and select the new order
+                    val orders = combinedOrders.value ?: emptyList()
+                    val newOrderIndex = orders.indexOfFirst { it.id == orderId }
+                    if (newOrderIndex >= 0) {
+                        android.util.Log.d("ChefPageFragment", "Auto-scrolling to new order at index $newOrderIndex")
+                        viewPager.setCurrentItem(newOrderIndex, true)
+                        selectTab(orders[newOrderIndex])
+                    } else {
+                        android.util.Log.d("ChefPageFragment", "New order not found in list yet, may need more time")
+                    }
+                }
+            }
+        }
+        
         // Observe order acceptance to refresh data
         viewModel.orderAccepted.observe(viewLifecycleOwner) { orderId ->
             // Order was accepted, refresh to get updated status
@@ -536,21 +658,13 @@ class ChefPageFragment : Fragment() {
     }
     
     private fun showEmptyState() {
-        // Hide all item views
-        binding.item1.visibility = View.GONE
-        binding.item2.visibility = View.GONE
-        binding.item3.visibility = View.GONE
-        binding.item4.visibility = View.GONE
-        binding.btnMarkAllPrepared.visibility = View.GONE
-        
-        // Show empty message in card
-        binding.tvTableHeader.text = "No orders in preparation"
-        binding.tvLastUpdated.visibility = View.GONE
-        binding.badgeRunningLate.visibility = View.GONE
+        // Empty state is handled by ViewPager2 having no items
+        // Individual views are in order_card_item.xml and managed by the adapter
     }
     
     private fun hideEmptyState() {
-        binding.tvLastUpdated.visibility = View.VISIBLE
+        // Empty state is handled by ViewPager2 having items
+        // Individual views are in order_card_item.xml and managed by the adapter
     }
     
     override fun onDestroyView() {
@@ -561,5 +675,38 @@ class ChefPageFragment : Fragment() {
         currentOrder = null
         selectedTabOrderId = null
     }
+}
+
+// ViewPager2 Adapter for orders
+private class OrdersPagerAdapter(
+    private var orders: MutableList<Order>,
+    private val onBindOrder: (Order, View) -> Unit
+) : RecyclerView.Adapter<OrdersPagerAdapter.OrderViewHolder>() {
+    
+    class OrderViewHolder(val view: View) : RecyclerView.ViewHolder(view)
+    
+    fun updateOrders(newOrders: List<Order>) {
+        val oldSize = orders.size
+        orders.clear()
+        orders.addAll(newOrders)
+        if (oldSize == orders.size) {
+            notifyItemRangeChanged(0, orders.size)
+        } else {
+            notifyDataSetChanged()
+        }
+    }
+    
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OrderViewHolder {
+        val view = LayoutInflater.from(parent.context)
+            .inflate(com.streatfeast.app.R.layout.order_card_item, parent, false)
+        return OrderViewHolder(view)
+    }
+    
+    override fun onBindViewHolder(holder: OrderViewHolder, position: Int) {
+        val order = orders[position]
+        onBindOrder(order, holder.view)
+    }
+    
+    override fun getItemCount() = orders.size
 }
 

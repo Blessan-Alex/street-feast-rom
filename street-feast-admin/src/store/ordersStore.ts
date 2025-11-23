@@ -616,10 +616,11 @@ export function initOrdersRealtime(storeId: string): () => void {
         filter: `store_id=eq.${storeId}`,
       },
       async (payload) => {
-        console.log('[Realtime] Event received:', {
+        console.log('[Realtime] 📨 Event received:', {
           eventType: payload.eventType,
-          new: payload.new,
-          old: payload.old,
+          orderId: payload.new?.id || payload.old?.id,
+          orderNumber: payload.new?.number || payload.old?.number,
+          status: payload.new?.status || payload.old?.status,
           timestamp: new Date().toISOString()
         });
 
@@ -641,6 +642,21 @@ export function initOrdersRealtime(storeId: string): () => void {
             });
             if (newRow) {
               await useOrdersStore.getState().upsertOrder(newRow);
+              
+              // Show in-app toast notification for status changes
+              const oldStatus = oldRow?.status as string;
+              const newStatus = newRow?.status as string;
+              const orderNumber = newRow?.number || 'N/A';
+              
+              if (oldStatus && oldStatus !== newStatus) {
+                if (newStatus === 'InKitchen') {
+                  toast.info(`Chef has accepted Order #${orderNumber}`);
+                } else if (newStatus === 'Prepared') {
+                  toast.success(`Chef has prepared Order #${orderNumber}`);
+                } else if (newStatus === 'Delivered') {
+                  toast.info(`Waiter has delivered Order #${orderNumber}`);
+                }
+              }
               
               // Optional: Show browser notification for status changes
               if (newRow.status) {
@@ -666,22 +682,27 @@ export function initOrdersRealtime(storeId: string): () => void {
       }
     )
     .subscribe((status, err) => {
-      console.log('[Realtime] Subscription status changed:', status);
+      console.log('[Realtime] Subscription status changed:', status, 'at', new Date().toISOString());
       if (err) {
         console.error('[Realtime] Subscription error details:', {
           error: err,
           message: err?.message,
-          details: err
+          details: err,
+          timestamp: new Date().toISOString()
         });
       }
       if (status === 'SUBSCRIBED') {
-        console.log('[Realtime] Successfully subscribed to orders changes');
+        console.log('[Realtime] ✅ Successfully subscribed to orders changes for store:', storeId);
+        console.log('[Realtime] Listening for INSERT, UPDATE, DELETE events on orders table');
       } else if (status === 'CHANNEL_ERROR') {
-        console.error('[Realtime] Channel error occurred - check RLS policies and authentication');
+        console.error('[Realtime] ❌ Channel error occurred - check RLS policies and authentication');
+        console.error('[Realtime] Verify user has SELECT permission on orders table for store:', storeId);
       } else if (status === 'TIMED_OUT') {
-        console.error('[Realtime] Subscription timed out');
+        console.error('[Realtime] ❌ Subscription timed out - network or server issue');
       } else if (status === 'CLOSED') {
-        console.warn('[Realtime] Channel closed');
+        console.warn('[Realtime] ⚠️ Channel closed');
+      } else {
+        console.log('[Realtime] Subscription status:', status);
       }
     });
 
