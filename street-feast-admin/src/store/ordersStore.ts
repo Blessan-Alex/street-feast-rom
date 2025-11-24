@@ -638,7 +638,8 @@ export function initOrdersRealtime(storeId: string): () => void {
             console.log('[Realtime] UPDATE event:', {
               oldStatus: oldRow?.status,
               newStatus: newRow?.status,
-              orderId: newRow?.id
+              orderId: newRow?.id,
+              orderNumber: newRow?.number
             });
             if (newRow) {
               await useOrdersStore.getState().upsertOrder(newRow);
@@ -648,23 +649,36 @@ export function initOrdersRealtime(storeId: string): () => void {
               const newStatus = newRow?.status as string;
               const orderNumber = newRow?.number || 'N/A';
               
-              if (oldStatus && oldStatus !== newStatus) {
-                if (newStatus === 'InKitchen') {
-                  toast.info(`Chef has accepted Order #${orderNumber}`);
-                } else if (newStatus === 'Prepared') {
-                  toast.success(`Chef has prepared Order #${orderNumber}`);
-                } else if (newStatus === 'Delivered') {
-                  toast.info(`Waiter has delivered Order #${orderNumber}`);
-                }
+              console.log('[Realtime] Status check:', {
+                oldStatus,
+                newStatus,
+                statusChanged: oldStatus && oldStatus !== newStatus,
+                shouldNotify: newStatus === 'InKitchen' || newStatus === 'Prepared'
+              });
+              
+              // Show toast notifications for InKitchen and Prepared regardless of oldStatus
+              // (prioritize toasts since they work reliably)
+              if (newStatus === 'InKitchen') {
+                toast.info(`Chef has accepted Order #${orderNumber}`);
+              } else if (newStatus === 'Prepared') {
+                toast.success(`Chef has prepared Order #${orderNumber}`);
+              } else if (newStatus === 'Delivered' && oldStatus && oldStatus !== newStatus) {
+                // Only show Delivered toast if status actually changed (to avoid duplicates)
+                toast.info(`Waiter has delivered Order #${orderNumber}`);
               }
               
-              // Optional: Show browser notification for status changes
+              // Show notification for status changes (works in both Electron and browser)
               if (newRow.status) {
                 const status = newRow.status as string;
+                console.log('[Realtime] Checking notification for status:', status);
                 if (status === 'InKitchen' || status === 'Prepared') {
-                  console.log('[Realtime] Showing browser notification for status:', status);
+                  console.log('[Realtime] ✅ Showing notification for status:', status, 'Order #', orderNumber);
                   showBrowserNotification(newRow);
+                } else {
+                  console.log('[Realtime] ⏭️ Skipping notification - status not InKitchen or Prepared:', status);
                 }
+              } else {
+                console.warn('[Realtime] ⚠️ No status found in newRow:', newRow);
               }
             }
             break;
@@ -713,35 +727,153 @@ export function initOrdersRealtime(storeId: string): () => void {
   };
 }
 
-// Optional: Browser notification helper
+// Notification helper that works in both Electron and browser
 function showBrowserNotification(order: any): void {
-  if (!('Notification' in window)) {
+  console.log('[Notification] Function called with order:', {
+    id: order?.id,
+    number: order?.number,
+    status: order?.status
+  });
+  
+  const orderNumber = order.number || 'N/A';
+  const status = order.status;
+  let title = '';
+  let body = '';
+
+  if (status === 'InKitchen') {
+    title = `Order #${orderNumber} accepted`;
+    body = 'Chef has accepted Order #' + orderNumber;
+  } else if (status === 'Prepared') {
+    title = `Order #${orderNumber} ready`;
+    body = 'Chef has prepared Order #' + orderNumber;
+  }
+
+  if (!title || !body) {
+    console.warn('[Notification] No title/body generated, status was:', status);
     return;
   }
 
+  console.log('[Notification] Attempting to show notification:', { 
+    title, 
+    body, 
+    hasElectronAPI: !!window.electronAPI, 
+    hasNotificationAPI: 'Notification' in window,
+    browserPermission: 'Notification' in window ? Notification.permission : 'N/A'
+  });
+
+  // Priority 1: Use Electron notifications if available (Electron app)
+  if (window.electronAPI) {
+    try {
+      console.log('[Notification] Sending Electron notification:', { title, body });
+      window.electronAPI.notify({ title, body });
+      return;
+    } catch (error) {
+      console.error('[Notification] Electron notification failed:', error);
+      // Fall through to browser notification
+    }
+  }
+
+  // Priority 2: Use browser Notification API (web browser or Electron fallback)
+  if (!('Notification' in window)) {
+    console.warn('[Notification] Notifications not supported in this environment');
+    return;
+  }
+
+  console.log('[Notification] Browser permission status:', Notification.permission);
+
+  // Check if permission is already granted
   if (Notification.permission === 'granted') {
-    const orderNumber = order.number || 'N/A';
-    const status = order.status;
-    let title = '';
-    let body = '';
-
-    if (status === 'InKitchen') {
-      title = `Order #${orderNumber} accepted`;
-      body = 'Order is now being prepared.';
-    } else if (status === 'Prepared') {
-      title = `Order #${orderNumber} ready`;
-      body = 'Order is ready to serve.';
+    try {
+      console.log('[Notification] Showing browser notification:', { title, body });
+      const notification = new Notification(title, { 
+        body,
+        icon: '/assets/logo/logo.png', // Use existing logo
+        badge: '/assets/logo/logo.png',
+        tag: `order-${orderNumber}`, // Prevent duplicate notifications
+        requireInteraction: false,
+        silent: false
+      });
+      
+      // Store reference to prevent garbage collection
+      console.log('[Notification] Notification created successfully:', notification);
+      
+      // Handle notification click
+      notification.onclick = () => {
+        console.log('[Notification] Notification clicked');
+        window.focus();
+        notification.close();
+      };
+      
+      // Handle notification close
+      notification.onclose = () => {
+        console.log('[Notification] Notification closed');
+      };
+      
+      // Handle notification error
+      notification.onerror = (error) => {
+        console.error('[Notification] Notification error:', error);
+      };
+      
+      // Auto-close after 5 seconds
+      setTimeout(() => {
+        notification.close();
+      }, 5000);
+      
+    } catch (error) {
+      console.error('[Notification] Browser notification failed:', error);
     }
-
-    if (title && body) {
-      new Notification(title, { body });
-    }
-  } else if (Notification.permission !== 'denied') {
-    // Request permission
+  } 
+  // Request permission if not denied
+  else if (Notification.permission !== 'denied') {
+    console.log('[Notification] Requesting notification permission...');
     Notification.requestPermission().then((permission) => {
+      console.log('[Notification] Permission result:', permission);
       if (permission === 'granted') {
-        showBrowserNotification(order);
+        try {
+          console.log('[Notification] Permission granted, showing notification:', { title, body });
+          const notification = new Notification(title, { 
+            body,
+            icon: '/assets/logo/logo.png', // Use existing logo
+            badge: '/assets/logo/logo.png',
+            tag: `order-${orderNumber}`,
+            requireInteraction: false,
+            silent: false
+          });
+          
+          console.log('[Notification] Notification created after permission grant:', notification);
+          
+          // Handle notification click
+          notification.onclick = () => {
+            console.log('[Notification] Notification clicked');
+            window.focus();
+            notification.close();
+          };
+          
+          // Handle notification close
+          notification.onclose = () => {
+            console.log('[Notification] Notification closed');
+          };
+          
+          // Handle notification error
+          notification.onerror = (error) => {
+            console.error('[Notification] Notification error:', error);
+          };
+          
+          // Auto-close after 5 seconds
+          setTimeout(() => {
+            notification.close();
+          }, 5000);
+          
+        } catch (error) {
+          console.error('[Notification] Browser notification failed after permission grant:', error);
+        }
+      } else {
+        console.warn('[Notification] Notification permission denied');
       }
+    }).catch((error) => {
+      console.error('[Notification] Error requesting notification permission:', error);
     });
+  } else {
+    console.warn('[Notification] Notification permission was previously denied');
   }
 }

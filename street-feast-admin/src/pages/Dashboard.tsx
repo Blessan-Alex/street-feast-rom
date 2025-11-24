@@ -204,8 +204,46 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Action Button */}
-      <div className="flex justify-center">
+      {/* Quick Action Buttons */}
+      <div className="flex justify-center gap-4">
+        <Button
+          variant="secondary"
+          size="medium"
+          onClick={() => {
+            console.log('[Test] Testing notification...');
+            console.log('[Test] Electron API available:', !!window.electronAPI);
+            console.log('[Test] Browser Notification available:', 'Notification' in window);
+            if ('Notification' in window) {
+              console.log('[Test] Browser permission:', Notification.permission);
+            }
+            
+            if (window.electronAPI) {
+              console.log('[Test] Sending Electron notification...');
+              window.electronAPI.notify({ 
+                title: 'Test Notification', 
+                body: 'This is a test notification from the admin app' 
+              });
+            } else if ('Notification' in window) {
+              if (Notification.permission === 'granted') {
+                console.log('[Test] Sending browser notification...');
+                new Notification('Test Notification', { 
+                  body: 'This is a test notification from the admin app' 
+                });
+              } else {
+                console.log('[Test] Requesting permission...');
+                Notification.requestPermission().then((permission) => {
+                  if (permission === 'granted') {
+                    new Notification('Test Notification', { 
+                      body: 'This is a test notification from the admin app' 
+                    });
+                  }
+                });
+              }
+            }
+          }}
+        >
+          Test Notification
+        </Button>
         <Button
           variant="primary"
           size="large"
