@@ -111,7 +111,6 @@ class ChefPageFragment : Fragment() {
         
         setupCloseButton()
         setupDate()
-        setupRefreshButton()
         setupTabs()
         setupViewPager()
         setupOrderCard()
@@ -130,13 +129,6 @@ class ChefPageFragment : Fragment() {
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
-    }
-    
-    private fun setupRefreshButton() {
-        binding.btnRefresh.setOnClickListener {
-            android.util.Log.d("ChefPageFragment", "Manual refresh triggered")
-            viewModel.refresh()
-        }
     }
     
     private fun setupTabs() {
@@ -514,7 +506,14 @@ class ChefPageFragment : Fragment() {
     ) {
         nameView.text = item.nameSnapshot
         qtyView.text = "x${item.qty}"
-        sizeView.text = "Size: ${item.size ?: "-"}"
+        
+        // Only show Size if it has a value
+        if (item.size != null && item.size.isNotBlank()) {
+            sizeView.text = "Size: ${item.size}"
+            sizeView.visibility = View.VISIBLE
+        } else {
+            sizeView.visibility = View.GONE
+        }
         
         // Show item-specific tip first, then fall back to order-level tip
         val tipToShow = when {
@@ -523,12 +522,12 @@ class ChefPageFragment : Fragment() {
             else -> null
         }
         
+        // Only show Tips if there's a tip to show
         if (tipToShow != null) {
             tipsView.text = "Tips: $tipToShow"
             tipsView.visibility = View.VISIBLE
         } else {
-            tipsView.text = "Tips: -"
-            tipsView.visibility = View.VISIBLE
+            tipsView.visibility = View.GONE
         }
         
         // Get prepared state for this item
@@ -597,27 +596,33 @@ class ChefPageFragment : Fragment() {
         if (selectedFilter == OrderType.DINE_IN) {
             binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
             binding.btnEatAway.setTextColor(android.graphics.Color.WHITE)
+            binding.btnEatAway.elevation = 4f // Add shadow/elevation for selected
         } else {
             binding.btnEatAway.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-            binding.btnEatAway.setTextColor(0xFF111111.toInt())
+            binding.btnEatAway.setTextColor(0xFF111111.toInt()) // Black text
+            binding.btnEatAway.elevation = 2f // Add shadow/elevation for unselected
         }
         
         // Style Parcel button
         if (selectedFilter == OrderType.PARCEL) {
             binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
             binding.btnParcel.setTextColor(android.graphics.Color.WHITE)
+            binding.btnParcel.elevation = 4f // Add shadow/elevation for selected
         } else {
             binding.btnParcel.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-            binding.btnParcel.setTextColor(0xFF111111.toInt())
+            binding.btnParcel.setTextColor(0xFF111111.toInt()) // Black text
+            binding.btnParcel.elevation = 2f // Add shadow/elevation for unselected
         }
         
         // Style Delivery button
         if (selectedFilter == OrderType.DELIVERY) {
             binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
             binding.btnDelivery.setTextColor(android.graphics.Color.WHITE)
+            binding.btnDelivery.elevation = 4f // Add shadow/elevation for selected
         } else {
             binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_white_outline_pill)
-            binding.btnDelivery.setTextColor(0xFF111111.toInt())
+            binding.btnDelivery.setTextColor(0xFF111111.toInt()) // Black text
+            binding.btnDelivery.elevation = 2f // Add shadow/elevation for unselected
         }
     }
     
