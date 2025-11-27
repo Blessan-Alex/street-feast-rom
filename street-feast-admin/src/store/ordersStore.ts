@@ -616,15 +616,18 @@ export function initOrdersRealtime(storeId: string): () => void {
         filter: `store_id=eq.${storeId}`,
       },
       async (payload) => {
+        const newRow = payload.new as any;
+        const oldRow = payload.old as any;
+        
         console.log('[Realtime] 📨 Event received:', {
           eventType: payload.eventType,
-          orderId: payload.new?.id || payload.old?.id,
-          orderNumber: payload.new?.number || payload.old?.number,
-          status: payload.new?.status || payload.old?.status,
+          orderId: newRow?.id || oldRow?.id,
+          orderNumber: newRow?.number || oldRow?.number,
+          status: newRow?.status || oldRow?.status,
           timestamp: new Date().toISOString()
         });
 
-        const { eventType, new: newRow, old: oldRow } = payload;
+        const { eventType } = payload;
 
         switch (eventType) {
           case 'INSERT':
