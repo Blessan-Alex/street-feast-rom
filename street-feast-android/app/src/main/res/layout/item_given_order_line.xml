@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <View
+        android:id="@+id/stripe"
+        android:layout_width="4dp"
+        android:layout_height="44dp"
+        android:background="@color/sf_red"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <TextView
+        android:id="@+id/tvItem"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:text="Spicy Ramen Burger"
+        android:textColor="@color/sf_text_primary"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toEndOf="@id/stripe"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btnAlter"/>
+
+    <TextView
+        android:id="@+id/badge"
+        android:layout_width="34dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="10dp"
+        android:background="@drawable/sf_badge_qty"
+        android:gravity="center"
+        android:text="x2"
+        android:textColor="@color/sf_text_primary"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toEndOf="@id/tvItem"
+        app:layout_constraintTop_toTopOf="@id/tvItem"/>
+
+    <TextView
+        android:id="@+id/tvSize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Size: Large"
+        android:textColor="@color/sf_text_secondary"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toStartOf="@id/btnAlter"
+        app:layout_constraintTop_toTopOf="@id/tvItem"
+        android:layout_marginEnd="10dp"/>
+
+    <TextView
+        android:id="@+id/tvTips"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Tips: Extra hot sauce, no onions"
+        android:textColor="@color/sf_text_muted"
+        android:textSize="13sp"
+        app:layout_constraintStart_toStartOf="@id/tvItem"
+        app:layout_constraintTop_toBottomOf="@id/tvItem"
+        app:layout_constraintEnd_toEndOf="@id/tvItem"/>
+
+    <TextView
+        android:id="@+id/btnAlter"
+        android:layout_width="110dp"
+        android:layout_height="36dp"
+        android:background="@drawable/sf_bg_pill_outline"
+        android:gravity="center"
+        android:text="Alter order"
+        android:textColor="@color/sf_text_secondary"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/tvItem"/>
+</androidx.constraintlayout.widget.ConstraintLayout>
+

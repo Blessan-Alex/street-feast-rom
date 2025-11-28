@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp"
+    android:layout_height="74dp"
+    android:layout_marginBottom="12dp"
+    app:cardCornerRadius="@dimen/sf_radius_xl"
+    app:cardUseCompatPadding="true"
+    app:cardElevation="4dp"
+    app:cardBackgroundColor="@color/sf_surface_soft2">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingStart="14dp"
+        android:paddingEnd="12dp">
+
+        <!-- small red/green dots -->
+        <View
+            android:id="@+id/dotGreen"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:background="@drawable/sf_dot_green"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginTop="10dp"/>
+
+        <View
+            android:id="@+id/dotRed"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/sf_dot_red"
+            app:layout_constraintTop_toTopOf="@id/dotGreen"
+            app:layout_constraintStart_toEndOf="@id/dotGreen"/>
+
+        <TextView
+            android:id="@+id/tvName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Ramen"
+            android:textColor="@color/sf_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            android:layout_marginTop="20dp"/>
+
+        <TextView
+            android:id="@+id/tvQty"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="qnty: Small,mid,large"
+            android:textColor="@color/sf_text_secondary"
+            android:textSize="13sp"
+            app:layout_constraintTop_toBottomOf="@id/tvName"
+            app:layout_constraintStart_toStartOf="@id/tvName"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            android:layout_marginTop="2dp"/>
+
+        <FrameLayout
+            android:id="@+id/btnAdd"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/sf_bg_circle_dark"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_plus_20" />
+        </FrameLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>
+

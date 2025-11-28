@@ -27,6 +27,32 @@
     <dimen name="card_elevation">4dp</dimen>
     <dimen name="card_radius">12dp</dimen>
     <dimen name="card_padding">16dp</dimen>
+    
+    <!-- Street Feast Design System Dimensions -->
+    <!-- Padding -->
+    <dimen name="sf_pad_screen_h">20dp</dimen>
+    <dimen name="sf_pad_section_top">18dp</dimen>
+    
+    <!-- Radius -->
+    <dimen name="sf_radius_xl">22dp</dimen>
+    <dimen name="sf_radius_l">18dp</dimen>
+    <dimen name="sf_radius_m">14dp</dimen>
+    
+    <!-- Elevations -->
+    <dimen name="sf_elev_soft">6dp</dimen>
+    <dimen name="sf_elev_nav">8dp</dimen>
+    
+    <!-- Heights -->
+    <dimen name="sf_appbar_h">116dp</dimen>
+    <dimen name="sf_bottom_nav_h">96dp</dimen>
+    <dimen name="sf_selected_nav_h">64dp</dimen>
+    <dimen name="sf_btn_h_big">74dp</dimen>
+    <dimen name="sf_btn_h_mid">66dp</dimen>
+    <dimen name="sf_search_h">54dp</dimen>
+    
+    <!-- Stepper -->
+    <dimen name="sf_step_dot">12dp</dimen>
+    <dimen name="sf_step_line_h">2dp</dimen>
 </resources>
 
 

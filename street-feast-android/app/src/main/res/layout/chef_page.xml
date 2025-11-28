@@ -58,6 +58,20 @@
             android:textColor="#9AA0B5"
             android:textSize="12sp" />
 
+        <FrameLayout
+            android:id="@+id/btnLogout"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/sf_bg_circle_light">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/logout_24px" />
+        </FrameLayout>
+
     </LinearLayout>
 
     <TextView

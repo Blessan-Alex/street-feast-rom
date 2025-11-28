@@ -205,6 +205,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRoleBasedUI() {
+        // Observe changes to user state
         authViewModel.currentUser.observe(this) { user ->
             if (user != null) {
                 android.util.Log.d("MainActivity", "User logged in: ${user.id}, logging into OneSignal")
@@ -212,29 +213,54 @@ class MainActivity : AppCompatActivity() {
                 
                 // After login, wait for subscription ID with retry logic
                 // Subscription ID may not be immediately available after login
-                    lifecycleScope.launch {
+                lifecycleScope.launch {
                     waitForSubscriptionAfterLogin()
                 }
-                when (user.role) {
-                    UserRole.CHEF -> {
-                        binding.bottomNavigation.menu.clear()
-                        binding.bottomNavigation.inflateMenu(R.menu.chef_nav_menu)
-                        navigateToFragment(R.id.chefPageFragment)
-                    }
-                    UserRole.WAITER -> {
-                        binding.bottomNavigation.menu.clear()
-                        binding.bottomNavigation.inflateMenu(R.menu.waiter_nav_menu)
-                        navigateToFragment(R.id.waiterReadyFragment)
-                    }
-                    UserRole.ADMIN -> {
-                        binding.bottomNavigation.menu.clear()
-                        binding.bottomNavigation.inflateMenu(R.menu.bottom_nav_menu)
-                        navigateToFragment(R.id.chefPageFragment)
-                    }
-                }
+                
+                // Navigate based on role
+                navigateToRoleBasedFragment(user.role)
             } else {
                 android.util.Log.d("MainActivity", "User logged out, logging out of OneSignal")
                 OneSignal.logout()
+                
+                // Navigate to LoginActivity when user logs out
+                val intent = Intent(this@MainActivity, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+        }
+        
+        // Check initial state - if no user after a brief delay, navigate to login
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(500) // Wait for checkAuthState to complete
+            val currentUser = authViewModel.currentUser.value
+            if (currentUser == null) {
+                // No user logged in, navigate to login
+                val intent = Intent(this@MainActivity, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+        }
+    }
+    
+    private fun navigateToRoleBasedFragment(role: UserRole) {
+        when (role) {
+            UserRole.CHEF -> {
+                binding.bottomNavigation.menu.clear()
+                binding.bottomNavigation.inflateMenu(R.menu.chef_nav_menu)
+                navigateToFragment(R.id.chefPageFragment)
+            }
+            UserRole.WAITER -> {
+                binding.bottomNavigation.menu.clear()
+                binding.bottomNavigation.inflateMenu(R.menu.waiter_nav_menu)
+                navigateToFragment(R.id.orderTypeFragment)
+            }
+            UserRole.ADMIN -> {
+                binding.bottomNavigation.menu.clear()
+                binding.bottomNavigation.inflateMenu(R.menu.bottom_nav_menu)
+                navigateToFragment(R.id.chefPageFragment)
             }
         }
     }
@@ -311,7 +337,19 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.nav_ready -> {
-                    navController.navigate(R.id.waiterReadyFragment)
+                    navController.navigate(R.id.readyOrderFragment)
+                    true
+                }
+                R.id.nav_new_order -> {
+                    navController.navigate(R.id.orderTypeFragment)
+                    true
+                }
+                R.id.nav_ready_order -> {
+                    navController.navigate(R.id.readyOrderFragment)
+                    true
+                }
+                R.id.nav_given_order -> {
+                    navController.navigate(R.id.givenOrderFragment)
                     true
                 }
                 else -> false
@@ -333,6 +371,40 @@ class MainActivity : AppCompatActivity() {
                     binding.bottomNavigation.visibility = View.GONE
                     binding.bottomNavigation.selectedItemId = R.id.nav_new_orders
                 }
+                R.id.orderTypeFragment, R.id.orderWhereFragment, R.id.orderItemFragment, R.id.orderCategoryItemsFragment, R.id.waiterReadyFragment, R.id.previewOrderFragment, R.id.previewOrderHeaderFragment, R.id.givenOrderFragment, R.id.readyOrderFragment -> {
+                    // Hide old UI elements - waiter fragments have their own UI
+                    binding.toolbar.visibility = View.GONE
+                    binding.bottomNavigation.visibility = View.GONE
+                    when (destination.id) {
+                        R.id.orderTypeFragment -> {
+                            // New Order tab is selected (handled by fragment's bottom nav)
+                        }
+                        R.id.orderWhereFragment -> {
+                            // Table selection screen (handled by fragment's bottom nav)
+                        }
+                        R.id.orderItemFragment -> {
+                            // Item selection screen (handled by fragment's bottom nav)
+                        }
+                        R.id.orderCategoryItemsFragment -> {
+                            // Category items screen (handled by fragment's bottom nav)
+                        }
+                        R.id.waiterReadyFragment -> {
+                            // Ready Order tab is selected (handled by fragment's bottom nav)
+                        }
+                        R.id.previewOrderFragment -> {
+                            // Preview order screen (compact) - handled by fragment's bottom nav
+                        }
+                        R.id.previewOrderHeaderFragment -> {
+                            // Preview order screen (with header) - handled by fragment's bottom nav
+                        }
+                        R.id.givenOrderFragment -> {
+                            // Given Order tab is selected (handled by fragment's bottom nav)
+                        }
+                        R.id.readyOrderFragment -> {
+                            // Ready Order tab is selected (handled by fragment's bottom nav)
+                        }
+                    }
+                }
                 else -> {
                     // Show old UI elements for other fragments
                     binding.toolbar.visibility = View.VISIBLE
@@ -340,9 +412,6 @@ class MainActivity : AppCompatActivity() {
                     when (destination.id) {
                         R.id.chefPreparingFragment -> {
                             binding.bottomNavigation.selectedItemId = R.id.nav_preparing
-                        }
-                        R.id.waiterReadyFragment -> {
-                            binding.bottomNavigation.selectedItemId = R.id.nav_ready
                         }
                     }
                 }

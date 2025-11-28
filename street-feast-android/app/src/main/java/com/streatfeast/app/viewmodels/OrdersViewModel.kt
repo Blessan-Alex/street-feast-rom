@@ -46,6 +46,9 @@ class OrdersViewModel(
     val readyOrders: LiveData<List<Order>> =
         repository.observeOrders(OrderStatus.PREPARED).asLiveData()
 
+    val deliveredOrders: LiveData<List<Order>> =
+        repository.observeOrders(OrderStatus.DELIVERED).asLiveData()
+
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
 

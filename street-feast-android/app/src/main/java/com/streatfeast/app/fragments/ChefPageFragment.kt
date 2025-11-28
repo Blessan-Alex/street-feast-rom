@@ -10,6 +10,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +24,7 @@ import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.utils.DateTimeUtils
+import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
 import java.text.SimpleDateFormat
@@ -50,6 +52,7 @@ class ChefPageFragment : Fragment() {
     private var _binding: ChefPageBinding? = null
     private val binding get() = _binding!!
     
+    private val authViewModel: AuthViewModel by activityViewModels()
     private val viewModel: OrdersViewModel by viewModels {
         OrdersViewModelFactory(
             ServiceLocator.provideOrderRepository(requireContext().applicationContext)
@@ -111,6 +114,7 @@ class ChefPageFragment : Fragment() {
         
         setupCloseButton()
         setupDate()
+        setupLogoutButton()
         setupTabs()
         setupViewPager()
         setupOrderCard()
@@ -129,6 +133,33 @@ class ChefPageFragment : Fragment() {
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
+    }
+    
+    private fun setupLogoutButton() {
+        binding.btnLogout.setOnClickListener {
+            lifecycleScope.launch {
+                try {
+                    // FIRST: Logout from auth (this needs the SupabaseClient)
+                    authViewModel.logout()
+                    
+                    // Wait a bit to ensure logout completes
+                    kotlinx.coroutines.delay(100)
+                    
+                    // THEN: Stop realtime and clear ServiceLocator
+                    ServiceLocator.provideOrderRepository(requireContext().applicationContext).stopRealtime()
+                    ServiceLocator.clear()
+                } catch (e: Exception) {
+                    android.util.Log.e("ChefPageFragment", "Error during logout", e)
+                    // Even if there's an error, try to clear
+                    try {
+                        ServiceLocator.clear()
+                    } catch (clearError: Exception) {
+                        android.util.Log.e("ChefPageFragment", "Error clearing ServiceLocator", clearError)
+                    }
+                }
+            }
+            // MainActivity will handle navigation when currentUser becomes null
+        }
     }
     
     private fun setupTabs() {

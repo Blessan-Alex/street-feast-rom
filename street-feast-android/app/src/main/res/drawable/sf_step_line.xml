@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <size android:height="@dimen/sf_step_line_h"/>
+    <solid android:color="@color/sf_divider"/>
+    <corners android:radius="999dp"/>
+</shape>
+

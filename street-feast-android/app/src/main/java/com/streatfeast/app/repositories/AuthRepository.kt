@@ -9,6 +9,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -87,6 +88,10 @@ class AuthRepository(
                 Log.w("AuthRepository", "fetchUser: No user found in database for ID: $userId")
                 null
             }
+        } catch (e: CancellationException) {
+            // This is expected when ViewModel is cleared during activity destruction
+            // Don't log as error, just rethrow to allow proper cancellation
+            throw e
         } catch (e: Exception) {
             Log.e("AuthRepository", "fetchUser: Error querying users table", e)
             Log.e("AuthRepository", "fetchUser: Error message: ${e.message}")

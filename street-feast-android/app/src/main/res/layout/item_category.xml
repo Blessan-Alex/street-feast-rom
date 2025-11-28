@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp"
+    android:layout_height="66dp"
+    app:cardCornerRadius="@dimen/sf_radius_l"
+    app:cardUseCompatPadding="true"
+    app:cardElevation="4dp"
+    app:cardBackgroundColor="@color/sf_surface_soft2">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingStart="14dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/tvCat"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Chinese"
+            android:textColor="@color/sf_text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/ivArrow"
+            android:layout_marginTop="12dp"/>
+
+        <TextView
+            android:id="@+id/tvItems"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Items 10"
+            android:textColor="@color/sf_text_secondary"
+            android:textSize="13sp"
+            app:layout_constraintStart_toStartOf="@id/tvCat"
+            app:layout_constraintTop_toBottomOf="@id/tvCat"
+            app:layout_constraintEnd_toStartOf="@id/ivArrow"
+            android:layout_marginTop="2dp"/>
+
+        <ImageView
+            android:id="@+id/ivArrow"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_chev_right_20"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>
+

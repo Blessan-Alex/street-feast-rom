@@ -28,4 +28,43 @@
     <!-- Legacy colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Street Feast Design System Colors -->
+    <!-- Core -->
+    <color name="sf_bg">#FFFFFF</color>
+    <color name="sf_appbar_bg">#F7F8FB</color>
+    
+    <!-- Primary (sampled from screenshot blue) -->
+    <color name="sf_primary">#4186F6</color>
+    
+    <!-- Greys -->
+    <color name="sf_text_primary">#1F2937</color>
+    <color name="sf_text_secondary">#6B7280</color>
+    <color name="sf_text_muted">#9CA3AF</color>
+    
+    <!-- Surfaces -->
+    <color name="sf_surface_soft">#E8E8EC</color>
+    <color name="sf_surface_soft2">#EFF0F2</color>
+    <color name="sf_chip_bg">#F1F3F4</color>
+    <color name="sf_divider">#D1D5DB</color>
+    
+    <!-- Dots & icons -->
+    <color name="sf_dot_active">#111827</color>
+    <color name="sf_dot_inactive">#BFC4CC</color>
+    <color name="sf_black">#202124</color>
+    <color name="sf_white">#FFFFFF</color>
+    
+    <!-- Indicators -->
+    <color name="sf_green">#22C55E</color>
+    <color name="sf_red">#EF4444</color>
+    
+    <!-- Additional -->
+    <color name="sf_card_bg">#FBFBFB</color>
+    <color name="sf_disabled_circle">#9A9A9A</color>
+    <color name="sf_badge_red">#D54040</color>
+    <color name="sf_scrim">#80000000</color>
+    <color name="sf_success">#48B878</color>
+    <color name="sf_border">#E0E3E7</color>
+    <color name="sf_light_blue">#E7F0FF</color>
+    <color name="sf_card_soft">#F3F4F6</color>
 </resources>

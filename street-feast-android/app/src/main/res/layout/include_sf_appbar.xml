@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/sf_appbar_h"
+    android:background="@color/sf_appbar_bg"
+    android:paddingStart="@dimen/sf_pad_screen_h"
+    android:paddingEnd="@dimen/sf_pad_screen_h"
+    android:paddingTop="18dp">
+
+    <FrameLayout
+        android:id="@+id/btnClose"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:background="@drawable/sf_bg_circle_light"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_close_20" />
+    </FrameLayout>
+
+    <ImageView
+        android:id="@+id/ivBrand"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="10dp"
+        android:src="@drawable/ic_cutlery"
+        android:tint="@color/sf_text_primary"
+        app:layout_constraintStart_toEndOf="@id/btnClose"
+        app:layout_constraintTop_toTopOf="@id/btnClose"
+        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+
+    <TextView
+        android:id="@+id/tvBrand"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="Street Feast"
+        android:textColor="@color/sf_text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toEndOf="@id/ivBrand"
+        app:layout_constraintEnd_toStartOf="@id/tvDate"
+        app:layout_constraintTop_toTopOf="@id/btnClose"
+        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+
+    <TextView
+        android:id="@+id/tvDate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mon, Nov 28"
+        android:textColor="@color/sf_text_muted"
+        android:textSize="14sp"
+        app:layout_constraintStart_toEndOf="@id/tvBrand"
+        app:layout_constraintEnd_toStartOf="@id/btnLogout"
+        app:layout_constraintTop_toTopOf="@id/btnClose"
+        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+
+    <FrameLayout
+        android:id="@+id/btnLogout"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:background="@drawable/sf_bg_circle_light"
+        android:layout_marginEnd="10dp"
+        app:layout_constraintStart_toEndOf="@id/tvDate"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/logout_24px" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Waiter Page"
+        android:textColor="@color/sf_text_primary"
+        android:textSize="34sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnClose" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+

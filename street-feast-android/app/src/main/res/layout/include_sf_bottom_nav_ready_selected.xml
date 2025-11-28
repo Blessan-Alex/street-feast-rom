@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/bottomNav"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/sf_bottom_nav_h"
+    app:cardElevation="@dimen/sf_elev_nav"
+    app:cardUseCompatPadding="true"
+    app:cardCornerRadius="22dp"
+    app:cardBackgroundColor="@color/sf_bg">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingStart="@dimen/sf_pad_screen_h"
+        android:paddingEnd="@dimen/sf_pad_screen_h"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <!-- New Order (unselected) -->
+        <LinearLayout
+            android:id="@+id/navNewOrder"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/navReadyOrder"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintHorizontal_weight="1">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/add_circle_24px"
+                android:tint="@color/sf_text_muted" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="New Order"
+                android:textSize="13sp"
+                android:textColor="@color/sf_text_muted"
+                android:textStyle="bold"/>
+        </LinearLayout>
+
+        <!-- Ready Order (selected) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/navReadyOrder"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/sf_selected_nav_h"
+            app:cardBackgroundColor="@color/sf_primary"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="0dp"
+            app:layout_constraintStart_toEndOf="@id/navNewOrder"
+            app:layout_constraintEnd_toStartOf="@id/navGivenOrder"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintHorizontal_weight="1.2">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/soup_kitchen_24px"
+                    android:tint="@color/sf_white" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Ready Order"
+                    android:textSize="13sp"
+                    android:textColor="@color/sf_white"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Given Order (unselected) -->
+        <LinearLayout
+            android:id="@+id/navGivenOrder"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            app:layout_constraintStart_toEndOf="@id/navReadyOrder"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintHorizontal_weight="1">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/check_circle_24px"
+                android:tint="@color/sf_text_muted" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Given Order"
+                android:textColor="@color/sf_text_muted"
+                android:textSize="13sp"
+                android:textStyle="bold"/>
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>
+

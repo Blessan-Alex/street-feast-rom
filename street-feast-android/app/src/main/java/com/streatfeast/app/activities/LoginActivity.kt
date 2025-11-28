@@ -17,6 +17,8 @@ class LoginActivity : AppCompatActivity() {
         AuthViewModelFactory(ServiceLocator.provideAuthRepository(applicationContext))
     }
     
+    private var hasNavigated = false  // Flag to prevent multiple navigations
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
@@ -38,7 +40,8 @@ class LoginActivity : AppCompatActivity() {
         // Observe authentication state
         viewModel.isAuthenticated.observe(this) { isAuthenticated ->
             println("DEBUG: LoginActivity - isAuthenticated changed to: $isAuthenticated")
-            if (isAuthenticated) {
+            if (isAuthenticated && !hasNavigated) {
+                hasNavigated = true  // Set flag to prevent multiple navigations
                 println("DEBUG: LoginActivity - Navigating to MainActivity")
                 // Login successful, navigate to MainActivity
                 startActivity(Intent(this, MainActivity::class.java))
