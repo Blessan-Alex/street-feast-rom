@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph_waiter"
+    app:startDestination="@id/orderTypeFragment">
+
+    <fragment
+        android:id="@+id/orderTypeFragment"
+        android:name="com.streatfeast.app.fragments.OrderTypeFragment"
+        android:label="New Order" />
+
+    <fragment
+        android:id="@+id/orderWhereFragment"
+        android:name="com.streatfeast.app.fragments.OrderWhereFragment"
+        android:label="Select Table">
+        <argument
+            android:name="orderType"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/orderItemFragment"
+        android:name="com.streatfeast.app.fragments.OrderItemFragment"
+        android:label="Select Items">
+        <argument
+            android:name="orderType"
+            app:argType="string" />
+        <argument
+            android:name="tableNumber"
+            app:argType="integer" />
+        <argument
+            android:name="showHeader"
+            app:argType="boolean"
+            android:defaultValue="false" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/orderCategoryItemsFragment"
+        android:name="com.streatfeast.app.fragments.OrderCategoryItemsFragment"
+        android:label="Category Items">
+        <argument
+            android:name="categoryName"
+            app:argType="string" />
+        <argument
+            android:name="tableNumber"
+            app:argType="integer" />
+        <argument
+            android:name="orderType"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/previewOrderFragment"
+        android:name="com.streatfeast.app.fragments.PreviewOrderFragment"
+        android:label="Preview Order">
+        <argument
+            android:name="tableNumber"
+            app:argType="integer" />
+        <argument
+            android:name="orderType"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/previewOrderHeaderFragment"
+        android:name="com.streatfeast.app.fragments.PreviewOrderHeaderFragment"
+        android:label="Preview Order">
+        <argument
+            android:name="tableNumber"
+            app:argType="integer" />
+        <argument
+            android:name="orderType"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/givenOrderFragment"
+        android:name="com.streatfeast.app.fragments.GivenOrderFragment"
+        android:label="Given Orders" />
+
+    <fragment
+        android:id="@+id/readyOrderFragment"
+        android:name="com.streatfeast.app.fragments.ReadyOrderFragment"
+        android:label="Ready Orders" />
+
+    <fragment
+        android:id="@+id/waiterReadyFragment"
+        android:name="com.streatfeast.app.fragments.WaiterReadyFragment"
+        android:label="@string/nav_ready" />
+
+</navigation>
+

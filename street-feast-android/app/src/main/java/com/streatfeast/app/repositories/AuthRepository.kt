@@ -103,7 +103,7 @@ class AuthRepository(
         id = id,
         email = email ?: "",
         displayName = displayName ?: email ?: "",
-        role = UserRole.fromString(role ?: "chef"),
+        role = UserRole.fromString(role?.trim()?.lowercase() ?: "chef"),
         deviceTokens = emptyList()
     )
 }

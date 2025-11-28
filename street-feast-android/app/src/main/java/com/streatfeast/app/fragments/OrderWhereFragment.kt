@@ -77,7 +77,7 @@ class OrderWhereFragment : Fragment() {
     
     private fun getOrderTypeDisplayText(type: OrderType): String {
         return when (type) {
-            OrderType.DINE_IN -> "Din in"
+            OrderType.DINE_IN -> "Dine in"
             OrderType.PARCEL -> "Parcel"
             OrderType.DELIVERY -> "Eat away"
         }

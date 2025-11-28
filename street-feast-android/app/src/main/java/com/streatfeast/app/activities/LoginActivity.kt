@@ -42,9 +42,11 @@ class LoginActivity : AppCompatActivity() {
             println("DEBUG: LoginActivity - isAuthenticated changed to: $isAuthenticated")
             if (isAuthenticated && !hasNavigated) {
                 hasNavigated = true  // Set flag to prevent multiple navigations
-                println("DEBUG: LoginActivity - Navigating to MainActivity")
-                // Login successful, navigate to MainActivity
-                startActivity(Intent(this, MainActivity::class.java))
+                println("DEBUG: LoginActivity - Navigating to AuthGateActivity")
+                // Login successful, navigate to AuthGateActivity (single router)
+                startActivity(Intent(this, AuthGateActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                })
                 finish()
             }
         }

@@ -138,7 +138,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Din in"
+        android:text="Dine in"
         android:textColor="@color/sf_text_primary"
         android:textSize="12sp"
         android:visibility="gone"

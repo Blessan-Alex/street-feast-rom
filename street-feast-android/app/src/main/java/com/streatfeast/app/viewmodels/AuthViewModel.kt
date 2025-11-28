@@ -26,11 +26,19 @@ class AuthViewModel(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
 
+    private var userSetDirectly = false  // Flag to prevent checkAuthState from overwriting
+
     init {
         viewModelScope.launch { checkAuthState() }
     }
 
     private suspend fun checkAuthState() {
+        // Don't overwrite if user was set directly
+        if (userSetDirectly) {
+            android.util.Log.d("AuthViewModel", "Skipping checkAuthState - user was set directly")
+            return
+        }
+        
         val loggedIn = repository.isLoggedIn()
         _isAuthenticated.value = loggedIn
         if (loggedIn) {
@@ -79,6 +87,14 @@ class AuthViewModel(
 
     fun clearError() {
         _error.value = null
+    }
+
+    fun setUserDirectly(user: User) {
+        userSetDirectly = true  // Set flag to prevent checkAuthState from overwriting
+        _currentUser.value = user
+        _isAuthenticated.value = true
+        _isLoading.value = false
+        android.util.Log.d("AuthViewModel", "User set directly: ${user.id}, role: ${user.role}")
     }
 }
 

@@ -36,10 +36,10 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private suspend fun checkAuthState() {
-        val repository = ServiceLocator.provideAuthRepository(applicationContext)
-        val isLoggedIn = repository.isLoggedIn()
-        val destination = if (isLoggedIn) MainActivity::class.java else LoginActivity::class.java
-        startActivity(Intent(this, destination))
+        // Route to AuthGateActivity (single router) instead of doing routing here
+        startActivity(Intent(this, AuthGateActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        })
         finish()
     }
 }

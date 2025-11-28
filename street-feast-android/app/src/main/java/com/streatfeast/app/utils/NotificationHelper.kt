@@ -9,6 +9,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.streatfeast.app.R
 import com.streatfeast.app.activities.MainActivity
+import com.streatfeast.app.activities.ChefPageActivity
+import com.streatfeast.app.activities.WaiterActivity
+import com.streatfeast.app.models.UserRole
 
 object NotificationHelper {
     
@@ -48,8 +51,23 @@ object NotificationHelper {
      * Show notification for new order
      */
     fun showNewOrderNotification(context: Context, orderNumber: Int) {
-        val intent = Intent(context, MainActivity::class.java).apply {
+        showNewOrderNotification(context, orderNumber, null)
+    }
+    
+    /**
+     * Show notification for new order with role-based routing
+     */
+    fun showNewOrderNotification(context: Context, orderNumber: Int, role: UserRole?) {
+        // Determine target activity based on role
+        val targetActivity = when (role) {
+            UserRole.CHEF, UserRole.ADMIN -> ChefPageActivity::class.java
+            UserRole.WAITER -> WaiterActivity::class.java
+            null -> MainActivity::class.java // Fallback to MainActivity if role unknown
+        }
+        
+        val intent = Intent(context, targetActivity).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            action = "OPEN_ORDER"
         }
         
         val pendingIntent = PendingIntent.getActivity(
@@ -92,8 +110,24 @@ object NotificationHelper {
      * Show notification for prepared order
      */
     fun showPreparedNotification(context: Context, orderNumber: Int) {
-        val intent = Intent(context, MainActivity::class.java).apply {
+        showPreparedNotification(context, orderNumber, null)
+    }
+    
+    /**
+     * Show notification for prepared order with role-based routing
+     */
+    fun showPreparedNotification(context: Context, orderNumber: Int, role: UserRole?) {
+        // Prepared orders are for waiters, but route to appropriate activity based on role
+        val targetActivity = when (role) {
+            UserRole.WAITER -> WaiterActivity::class.java
+            UserRole.CHEF, UserRole.ADMIN -> ChefPageActivity::class.java
+            null -> MainActivity::class.java // Fallback to MainActivity if role unknown
+        }
+        
+        val intent = Intent(context, targetActivity).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            action = "OPEN_ORDER"
+            putExtra("status", "Prepared")
         }
         
         val pendingIntent = PendingIntent.getActivity(

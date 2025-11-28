@@ -104,8 +104,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t1"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
@@ -123,8 +123,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t2"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
@@ -141,8 +141,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t3"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
@@ -160,8 +160,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t4"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_primary">
@@ -179,8 +179,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t5"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
@@ -197,8 +197,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t6"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
@@ -215,8 +215,8 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/t7"
         android:layout_width="0dp"
-        android:layout_height="78dp"
-        app:cardCornerRadius="@dimen/sf_radius_xl"
+        android:layout_height="100dp"
+        app:cardCornerRadius="@dimen/sf_radius_m"
         app:cardUseCompatPadding="true"
         app:cardElevation="@dimen/sf_elev_soft"
         app:cardBackgroundColor="@color/sf_surface_soft2">
