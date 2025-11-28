@@ -130,9 +130,9 @@
                 android:paddingEnd="16dp">
 
                 <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_search_20" />
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/search_24" />
 
                 <EditText
                     android:id="@+id/etSearch"
@@ -179,7 +179,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toStartOf="@id/gMid"
                     app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginEnd="6dp" />
+                    android:layout_marginEnd="4dp" />
 
                 <include
                     android:id="@+id/mb2"
@@ -190,7 +190,7 @@
                     app:layout_constraintStart_toEndOf="@id/gMid"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginStart="6dp" />
+                    android:layout_marginStart="4dp" />
 
                 <include
                     android:id="@+id/mb3"
@@ -201,8 +201,8 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toStartOf="@id/gMid"
                     app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginEnd="6dp"
-                    android:layout_marginTop="12dp" />
+                    android:layout_marginEnd="4dp"
+                    android:layout_marginTop="8dp" />
 
                 <include
                     android:id="@+id/mb4"
@@ -213,8 +213,8 @@
                     app:layout_constraintStart_toEndOf="@id/gMid"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginStart="6dp"
-                    android:layout_marginTop="12dp" />
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="8dp" />
 
             </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -239,8 +239,8 @@
                     android:layout_height="wrap_content"
                     app:flow_wrapMode="chain"
                     app:flow_horizontalStyle="packed"
-                    app:flow_verticalGap="14dp"
-                    app:flow_horizontalGap="14dp"
+                    app:flow_verticalGap="8dp"
+                    app:flow_horizontalGap="8dp"
                     app:flow_maxElementsWrap="3"
                     app:constraint_referenced_ids="c1,c2,c3,c4,c5,c6,c7,c8,c9"
                     app:layout_constraintTop_toTopOf="parent"

@@ -43,11 +43,11 @@ class PreviewOrderAdapter(
         fun bind(item: OrderItem) {
             tvName.text = item.nameSnapshot
             
-            // Display amount/size
+            // Display amount/size - just show capitalized size (Small, Medium, Large)
             val amountText = if (item.size != null) {
-                "amount : ${item.size.lowercase()}"
+                item.size.replaceFirstChar { it.uppercase() }
             } else {
-                "amount : standard"
+                "Standard"
             }
             tvAmount.text = amountText
             

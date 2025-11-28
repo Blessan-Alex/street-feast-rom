@@ -5,6 +5,58 @@
     android:layout_height="match_parent"
     android:background="@color/sf_bg">
 
+    <!-- Appbar (toggleable) -->
+    <include
+        android:id="@+id/appbar"
+        layout="@layout/include_sf_appbar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/tvCreateOrder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/sf_pad_screen_h"
+        android:layout_marginTop="14dp"
+        android:text="Create order"
+        android:textColor="@color/sf_text_primary"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/appbar"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <include
+        android:id="@+id/stepper"
+        layout="@layout/include_sf_stepper"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/sf_pad_screen_h"
+        android:layout_marginEnd="@dimen/sf_pad_screen_h"
+        android:layout_marginTop="10dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/tvCreateOrder"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Small up chevron (for breadcrumbs view) -->
+    <ImageView
+        android:id="@+id/ivUp"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginTop="6dp"
+        android:src="@drawable/ic_chev_down_20"
+        android:rotation="180"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/stepper"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Table handle (for normal view) -->
     <include
         android:id="@+id/tableHandle"
         layout="@layout/include_sf_table_handle"
@@ -32,9 +84,9 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:src="@drawable/ic_search_20" />
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/search_24" />
 
         <EditText
             android:id="@+id/etSearch"
@@ -69,8 +121,8 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
         android:clipToPadding="false"
         app:layout_constraintTop_toBottomOf="@id/tvCategory"
         app:layout_constraintBottom_toTopOf="@id/previewBar"

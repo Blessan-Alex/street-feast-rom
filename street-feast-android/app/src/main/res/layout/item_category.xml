@@ -2,7 +2,7 @@
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="0dp"
-    android:layout_height="66dp"
+    android:layout_height="80dp"
     app:cardCornerRadius="@dimen/sf_radius_l"
     app:cardUseCompatPadding="true"
     app:cardElevation="4dp"
@@ -11,8 +11,10 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingStart="14dp"
-        android:paddingEnd="12dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
         <TextView
             android:id="@+id/tvCat"
@@ -20,12 +22,11 @@
             android:layout_height="wrap_content"
             android:text="Chinese"
             android:textColor="@color/sf_text_primary"
-            android:textSize="16sp"
+            android:textSize="17sp"
             android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/ivArrow"
-            android:layout_marginTop="12dp"/>
+            app:layout_constraintEnd_toStartOf="@id/ivArrow"/>
 
         <TextView
             android:id="@+id/tvItems"
@@ -33,11 +34,11 @@
             android:layout_height="wrap_content"
             android:text="Items 10"
             android:textColor="@color/sf_text_secondary"
-            android:textSize="13sp"
+            android:textSize="14sp"
             app:layout_constraintStart_toStartOf="@id/tvCat"
             app:layout_constraintTop_toBottomOf="@id/tvCat"
             app:layout_constraintEnd_toStartOf="@id/ivArrow"
-            android:layout_marginTop="2dp"/>
+            android:layout_marginTop="4dp"/>
 
         <ImageView
             android:id="@+id/ivArrow"

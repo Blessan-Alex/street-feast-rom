@@ -4,8 +4,11 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
@@ -27,6 +30,7 @@ class OrderCategoryItemsFragment : Fragment() {
     private var categoryName: String = "Chinese"
     private var tableNumber: Int = 4
     private var orderType: OrderType = OrderType.DINE_IN
+    private var showHeader: Boolean = false
     
     private lateinit var adapter: MenuItemAdapter
     private val allItems = mutableListOf<MenuItem>()
@@ -55,9 +59,13 @@ class OrderCategoryItemsFragment : Fragment() {
                     OrderType.DINE_IN
                 }
             }
+            showHeader = args.getBoolean("showHeader", false)
         }
         
+        setupScreenState()
         setupTableHandle()
+        setupStepper()
+        setupUpArrow()
         setupSearch()
         setupRecyclerView()
         setupPreviewBar()
@@ -65,16 +73,126 @@ class OrderCategoryItemsFragment : Fragment() {
         loadMenuItems()
     }
     
+    private fun setupScreenState() {
+        val constraintSet = ConstraintSet()
+        constraintSet.clone(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
+        
+        if (showHeader) {
+            // Show breadcrumbs, hide table handle
+            binding.appbar.root.visibility = View.VISIBLE
+            binding.tvCreateOrder.visibility = View.VISIBLE
+            binding.stepper.root.visibility = View.VISIBLE
+            binding.ivUp.visibility = View.VISIBLE
+            binding.tableHandle.root.visibility = View.GONE
+            
+            // Update searchWrap constraint to be below ivUp
+            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
+            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.ivUp, ConstraintSet.BOTTOM, 8)
+        } else {
+            // Hide breadcrumbs, show table handle
+            binding.appbar.root.visibility = View.GONE
+            binding.tvCreateOrder.visibility = View.GONE
+            binding.stepper.root.visibility = View.GONE
+            binding.ivUp.visibility = View.GONE
+            binding.tableHandle.root.visibility = View.VISIBLE
+            
+            // Update searchWrap constraint to be below tableHandle
+            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
+            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.tableHandle, ConstraintSet.BOTTOM, 8)
+        }
+        
+        constraintSet.applyTo(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
+    }
+    
     private fun setupTableHandle() {
         val tableHandleView = binding.tableHandle.root
         val tvTable = tableHandleView.findViewById<android.widget.TextView>(R.id.tvTable)
         tvTable?.text = "Table $tableNumber"
         
-        // Handle down chevron click - navigate back
+        // Handle down chevron click - show breadcrumbs (don't navigate back)
         val ivDown = tableHandleView.findViewById<android.widget.ImageView>(R.id.ivDown)
         ivDown?.setOnClickListener {
-            findNavController().popBackStack()
+            // Show breadcrumbs by navigating to same fragment with showHeader=true
+            val bundle = Bundle().apply {
+                putString("categoryName", categoryName)
+                putInt("tableNumber", tableNumber)
+                putString("orderType", orderType.name)
+                putBoolean("showHeader", true)
+            }
+            findNavController().navigate(R.id.orderCategoryItemsFragment, bundle)
         }
+    }
+    
+    private fun setupStepper() {
+        if (!showHeader) return // Only update stepper when breadcrumbs are shown
+        
+        val stepperView = binding.stepper.root
+        val d1 = stepperView.findViewById<View>(R.id.d1)
+        val d2 = stepperView.findViewById<View>(R.id.d2)
+        val d3 = stepperView.findViewById<View>(R.id.d3)
+        val v1 = stepperView.findViewById<android.widget.TextView>(R.id.v1)
+        val v2 = stepperView.findViewById<android.widget.TextView>(R.id.v2)
+        
+        // Set d1, d2, d3 to active
+        d1?.background = ContextCompat.getDrawable(requireContext(), R.drawable.sf_step_dot_active)
+        d2?.background = ContextCompat.getDrawable(requireContext(), R.drawable.sf_step_dot_active)
+        d3?.background = ContextCompat.getDrawable(requireContext(), R.drawable.sf_step_dot_active)
+        
+        // Set v1 and v2 to visible with values
+        v1?.visibility = View.VISIBLE
+        v1?.text = getOrderTypeDisplayText(orderType)
+        
+        v2?.visibility = View.VISIBLE
+        v2?.text = "No $tableNumber"
+    }
+    
+    private fun getOrderTypeDisplayText(type: OrderType): String {
+        return when (type) {
+            OrderType.DINE_IN -> "Dine in"
+            OrderType.PARCEL -> "Parcel"
+            OrderType.DELIVERY -> "Eat away"
+        }
+    }
+    
+    private fun setupUpArrow() {
+        binding.ivUp.setOnClickListener {
+            collapseBreadcrumbs()
+        }
+        
+        // Add swipe gesture detector for upward arrow
+        binding.ivUp.setOnTouchListener(object : View.OnTouchListener {
+            private var startY = 0f
+            private val swipeThreshold = 100f // Minimum distance for swipe
+            
+            override fun onTouch(v: View, event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startY = event.y
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val deltaY = startY - event.y // Positive if swiped up
+                        if (deltaY > swipeThreshold) {
+                            // Swiped up - collapse breadcrumbs
+                            collapseBreadcrumbs()
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+        })
+    }
+    
+    private fun collapseBreadcrumbs() {
+        // Navigate back to same fragment with showHeader=false
+        val bundle = Bundle().apply {
+            putString("categoryName", categoryName)
+            putInt("tableNumber", tableNumber)
+            putString("orderType", orderType.name)
+            putBoolean("showHeader", false)
+        }
+        findNavController().navigate(R.id.orderCategoryItemsFragment, bundle)
     }
     
     private fun setupSearch() {
@@ -164,11 +282,10 @@ class OrderCategoryItemsFragment : Fragment() {
     }
     
     private fun openCustomizationModal(item: MenuItem) {
-        val bottomSheet = ItemCustomizeBottomSheet.newInstance(item)
-        bottomSheet.onItemAdded = {
-            // Preview bar will update automatically via LiveData
+        val bundle = Bundle().apply {
+            putParcelable("menuItem", item)
         }
-        bottomSheet.show(parentFragmentManager, "ItemCustomize")
+        findNavController().navigate(R.id.itemCustomizeFragment, bundle)
     }
     
     private fun generateMockItems(): List<MenuItem> {

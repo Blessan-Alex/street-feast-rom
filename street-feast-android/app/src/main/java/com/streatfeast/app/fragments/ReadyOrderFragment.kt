@@ -62,12 +62,8 @@ class ReadyOrderFragment : Fragment() {
     }
 
     private fun setupAppbar() {
-        val appbarView = binding.appbar.root
-        val btnClose = appbarView.findViewById<View>(R.id.btnClose)
-        btnClose?.setOnClickListener {
-            // Navigate back or close
-            findNavController().popBackStack()
-        }
+        // btnClose removed from app bar
+        // Users can use system back button instead
     }
 
     private fun setupLogoutButton() {

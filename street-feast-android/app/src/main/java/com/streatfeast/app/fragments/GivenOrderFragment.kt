@@ -86,14 +86,13 @@ class GivenOrderFragment : Fragment() {
                 android.util.Log.d("GivenOrderFragment", "Alter order: ${order.id}, item: ${item.id}")
             },
             onAddItemsClick = { order ->
-                // Navigate to item selection with existing order context
+                // Navigate to preview order with existing order context
                 val bundle = Bundle().apply {
                     putString("existingOrderId", order.id)
                     putString("orderType", order.type.name)
-                    // Extract table number - placeholder for now
                     putInt("tableNumber", extractTableNumber(order))
                 }
-                findNavController().navigate(R.id.orderItemFragment, bundle)
+                findNavController().navigate(R.id.previewOrderFragment, bundle)
             }
         )
 

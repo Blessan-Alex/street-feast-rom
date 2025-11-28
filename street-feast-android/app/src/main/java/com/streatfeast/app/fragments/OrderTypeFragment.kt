@@ -71,14 +71,8 @@ class OrderTypeFragment : Fragment() {
     }
     
     private fun setupAppbar() {
-        binding.appbar.btnClose.setOnClickListener {
-            // Navigate back or clear draft
-            if (!findNavController().popBackStack()) {
-                // If we can't pop, navigate to a default screen
-                // For now, just finish the activity or navigate to ready orders
-                activity?.finish()
-            }
-        }
+        // btnClose removed from app bar
+        // Users can use system back button instead
         
         // Update date if needed (can be done programmatically)
         // For now, date is set in XML

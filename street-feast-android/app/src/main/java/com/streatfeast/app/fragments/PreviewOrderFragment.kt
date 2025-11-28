@@ -13,9 +13,13 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.R
 import com.streatfeast.app.adapters.PreviewOrderAdapter
 import com.streatfeast.app.databinding.FragmentPreviewOrderBinding
+import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModelFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,9 +30,15 @@ class PreviewOrderFragment : Fragment() {
     private val binding get() = _binding!!
     
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
+    private val ordersViewModel: OrdersViewModel by viewModels {
+        OrdersViewModelFactory(
+            ServiceLocator.provideOrderRepository(requireContext().applicationContext)
+        )
+    }
     
     private var tableNumber: Int = 4
     private var orderType: OrderType = OrderType.DINE_IN
+    private var existingOrderId: String? = null
     
     private lateinit var adapter: PreviewOrderAdapter
     
@@ -54,6 +64,12 @@ class PreviewOrderFragment : Fragment() {
                     OrderType.DINE_IN
                 }
             }
+            existingOrderId = args.getString("existingOrderId")
+        }
+        
+        // Load existing order items if editing existing order
+        if (existingOrderId != null) {
+            loadExistingOrderItems()
         }
         
         setupTableHandle()
@@ -77,10 +93,20 @@ class PreviewOrderFragment : Fragment() {
     }
     
     private fun setupAddButton() {
-        // Handle "+" button click - navigate back to item selection
+        // Handle "+" button click - navigate to item selection
         binding.btnAdd.setOnClickListener {
-            // Navigate back to item selection (Screen 3/4 or Screen 5)
-            findNavController().popBackStack(R.id.orderItemFragment, false)
+            if (existingOrderId != null) {
+                // If editing existing order, navigate to item selection with existing order context
+                val bundle = Bundle().apply {
+                    putString("existingOrderId", existingOrderId)
+                    putString("orderType", orderType.name)
+                    putInt("tableNumber", tableNumber)
+                }
+                findNavController().navigate(R.id.orderItemFragment, bundle)
+            } else {
+                // Navigate back to item selection (Screen 3/4 or Screen 5)
+                findNavController().popBackStack(R.id.orderItemFragment, false)
+            }
         }
     }
     
@@ -98,9 +124,8 @@ class PreviewOrderFragment : Fragment() {
                 }
             },
             onAlterClick = { item ->
-                // TODO: Open customization modal with existing item data
-                // For now, just log
-                android.util.Log.d("PreviewOrderFragment", "Alter item: ${item.nameSnapshot}")
+                // Navigate to customization with existing OrderItem
+                openCustomizationForEdit(item)
             },
             onRemoveClick = { item ->
                 draftViewModel.removeDraftItem(item.id)
@@ -160,8 +185,8 @@ class PreviewOrderFragment : Fragment() {
                     }
                 },
                 onAlterClick = { item ->
-                    // TODO: Open customization modal with existing item data
-                    android.util.Log.d("PreviewOrderFragment", "Alter item: ${item.nameSnapshot}")
+                    // Navigate to customization with existing OrderItem
+                    openCustomizationForEdit(item)
                 },
                 onRemoveClick = { item ->
                     draftViewModel.removeDraftItem(item.id)
@@ -171,10 +196,42 @@ class PreviewOrderFragment : Fragment() {
         }
     }
     
+    private fun openCustomizationForEdit(orderItem: OrderItem) {
+        // Create a MenuItem from OrderItem for the customization sheet
+        // You may need to fetch the actual MenuItem from your data source
+        // For now, creating a MenuItem with common sizes
+        val menuItem = MenuItem(
+            id = orderItem.itemId,
+            name = orderItem.nameSnapshot,
+            sizes = listOf("Small", "medium", "Large"),
+            vegFlag = orderItem.vegFlagSnapshot
+        )
+        
+        val bundle = Bundle().apply {
+            putParcelable("menuItem", menuItem)
+            putParcelable("orderItem", orderItem) // Pass the existing OrderItem for edit mode
+        }
+        findNavController().navigate(R.id.itemCustomizeFragment, bundle)
+    }
+    
+    private fun loadExistingOrderItems() {
+        existingOrderId?.let { orderId ->
+            // Observe delivered orders to find the existing order
+            ordersViewModel.deliveredOrders.observe(viewLifecycleOwner) { orders ->
+                val order = orders.find { it.id == orderId }
+                order?.let {
+                    // Load existing items into draft
+                    draftViewModel.loadOrderItems(it.items)
+                }
+            }
+        }
+    }
+    
     private fun navigateToHeaderView() {
         val bundle = Bundle().apply {
             putInt("tableNumber", tableNumber)
             putString("orderType", orderType.name)
+            existingOrderId?.let { putString("existingOrderId", it) }
         }
         findNavController().navigate(R.id.previewOrderHeaderFragment, bundle)
     }
@@ -187,20 +244,26 @@ class PreviewOrderFragment : Fragment() {
             return
         }
         
-        // TODO: Implement order placement via Supabase
-        // Similar to admin placeDraft function
-        // For now, just log and clear draft
-        android.util.Log.d("PreviewOrderFragment", "Placing order with ${items.size} items")
-        
-        // Placeholder: Clear draft after "placing" order
-        // In real implementation, this should happen after successful order creation
-        CoroutineScope(Dispatchers.Main).launch {
-            // TODO: Call Supabase RPC orders_upsert
-            // For now, just clear draft
-            draftViewModel.clearDraft()
-            
-            // Navigate back to start or to Given Order tab
-            findNavController().popBackStack(R.id.orderTypeFragment, false)
+        if (existingOrderId != null) {
+            // Update existing order - add items to it
+            // TODO: Implement addItemsToOrder in OrdersViewModel/Repository
+            // For now, just log and navigate back
+            android.util.Log.d("PreviewOrderFragment", "Adding ${items.size} items to existing order $existingOrderId")
+            CoroutineScope(Dispatchers.Main).launch {
+                // TODO: Call repository to add items to existing order
+                // This should create a new order with parent_order_id pointing to existingOrderId
+                draftViewModel.clearDraft()
+                findNavController().popBackStack(R.id.givenOrderFragment, false)
+            }
+        } else {
+            // Create new order
+            // TODO: Implement order placement via Supabase
+            android.util.Log.d("PreviewOrderFragment", "Placing new order with ${items.size} items")
+            CoroutineScope(Dispatchers.Main).launch {
+                // TODO: Call Supabase RPC orders_upsert
+                draftViewModel.clearDraft()
+                findNavController().popBackStack(R.id.orderTypeFragment, false)
+            }
         }
     }
     

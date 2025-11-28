@@ -30,18 +30,19 @@
             android:id="@+id/tvAmount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="amount : large"
-            android:textColor="@color/sf_text_secondary"
+            android:text="Large"
+            android:textColor="@color/sf_text_primary"
             android:textSize="14sp"
+            android:layout_marginEnd="8dp"
             app:layout_constraintTop_toTopOf="@id/tvName"
-            app:layout_constraintEnd_toEndOf="parent"/>
+            app:layout_constraintEnd_toStartOf="@id/btnRemove"/>
 
         <FrameLayout
             android:id="@+id/btnRemove"
             android:layout_width="38dp"
             android:layout_height="38dp"
-            android:layout_marginTop="-8dp"
-            android:layout_marginEnd="-8dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
             android:background="@drawable/sf_bg_circle_dark"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent">
@@ -76,6 +77,8 @@
             android:textColor="@color/sf_text_secondary"
             android:textSize="14sp"
             android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
             app:layout_constraintTop_toBottomOf="@id/tvTip"
             app:layout_constraintStart_toStartOf="parent"/>
 

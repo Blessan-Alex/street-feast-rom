@@ -4,8 +4,8 @@
     android:id="@+id/previewBar"
     android:layout_width="0dp"
     android:layout_height="66dp"
-    android:layout_marginStart="18dp"
-    android:layout_marginEnd="18dp"
+    android:layout_marginStart="10dp"
+    android:layout_marginEnd="10dp"
     app:cardCornerRadius="28dp"
     app:cardElevation="10dp"
     app:cardBackgroundColor="@color/sf_black"
@@ -20,11 +20,13 @@
         <TextView
             android:id="@+id/tvPreview"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="45dp"
             android:text="Preview order"
             android:textColor="@color/sf_white"
-            android:textSize="16sp"
+            android:textSize="18sp"
             android:textStyle="bold"
+            android:textAlignment="center"
+            android:gravity="center"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -37,8 +39,8 @@
             android:background="@drawable/sf_badge_red"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginEnd="-2dp"
-            android:layout_marginBottom="6dp">
+            android:layout_marginEnd="0dp"
+            android:layout_marginBottom="10dp">
 
             <TextView
                 android:id="@+id/tvBadgeCount"

@@ -59,6 +59,9 @@
         <argument
             android:name="orderType"
             app:argType="string" />
+        <argument
+            android:name="existingOrderId"
+            app:argType="string" />
     </fragment>
 
     <fragment
@@ -70,6 +73,9 @@
             app:argType="integer" />
         <argument
             android:name="orderType"
+            app:argType="string" />
+        <argument
+            android:name="existingOrderId"
             app:argType="string" />
     </fragment>
 
@@ -87,6 +93,18 @@
         android:id="@+id/waiterReadyFragment"
         android:name="com.streatfeast.app.fragments.WaiterReadyFragment"
         android:label="@string/nav_ready" />
+
+    <fragment
+        android:id="@+id/itemCustomizeFragment"
+        android:name="com.streatfeast.app.fragments.ItemCustomizeBottomSheet"
+        android:label="Customize Item">
+        <argument
+            android:name="menuItem"
+            app:argType="com.streatfeast.app.models.MenuItem" />
+        <argument
+            android:name="orderItem"
+            app:argType="com.streatfeast.app.models.OrderItem" />
+    </fragment>
 
 </navigation>
 

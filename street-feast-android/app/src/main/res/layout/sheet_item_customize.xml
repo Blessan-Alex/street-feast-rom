@@ -65,7 +65,7 @@
                 android:id="@+id/l2"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="cheif tip"
+                android:text="Chef Tip"
                 android:textSize="13sp"
                 android:textColor="@color/sf_text_secondary"
                 android:textStyle="bold"
@@ -79,7 +79,7 @@
                 android:id="@+id/l3"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Qnty"
+                android:text="Quantity"
                 android:textSize="13sp"
                 android:textColor="@color/sf_text_secondary"
                 android:textStyle="bold"
@@ -152,11 +152,12 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent">
 
-                <LinearLayout
+                <RadioGroup
+                    android:id="@+id/rgSize"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="16dp"
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -191,7 +192,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="medium"
+                            android:text="Medium"
                             android:textColor="@color/sf_text_primary"
                             android:textSize="15sp"
                             android:textStyle="bold"/>
@@ -225,10 +226,10 @@
                             android:button="@drawable/sf_radio_selector"/>
                     </LinearLayout>
 
-                </LinearLayout>
+                </RadioGroup>
             </androidx.cardview.widget.CardView>
 
-            <!-- ========== STEP 2: Chief tip (initially GONE) ========== -->
+            <!-- ========== STEP 2: Chef tip (initially GONE) ========== -->
             <LinearLayout
                 android:id="@+id/stepChefTip"
                 android:layout_width="0dp"
@@ -238,12 +239,13 @@
                 android:visibility="gone"
                 app:layout_constraintTop_toBottomOf="@id/stepLine"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent">
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/btnBack">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Enter chief tip"
+                    android:text="Enter chef tip"
                     android:textColor="@color/sf_text_primary"
                     android:textSize="16sp"
                     android:textStyle="bold"/>
@@ -281,16 +283,6 @@
                         app:chipCornerRadius="18dp"
                         app:chipBackgroundColor="@color/sf_chip_bg"
                         android:textColor="@color/sf_text_secondary"/>
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chipCreamy"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:layout_marginStart="8dp"
-                        android:text="Creamy"
-                        app:chipCornerRadius="18dp"
-                        app:chipBackgroundColor="@color/sf_chip_bg"
-                        android:textColor="@color/sf_text_secondary"/>
                 </LinearLayout>
 
                 <EditText
@@ -306,7 +298,7 @@
                     android:textColorHint="@color/sf_text_secondary"/>
             </LinearLayout>
 
-            <!-- ========== STEP 3: Qty (initially GONE) ========== -->
+            <!-- ========== STEP 3: Quantity (initially GONE) ========== -->
             <LinearLayout
                 android:id="@+id/stepQty"
                 android:layout_width="0dp"
@@ -316,12 +308,13 @@
                 android:visibility="gone"
                 app:layout_constraintTop_toBottomOf="@id/stepLine"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent">
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/btnBack">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Enter qnty"
+                    android:text="Enter quantity"
                     android:textColor="@color/sf_text_primary"
                     android:textSize="16sp"
                     android:textStyle="bold"/>

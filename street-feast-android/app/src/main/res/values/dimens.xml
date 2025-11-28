@@ -46,7 +46,7 @@
     <dimen name="sf_appbar_h">116dp</dimen>
     <dimen name="sf_bottom_nav_h">96dp</dimen>
     <dimen name="sf_selected_nav_h">64dp</dimen>
-    <dimen name="sf_btn_h_big">74dp</dimen>
+    <dimen name="sf_btn_h_big">80dp</dimen>
     <dimen name="sf_btn_h_mid">66dp</dimen>
     <dimen name="sf_search_h">54dp</dimen>
     

@@ -40,13 +40,15 @@
         <TextView
             android:id="@+id/btnDeliver"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="60dp"
             android:background="@drawable/sf_bg_pill_green"
             android:gravity="center"
             android:text="Deliver"
             android:textColor="@color/sf_white"
             android:textSize="22sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold"
+
+            android:drawableTint="@color/sf_white"/>
     </LinearLayout>
 </androidx.cardview.widget.CardView>
 

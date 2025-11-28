@@ -56,7 +56,8 @@
             android:text="Add Items"
             android:textColor="@color/sf_white"
             android:textSize="18sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold"
+            android:drawableTint="@color/sf_white"/>
     </LinearLayout>
 </androidx.cardview.widget.CardView>
 

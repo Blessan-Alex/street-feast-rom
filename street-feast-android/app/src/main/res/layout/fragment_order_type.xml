@@ -69,7 +69,7 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/btnParcel"
         android:layout_width="0dp"
-        android:layout_height="@dimen/sf_btn_h_mid"
+        android:layout_height="@dimen/sf_btn_h_big"
         android:layout_marginStart="@dimen/sf_pad_screen_h"
         android:layout_marginTop="14dp"
         android:layout_marginEnd="10dp"
@@ -94,7 +94,7 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/btnEatAway"
         android:layout_width="0dp"
-        android:layout_height="@dimen/sf_btn_h_mid"
+        android:layout_height="@dimen/sf_btn_h_big"
         android:layout_marginEnd="@dimen/sf_pad_screen_h"
         android:layout_marginTop="14dp"
         android:layout_marginStart="10dp"

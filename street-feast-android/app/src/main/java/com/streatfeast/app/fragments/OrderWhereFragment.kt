@@ -156,13 +156,8 @@ class OrderWhereFragment : Fragment() {
     }
     
     private fun setupAppbar() {
-        binding.appbar.btnClose.setOnClickListener {
-            // Navigate back or clear draft
-            if (!findNavController().popBackStack()) {
-                // If we can't pop, navigate to a default screen
-                activity?.finish()
-            }
-        }
+        // btnClose removed from app bar
+        // Users can use system back button instead
     }
     
     private fun setupLogoutButton() {

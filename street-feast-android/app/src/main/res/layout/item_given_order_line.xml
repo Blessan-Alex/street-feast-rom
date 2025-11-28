@@ -9,7 +9,7 @@
     <View
         android:id="@+id/stripe"
         android:layout_width="4dp"
-        android:layout_height="44dp"
+        android:layout_height="72dp"
         android:background="@color/sf_red"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
@@ -46,11 +46,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Size: Large"
-        android:textColor="@color/sf_text_secondary"
+        android:textColor="@color/sf_text_muted"
         android:textSize="14sp"
-        app:layout_constraintEnd_toStartOf="@id/btnAlter"
-        app:layout_constraintTop_toTopOf="@id/tvItem"
-        android:layout_marginEnd="10dp"/>
+        android:layout_marginTop="4dp"
+        app:layout_constraintStart_toStartOf="@id/tvItem"
+        app:layout_constraintTop_toBottomOf="@id/tvTips"/>
 
     <TextView
         android:id="@+id/tvTips"
@@ -59,7 +59,7 @@
         android:layout_marginTop="6dp"
         android:text="Tips: Extra hot sauce, no onions"
         android:textColor="@color/sf_text_muted"
-        android:textSize="13sp"
+        android:textSize="14sp"
         app:layout_constraintStart_toStartOf="@id/tvItem"
         app:layout_constraintTop_toBottomOf="@id/tvItem"
         app:layout_constraintEnd_toEndOf="@id/tvItem"/>

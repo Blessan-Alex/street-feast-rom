@@ -56,6 +56,13 @@ class OrderDraftViewModel : ViewModel() {
         return currentItems.sumOf { it.qty }
     }
     
+    fun loadOrderItems(items: List<OrderItem>) {
+        currentItems.clear()
+        currentItems.addAll(items)
+        _draftItems.value = currentItems.toList()
+        updateItemCount()
+    }
+    
     private fun updateItemCount() {
         _itemCount.value = getDraftItemCount()
     }

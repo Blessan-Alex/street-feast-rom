@@ -8,31 +8,14 @@
     android:paddingEnd="@dimen/sf_pad_screen_h"
     android:paddingTop="18dp">
 
-    <FrameLayout
-        android:id="@+id/btnClose"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
-        android:background="@drawable/sf_bg_circle_light"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_close_20" />
-    </FrameLayout>
-
     <ImageView
         android:id="@+id/ivBrand"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        android:layout_marginStart="10dp"
         android:src="@drawable/ic_cutlery"
         android:tint="@color/sf_text_primary"
-        app:layout_constraintStart_toEndOf="@id/btnClose"
-        app:layout_constraintTop_toTopOf="@id/btnClose"
-        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/tvBrand"
@@ -45,8 +28,8 @@
         android:textStyle="bold"
         app:layout_constraintStart_toEndOf="@id/ivBrand"
         app:layout_constraintEnd_toStartOf="@id/tvDate"
-        app:layout_constraintTop_toTopOf="@id/btnClose"
-        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+        app:layout_constraintTop_toTopOf="@id/ivBrand"
+        app:layout_constraintBottom_toBottomOf="@id/ivBrand" />
 
     <TextView
         android:id="@+id/tvDate"
@@ -57,8 +40,8 @@
         android:textSize="14sp"
         app:layout_constraintStart_toEndOf="@id/tvBrand"
         app:layout_constraintEnd_toStartOf="@id/btnLogout"
-        app:layout_constraintTop_toTopOf="@id/btnClose"
-        app:layout_constraintBottom_toBottomOf="@id/btnClose" />
+        app:layout_constraintTop_toTopOf="@id/ivBrand"
+        app:layout_constraintBottom_toBottomOf="@id/ivBrand" />
 
     <FrameLayout
         android:id="@+id/btnLogout"
@@ -87,7 +70,7 @@
         android:textSize="34sp"
         android:textStyle="bold"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btnClose" />
+        app:layout_constraintTop_toBottomOf="@id/ivBrand" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
 

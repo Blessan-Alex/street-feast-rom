@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
@@ -76,7 +77,7 @@ class OrderItemFragment : Fragment() {
         setupMostBoughtItems()
         setupCategories()
         setupPreviewBar()
-        setupGoBackButton()
+        setupUpArrow()
         setupAppbar()
         setupLogoutButton()
         setupBottomNavigation()
@@ -91,7 +92,7 @@ class OrderItemFragment : Fragment() {
             binding.tvCreateOrder.visibility = View.VISIBLE
             binding.stepper.root.visibility = View.VISIBLE
             binding.ivUp.visibility = View.VISIBLE
-            binding.btnGoBack.visibility = View.VISIBLE
+            binding.btnGoBack.visibility = View.GONE // Hide go back button
             binding.tableHandle.root.visibility = View.GONE
             
             // Update scroll constraint to ivUp
@@ -246,19 +247,49 @@ class OrderItemFragment : Fragment() {
         }
     }
     
-    private fun setupGoBackButton() {
-        binding.btnGoBack.setOnClickListener {
-            findNavController().popBackStack()
+    private fun setupUpArrow() {
+        binding.ivUp.setOnClickListener {
+            collapseBreadcrumbs()
         }
+        
+        // Add swipe gesture detector for upward arrow
+        binding.ivUp.setOnTouchListener(object : View.OnTouchListener {
+            private var startY = 0f
+            private val swipeThreshold = 100f // Minimum distance for swipe
+            
+            override fun onTouch(v: View, event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startY = event.y
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val deltaY = startY - event.y // Positive if swiped up
+                        if (deltaY > swipeThreshold) {
+                            // Swiped up - collapse breadcrumbs
+                            collapseBreadcrumbs()
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+        })
+    }
+    
+    private fun collapseBreadcrumbs() {
+        // Navigate back to Screen 3 (same fragment with showHeader=false)
+        val bundle = Bundle().apply {
+            putString("orderType", orderType.name)
+            putInt("tableNumber", tableNumber)
+            putBoolean("showHeader", false)
+        }
+        findNavController().navigate(R.id.orderItemFragment, bundle)
     }
     
     private fun setupAppbar() {
-        binding.appbar.btnClose.setOnClickListener {
-            // Navigate back or clear draft
-            if (!findNavController().popBackStack()) {
-                activity?.finish()
-            }
-        }
+        // btnClose removed from app bar
+        // Users can use system back button instead
     }
     
     private fun setupLogoutButton() {
@@ -321,11 +352,10 @@ class OrderItemFragment : Fragment() {
             vegFlag = "Veg"
         )
         
-        val bottomSheet = ItemCustomizeBottomSheet.newInstance(menuItem)
-        bottomSheet.onItemAdded = {
-            // Preview bar will update automatically via LiveData
+        val bundle = Bundle().apply {
+            putParcelable("menuItem", menuItem)
         }
-        bottomSheet.show(parentFragmentManager, "ItemCustomize")
+        findNavController().navigate(R.id.itemCustomizeFragment, bundle)
     }
     
     private fun navigateToCategoryItems(categoryName: String) {

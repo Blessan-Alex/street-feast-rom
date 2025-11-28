@@ -74,6 +74,9 @@ class GivenOrderCardAdapter(
                 val tvTips = itemView.findViewById<TextView>(R.id.tvTips)
                 val btnAlter = itemView.findViewById<TextView>(R.id.btnAlter)
                 
+                // Hide alter button for given orders (only show in preview order)
+                btnAlter.visibility = View.GONE
+                
                 // Set stripe color based on veg flag
                 val stripeColor = if (item.isVeg) {
                     ContextCompat.getColor(binding.root.context, R.color.sf_green)
@@ -88,10 +91,7 @@ class GivenOrderCardAdapter(
                 tvSize.text = if (item.size != null) "Size: ${item.size}" else "Size: -"
                 tvTips.text = if (item.chefTip.isNotBlank()) "Tips: ${item.chefTip}" else "Tips: None"
                 
-                // Handle alter order click
-                btnAlter.setOnClickListener {
-                    onAlterOrderClick(order, item)
-                }
+                // Alter button is hidden, so no click listener needed
                 
                 binding.llItems.addView(itemView)
             }

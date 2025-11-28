@@ -5,21 +5,31 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import androidx.navigation.fragment.findNavController
 import com.google.android.material.chip.Chip
 import com.streatfeast.app.R
+import com.streatfeast.app.databinding.FragmentItemCustomizeBinding
 import com.streatfeast.app.databinding.SheetItemCustomizeBinding
 import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
 
-class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
+class ItemCustomizeBottomSheet : Fragment() {
     
-    private var _binding: SheetItemCustomizeBinding? = null
+    private var _binding: FragmentItemCustomizeBinding? = null
     private val binding get() = _binding!!
+    
+    // Access the included sheet content views directly
+    private val sheetBinding: SheetItemCustomizeBinding by lazy {
+        val includedView = binding.root.findViewById<androidx.core.widget.NestedScrollView>(R.id.sheetContent)
+        SheetItemCustomizeBinding.bind(includedView)
+    }
     
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
     
@@ -28,16 +38,17 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     private var chefTip: String = ""
     private var quantity: Int = 1
     private var menuItem: MenuItem? = null
-    
-    var onItemAdded: (() -> Unit)? = null
+    private var orderItem: OrderItem? = null // For edit mode
+    private var isEditMode = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setStyle(STYLE_NORMAL, R.style.Theme_StreetFeast)
         
-        // Get menu item from arguments
+        // Get menu item and order item from arguments
         arguments?.let { args ->
             menuItem = args.getParcelable("menuItem")
+            orderItem = args.getParcelable("orderItem")
+            isEditMode = orderItem != null
         }
     }
     
@@ -46,7 +57,7 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = SheetItemCustomizeBinding.inflate(inflater, container, false)
+        _binding = FragmentItemCustomizeBinding.inflate(inflater, container, false)
         return binding.root
     }
     
@@ -61,12 +72,64 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     }
     
     private fun setupInitialState() {
-        menuItem?.let { item ->
-            binding.tvSheetTitle.text = item.name
+        if (isEditMode && orderItem != null) {
+            // Edit mode: pre-populate with existing OrderItem data
+            val item = orderItem!!
+            sheetBinding.tvSheetTitle.text = item.nameSnapshot
             
-            // Set default size if available
-            if (item.sizes.isNotEmpty()) {
-                selectedSize = item.sizes[0]
+            // Pre-populate size
+            selectedSize = item.size
+            when (item.size?.lowercase()) {
+                "small" -> {
+                    sheetBinding.rbSmall.isChecked = true
+                    sheetBinding.rbMedium.isChecked = false
+                    sheetBinding.rbLarge.isChecked = false
+                }
+                "medium" -> {
+                    sheetBinding.rbSmall.isChecked = false
+                    sheetBinding.rbMedium.isChecked = true
+                    sheetBinding.rbLarge.isChecked = false
+                }
+                "large" -> {
+                    sheetBinding.rbSmall.isChecked = false
+                    sheetBinding.rbMedium.isChecked = false
+                    sheetBinding.rbLarge.isChecked = true
+                }
+                else -> {
+                    // No size selected, default to Small
+                    sheetBinding.rbSmall.isChecked = true
+                    selectedSize = "Small"
+                }
+            }
+            
+            // Pre-populate chef tip
+            chefTip = item.chefTip
+            sheetBinding.etChefTip.setText(item.chefTip)
+            
+            // Pre-populate quantity
+            quantity = item.qty
+            sheetBinding.tvQty.text = item.qty.toString()
+            
+            // Pre-populate suggestion chips
+            if (item.chefTip.contains("spicy", ignoreCase = true)) {
+                sheetBinding.chipSpicy.isChecked = true
+                sheetBinding.chipSpicy.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_primary)
+                sheetBinding.chipSpicy.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_white))
+            }
+            if (item.chefTip.contains("sour", ignoreCase = true)) {
+                sheetBinding.chipSour.isChecked = true
+                sheetBinding.chipSour.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_primary)
+                sheetBinding.chipSour.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_white))
+            }
+        } else {
+            // New item mode: use MenuItem
+            menuItem?.let { item ->
+                sheetBinding.tvSheetTitle.text = item.name
+                
+                // Set default size if available
+                if (item.sizes.isNotEmpty()) {
+                    selectedSize = item.sizes[0]
+                }
             }
         }
         
@@ -75,45 +138,68 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     }
     
     private fun setupStep1() {
-        binding.rbSmall.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) selectedSize = "Small"
+        // Set up individual listeners to ensure single selection
+        sheetBinding.rbSmall.setOnClickListener {
+            sheetBinding.rbSmall.isChecked = true
+            sheetBinding.rbMedium.isChecked = false
+            sheetBinding.rbLarge.isChecked = false
+            selectedSize = "Small"
         }
         
-        binding.rbMedium.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) selectedSize = "medium"
+        sheetBinding.rbMedium.setOnClickListener {
+            sheetBinding.rbSmall.isChecked = false
+            sheetBinding.rbMedium.isChecked = true
+            sheetBinding.rbLarge.isChecked = false
+            selectedSize = "Medium"
         }
         
-        binding.rbLarge.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) selectedSize = "Large"
+        sheetBinding.rbLarge.setOnClickListener {
+            sheetBinding.rbSmall.isChecked = false
+            sheetBinding.rbMedium.isChecked = false
+            sheetBinding.rbLarge.isChecked = true
+            selectedSize = "Large"
+        }
+        
+        // Also use RadioGroup listener as backup
+        sheetBinding.rgSize.setOnCheckedChangeListener { _, checkedId ->
+            when (checkedId) {
+                R.id.rbSmall -> selectedSize = "Small"
+                R.id.rbMedium -> selectedSize = "Medium"
+                R.id.rbLarge -> selectedSize = "Large"
+            }
+        }
+        
+        // Set default selection only if not in edit mode (edit mode is handled in setupInitialState)
+        if (!isEditMode) {
+            sheetBinding.rbSmall.isChecked = true
+            selectedSize = "Small"
         }
     }
     
     private fun setupStep2() {
-        binding.chipSour.setOnClickListener {
-            toggleChip(binding.chipSour)
-            if (binding.chipSour.isChecked) {
-                chefTip = "Sour"
-                binding.etChefTip.setText("Sour")
+        sheetBinding.chipSour.setOnClickListener {
+            toggleChip(sheetBinding.chipSour)
+            if (sheetBinding.chipSour.isChecked) {
+                chefTip = "Make it extra sour"
+                sheetBinding.etChefTip.setText("Make it extra sour")
+            } else {
+                sheetBinding.etChefTip.setText("")
+                chefTip = ""
             }
         }
         
-        binding.chipSpicy.setOnClickListener {
-            toggleChip(binding.chipSpicy)
-            if (binding.chipSpicy.isChecked) {
-                chefTip = "Spicy"
-                binding.etChefTip.setText("Spicy")
+        sheetBinding.chipSpicy.setOnClickListener {
+            toggleChip(sheetBinding.chipSpicy)
+            if (sheetBinding.chipSpicy.isChecked) {
+                chefTip = "Make it extra spicy"
+                sheetBinding.etChefTip.setText("Make it extra spicy")
+            } else {
+                sheetBinding.etChefTip.setText("")
+                chefTip = ""
             }
         }
         
-        binding.chipCreamy.setOnClickListener {
-            toggleChip(binding.chipCreamy)
-            if (binding.chipCreamy.isChecked) {
-                chefTip = "Creamy"
-                binding.etChefTip.setText("Creamy")
-            }
-        }
-        
-        binding.etChefTip.setOnFocusChangeListener { _, hasFocus ->
+        sheetBinding.etChefTip.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 // Clear chip selection when user types
                 clearChipSelection()
@@ -122,31 +208,31 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     }
     
     private fun setupStep3() {
-        binding.btnMinus.setOnClickListener {
+        sheetBinding.btnMinus.setOnClickListener {
             if (quantity > 1) {
                 quantity--
-                binding.tvQty.text = quantity.toString()
+                sheetBinding.tvQty.text = quantity.toString()
             }
         }
         
-        binding.btnPlus.setOnClickListener {
+        sheetBinding.btnPlus.setOnClickListener {
             if (quantity < 99) {
                 quantity++
-                binding.tvQty.text = quantity.toString()
+                sheetBinding.tvQty.text = quantity.toString()
             }
         }
     }
     
     private fun setupButtons() {
-        binding.btnClose.setOnClickListener {
-            dismiss()
+        sheetBinding.btnClose.setOnClickListener {
+            findNavController().popBackStack()
         }
         
-        binding.btnBack.setOnClickListener {
+        sheetBinding.btnBack.setOnClickListener {
             handleBack()
         }
         
-        binding.btnNext.setOnClickListener {
+        sheetBinding.btnNext.setOnClickListener {
             handleNext()
         }
     }
@@ -158,7 +244,7 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
             updateStepIndicator()
             updateButtonConstraints()
         } else {
-            dismiss()
+            findNavController().popBackStack()
         }
     }
     
@@ -173,13 +259,13 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
             }
             2 -> {
                 // Get chef tip from EditText
-                chefTip = binding.etChefTip.text.toString().trim()
+                chefTip = sheetBinding.etChefTip.text.toString().trim()
                 currentStep = 3
             }
             3 -> {
-                // Add item to draft and dismiss
+                // Add item to draft and navigate back
                 addItemToDraft()
-                dismiss()
+                findNavController().popBackStack()
             }
         }
         
@@ -189,69 +275,99 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     }
     
     private fun addItemToDraft() {
-        menuItem?.let { item ->
-            val orderItem = OrderItem(
-                itemId = item.id,
-                nameSnapshot = item.name,
-                size = selectedSize,
-                vegFlagSnapshot = item.vegFlag,
-                qty = quantity,
-                chefTip = chefTip
-            )
-            
-            draftViewModel.addDraftItem(orderItem)
-            onItemAdded?.invoke()
+        if (isEditMode && orderItem != null) {
+            // Update existing item
+            val item = orderItem!!
+            draftViewModel.updateDraftItem(item.id) { currentItem ->
+                currentItem.copy(
+                    size = selectedSize,
+                    qty = quantity,
+                    chefTip = chefTip
+                )
+            }
+        } else {
+            // Add new item
+            menuItem?.let { item ->
+                val newOrderItem = OrderItem(
+                    itemId = item.id,
+                    nameSnapshot = item.name,
+                    size = selectedSize,
+                    vegFlagSnapshot = item.vegFlag,
+                    qty = quantity,
+                    chefTip = chefTip
+                )
+                
+                draftViewModel.addDraftItem(newOrderItem)
+            }
         }
+        // ViewModel LiveData will automatically update observers
     }
     
     private fun updateStepVisibility() {
         when (currentStep) {
             1 -> {
-                binding.amountBox.visibility = View.VISIBLE
-                binding.stepChefTip.visibility = View.GONE
-                binding.stepQty.visibility = View.GONE
+                sheetBinding.tvStepTitle1.visibility = View.VISIBLE
+                sheetBinding.amountBox.visibility = View.VISIBLE
+                sheetBinding.stepChefTip.visibility = View.GONE
+                sheetBinding.stepQty.visibility = View.GONE
             }
             2 -> {
-                binding.amountBox.visibility = View.GONE
-                binding.stepChefTip.visibility = View.VISIBLE
-                binding.stepQty.visibility = View.GONE
+                sheetBinding.tvStepTitle1.visibility = View.GONE
+                sheetBinding.amountBox.visibility = View.GONE
+                sheetBinding.stepChefTip.visibility = View.VISIBLE
+                sheetBinding.stepQty.visibility = View.GONE
             }
             3 -> {
-                binding.amountBox.visibility = View.GONE
-                binding.stepChefTip.visibility = View.GONE
-                binding.stepQty.visibility = View.VISIBLE
+                sheetBinding.tvStepTitle1.visibility = View.GONE
+                sheetBinding.amountBox.visibility = View.GONE
+                sheetBinding.stepChefTip.visibility = View.GONE
+                sheetBinding.stepQty.visibility = View.VISIBLE
             }
         }
     }
     
     private fun updateStepIndicator() {
         // Update step label colors
-        binding.l1.setTextColor(ContextCompat.getColor(requireContext(),
+        sheetBinding.l1.setTextColor(ContextCompat.getColor(requireContext(),
             if (currentStep == 1) R.color.sf_text_primary else R.color.sf_text_secondary))
-        binding.l2.setTextColor(ContextCompat.getColor(requireContext(),
+        sheetBinding.l2.setTextColor(ContextCompat.getColor(requireContext(),
             if (currentStep == 2) R.color.sf_text_primary else R.color.sf_text_secondary))
-        binding.l3.setTextColor(ContextCompat.getColor(requireContext(),
+        sheetBinding.l3.setTextColor(ContextCompat.getColor(requireContext(),
             if (currentStep == 3) R.color.sf_text_primary else R.color.sf_text_secondary))
         
         // Update step dots
-        binding.sd1.background = ContextCompat.getDrawable(requireContext(),
+        sheetBinding.sd1.background = ContextCompat.getDrawable(requireContext(),
             if (currentStep >= 1) R.drawable.sf_step_dot_active else R.drawable.sf_step_dot_inactive)
-        binding.sd2.background = ContextCompat.getDrawable(requireContext(),
+        sheetBinding.sd2.background = ContextCompat.getDrawable(requireContext(),
             if (currentStep >= 2) R.drawable.sf_step_dot_active else R.drawable.sf_step_dot_inactive)
-        binding.sd3.background = ContextCompat.getDrawable(requireContext(),
+        sheetBinding.sd3.background = ContextCompat.getDrawable(requireContext(),
             if (currentStep >= 3) R.drawable.sf_step_dot_active else R.drawable.sf_step_dot_inactive)
     }
     
     private fun updateButtonConstraints() {
-        // Update btnBack constraint based on current step
-        val params = binding.btnBack.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        params.topToBottom = when (currentStep) {
-            1 -> R.id.amountBox
-            2 -> R.id.stepChefTip
-            3 -> R.id.stepQty
-            else -> R.id.amountBox
+        // Get the ConstraintLayout parent of btnBack (it's inside the CardView)
+        val constraintLayout = sheetBinding.btnBack.parent as? androidx.constraintlayout.widget.ConstraintLayout
+            ?: return // Safety check
+        
+        val constraintSet = ConstraintSet()
+        constraintSet.clone(constraintLayout)
+        
+        when (currentStep) {
+            1 -> {
+                constraintSet.clear(R.id.btnBack, ConstraintSet.TOP)
+                constraintSet.connect(R.id.btnBack, ConstraintSet.TOP, R.id.amountBox, ConstraintSet.BOTTOM, 18)
+            }
+            2 -> {
+                constraintSet.clear(R.id.btnBack, ConstraintSet.TOP)
+                constraintSet.connect(R.id.btnBack, ConstraintSet.TOP, R.id.stepChefTip, ConstraintSet.BOTTOM, 18)
+            }
+            3 -> {
+                constraintSet.clear(R.id.btnBack, ConstraintSet.TOP)
+                constraintSet.connect(R.id.btnBack, ConstraintSet.TOP, R.id.stepQty, ConstraintSet.BOTTOM, 18)
+            }
         }
-        binding.btnBack.layoutParams = params
+        
+        constraintSet.applyTo(constraintLayout)
     }
     
     private fun toggleChip(chip: Chip) {
@@ -266,17 +382,14 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
     }
     
     private fun clearChipSelection() {
-        binding.chipSour.isChecked = false
-        binding.chipSpicy.isChecked = false
-        binding.chipCreamy.isChecked = false
+        sheetBinding.chipSour.isChecked = false
+        sheetBinding.chipSpicy.isChecked = false
         
-        binding.chipSour.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
-        binding.chipSpicy.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
-        binding.chipCreamy.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
+        sheetBinding.chipSour.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
+        sheetBinding.chipSpicy.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
         
-        binding.chipSour.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
-        binding.chipSpicy.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
-        binding.chipCreamy.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
+        sheetBinding.chipSour.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
+        sheetBinding.chipSpicy.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
     }
     
     override fun onDestroyView() {
@@ -284,14 +397,5 @@ class ItemCustomizeBottomSheet : BottomSheetDialogFragment() {
         _binding = null
     }
     
-    companion object {
-        fun newInstance(menuItem: MenuItem): ItemCustomizeBottomSheet {
-            return ItemCustomizeBottomSheet().apply {
-                arguments = Bundle().apply {
-                    putParcelable("menuItem", menuItem)
-                }
-            }
-        }
-    }
 }
 
