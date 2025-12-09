@@ -114,6 +114,7 @@ class ChefPageFragment : Fragment() {
         
         setupCloseButton()
         setupDate()
+        setupRefreshButton()
         setupLogoutButton()
         setupTabs()
         setupViewPager()
@@ -133,6 +134,36 @@ class ChefPageFragment : Fragment() {
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
+    }
+    
+    private fun setupRefreshButton() {
+        val refreshButton = binding.btnRefresh
+        val refreshIcon = binding.root.findViewById<android.widget.ImageView>(com.streatfeast.app.R.id.ivRefresh)
+        var isRefreshing = false
+        
+        refreshButton.setOnClickListener {
+            if (!isRefreshing) {
+                isRefreshing = true
+                refreshIcon.animate()
+                    .rotationBy(360f)
+                    .setDuration(500)
+                    .withEndAction {
+                        refreshIcon.rotation = 0f
+                        isRefreshing = false
+                    }
+                    .start()
+                
+                Toast.makeText(requireContext(), "Refreshing orders...", Toast.LENGTH_SHORT).show()
+                viewModel.refresh()
+            }
+        }
+        
+        // Observe loading state to show feedback
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (!isLoading && isRefreshing) {
+                Toast.makeText(requireContext(), "Orders refreshed", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     
     private fun setupLogoutButton() {
@@ -252,7 +283,7 @@ class ChefPageFragment : Fragment() {
                 when (order.type) {
                     OrderType.DINE_IN -> com.streatfeast.app.R.drawable.ic_cutlery
                     OrderType.PARCEL -> com.streatfeast.app.R.drawable.ic_bag
-                    OrderType.DELIVERY -> com.streatfeast.app.R.drawable.ic_bag
+                    OrderType.EAT_AWAY -> com.streatfeast.app.R.drawable.ic_bag
                     else -> com.streatfeast.app.R.drawable.ic_cutlery
                 }
             )
@@ -422,6 +453,7 @@ class ChefPageFragment : Fragment() {
         val tvTableHeader = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvTableHeader)
         val tvLastUpdated = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvLastUpdated)
         val badgeRunningLate = cardView.findViewById<TextView>(com.streatfeast.app.R.id.badgeRunningLate)
+        val tvMoreItems = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvMoreItems)
         
         tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
         tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
@@ -430,7 +462,7 @@ class ChefPageFragment : Fragment() {
         val isLate = isOrderRunningLate(order)
         badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
         
-        // Items - show up to 4 items
+        // Items - show up to 4 items, plus overflow indicator
         val itemsToShow = order.items.take(4)
         val itemConfigs = listOf(
             ItemViewConfig(
@@ -486,6 +518,14 @@ class ChefPageFragment : Fragment() {
             if (index < itemConfigs.size) {
                 itemConfigs[index].itemView.visibility = View.GONE
             }
+        }
+
+        val remainingCount = order.items.size - itemsToShow.size
+        if (remainingCount > 0) {
+            tvMoreItems.visibility = View.VISIBLE
+            tvMoreItems.text = "+$remainingCount more"
+        } else {
+            tvMoreItems.visibility = View.GONE
         }
         
         // Update bottom buttons
@@ -609,8 +649,8 @@ class ChefPageFragment : Fragment() {
         }
         
         binding.btnDelivery.setOnClickListener {
-            viewModel.setOrderTypeFilter(OrderType.DELIVERY)
-            updateButtonStyles(OrderType.DELIVERY)
+            viewModel.setOrderTypeFilter(OrderType.EAT_AWAY)
+            updateButtonStyles(OrderType.EAT_AWAY)
         }
         
         // Observe filter changes and update button styles
@@ -646,7 +686,7 @@ class ChefPageFragment : Fragment() {
         }
         
         // Style Delivery button
-        if (selectedFilter == OrderType.DELIVERY) {
+        if (selectedFilter == OrderType.EAT_AWAY) {
             binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
             binding.btnDelivery.setTextColor(android.graphics.Color.WHITE)
             binding.btnDelivery.elevation = 4f // Add shadow/elevation for selected

@@ -15,11 +15,21 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.streatfeast.app.R
 import com.streatfeast.app.databinding.FragmentOrderItemBinding
-import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.ui.AppBarController
+
 import com.streatfeast.app.models.MenuItem
+import com.streatfeast.app.models.Category
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
+import com.streatfeast.app.viewmodels.MenuViewModel
+import com.streatfeast.app.viewmodels.MenuViewModelFactory
+import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.storage.StreetFeastDatabase
+import com.streatfeast.app.utils.Constants
+import android.widget.ProgressBar
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.isVisible
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -31,19 +41,21 @@ class OrderItemFragment : Fragment() {
     private var orderType: OrderType = OrderType.DINE_IN
     private var tableNumber: Int = 4
     private var showHeader: Boolean = false
+    private var currentSearchTerm: String = ""
+    private var allMenuItems: List<MenuItem> = emptyList()
+    private var frequentItemIds: List<String> = emptyList()
+    private var allCategories: List<Category> = emptyList()
+    private var appBarController: AppBarController? = null
     
     private val authViewModel: AuthViewModel by activityViewModels()
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
-    
-    // Mock data for now - will be replaced with ViewModel/Repository later
-    private val mockCategories = listOf(
-        "Chinese", "Indian", "Desserts", "Italian", "Mexican",
-        "Thai", "Japanese", "American", "Mediterranean"
-    )
-    
-    private val mockMostBoughtItems = listOf(
-        "Ramen", "Paneer Tikka", "Spring Rolls", "Butter Chicken"
-    )
+    private val menuViewModel: MenuViewModel by viewModels {
+        val repository = ServiceLocator.provideMenuRepository(requireContext().applicationContext)
+        val db = StreetFeastDatabase.getInstance(requireContext())
+        val localDataSource = com.streatfeast.app.storage.MenuLocalDataSource(db)
+        MenuViewModelFactory(repository, localDataSource, Constants.DEFAULT_STORE_ID)
+    }
+    private lateinit var menuLoadingView: ProgressBar
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -56,6 +68,7 @@ class OrderItemFragment : Fragment() {
     
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        addLoadingSpinner()
         
         // Get arguments
         arguments?.let { args ->
@@ -79,8 +92,27 @@ class OrderItemFragment : Fragment() {
         setupPreviewBar()
         setupUpArrow()
         setupAppbar()
+        setupMenuRefreshButton()
         setupLogoutButton()
         setupBottomNavigation()
+        setupAppbarHandle()
+    }
+
+    private fun addLoadingSpinner() {
+        menuLoadingView = ProgressBar(requireContext()).apply {
+            isIndeterminate = true
+            visibility = View.GONE
+        }
+        val params = ConstraintLayout.LayoutParams(
+            ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+            bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+        }
+        (binding.root as ConstraintLayout).addView(menuLoadingView, params)
     }
     
     private fun setupScreenState() {
@@ -142,7 +174,7 @@ class OrderItemFragment : Fragment() {
         return when (type) {
             OrderType.DINE_IN -> "Dine in"
             OrderType.PARCEL -> "Parcel"
-            OrderType.DELIVERY -> "Eat away"
+            OrderType.EAT_AWAY -> "Eat away"
         }
     }
     
@@ -169,10 +201,9 @@ class OrderItemFragment : Fragment() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                // Filter items/categories based on search term
-                // TODO: Implement search filtering when menu data is available
-                val searchTerm = s?.toString() ?: ""
-                android.util.Log.d("OrderItemFragment", "Search: $searchTerm")
+                currentSearchTerm = s?.toString()?.trim() ?: ""
+                filterMostBought(currentSearchTerm)
+                filterCategories(currentSearchTerm)
             }
         })
     }
@@ -184,32 +215,14 @@ class OrderItemFragment : Fragment() {
             binding.mb3.root to 2,
             binding.mb4.root to 3
         )
-        
-        mostBoughtCards.forEach { (cardView, index) ->
-            if (index < mockMostBoughtItems.size) {
-                val itemName = mockMostBoughtItems[index]
-                val tvName = cardView.findViewById<android.widget.TextView>(R.id.tvName)
-                val tvQty = cardView.findViewById<android.widget.TextView>(R.id.tvQty)
-                val btnAdd = cardView.findViewById<ViewGroup>(R.id.btnAdd)
-                
-                tvName?.text = itemName
-                tvQty?.text = "qnty: Small,mid,large"
-                
-                // Set dot visibility based on item type (mock - green for veg, red for non-veg)
-                val dotGreen = cardView.findViewById<View>(R.id.dotGreen)
-                val dotRed = cardView.findViewById<View>(R.id.dotRed)
-                dotGreen?.visibility = if (index % 2 == 0) View.VISIBLE else View.GONE
-                dotRed?.visibility = if (index % 2 == 1) View.VISIBLE else View.GONE
-                
-                // Handle add button click
-                btnAdd?.setOnClickListener {
-                    openCustomizationModal(itemName)
-                }
-                
-                cardView.visibility = View.VISIBLE
-            } else {
-                cardView.visibility = View.GONE
-            }
+        // Observe frequent ids and items; render via filter helper
+        menuViewModel.frequentItemIds.observe(viewLifecycleOwner) { ids ->
+            frequentItemIds = ids
+            filterMostBought(currentSearchTerm)
+        }
+        menuViewModel.items.observe(viewLifecycleOwner) { items ->
+            allMenuItems = items
+            filterMostBought(currentSearchTerm)
         }
     }
     
@@ -226,30 +239,19 @@ class OrderItemFragment : Fragment() {
             binding.c9.root to 8
         )
         
-        categoryCards.forEach { (cardView, index) ->
-            if (index < mockCategories.size) {
-                val categoryName = mockCategories[index]
-                val tvCat = cardView.findViewById<android.widget.TextView>(R.id.tvCat)
-                val tvItems = cardView.findViewById<android.widget.TextView>(R.id.tvItems)
-                
-                tvCat?.text = categoryName
-                tvItems?.text = "Items ${(index + 1) * 3}" // Mock item count
-                
-                // Handle category click
-                cardView.setOnClickListener {
-                    navigateToCategoryItems(categoryName)
-                }
-                
-                cardView.visibility = View.VISIBLE
-            } else {
-                cardView.visibility = View.GONE
-            }
+        menuViewModel.categories.observe(viewLifecycleOwner) { categories ->
+            allCategories = categories
+            filterCategories(currentSearchTerm)
+        }
+        menuViewModel.items.observe(viewLifecycleOwner) { items ->
+            allMenuItems = items
+            filterCategories(currentSearchTerm)
         }
     }
     
     private fun setupUpArrow() {
         binding.ivUp.setOnClickListener {
-            collapseBreadcrumbs()
+            findNavController().popBackStack()
         }
         
         // Add swipe gesture detector for upward arrow
@@ -288,8 +290,65 @@ class OrderItemFragment : Fragment() {
     }
     
     private fun setupAppbar() {
-        // btnClose removed from app bar
-        // Users can use system back button instead
+        val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
+        navBack?.setOnClickListener {
+            requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+    }
+
+    private fun setupAppbarHandle() {
+        val appbarView = binding.appbar.root
+        val handle = appbarView.findViewById<View>(R.id.ivAppbarHandle)
+        appBarController = AppBarController(
+            appBar = appbarView,
+            handleView = handle
+        )
+        appBarController?.attach()
+    }
+    
+    private fun setupMenuRefreshButton() {
+        val refreshButton = binding.appbar.root.findViewById<ViewGroup>(R.id.btnRefreshMenu)
+        val refreshIcon = binding.appbar.root.findViewById<android.widget.ImageView>(R.id.ivRefreshMenu)
+        
+        // Show button only when header is visible
+        refreshButton?.visibility = if (showHeader) View.VISIBLE else View.GONE
+        
+        var isRefreshing = false
+        
+        refreshButton?.setOnClickListener {
+            if (!isRefreshing) {
+                isRefreshing = true
+                refreshIcon?.animate()
+                    ?.rotationBy(360f)
+                    ?.setDuration(500)
+                    ?.withEndAction {
+                        refreshIcon?.rotation = 0f
+                        isRefreshing = false
+                    }
+                    ?.start()
+                
+                android.widget.Toast.makeText(requireContext(), "Refreshing menu...", android.widget.Toast.LENGTH_SHORT).show()
+                menuViewModel.loadMenu()
+            }
+        }
+        
+        // Observe menu loading state to show feedback
+        menuViewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (!isLoading && isRefreshing) {
+                android.widget.Toast.makeText(requireContext(), "Menu refreshed", android.widget.Toast.LENGTH_SHORT).show()
+                isRefreshing = false
+            }
+            menuLoadingView.isVisible = isLoading
+            binding.scroll.isVisible = !isLoading
+        }
+        
+        // Observe menu errors
+        menuViewModel.error.observe(viewLifecycleOwner) { error ->
+            error?.let {
+                android.widget.Toast.makeText(requireContext(), "Menu error: $it", android.widget.Toast.LENGTH_LONG).show()
+                isRefreshing = false
+            }
+        }
     }
     
     private fun setupLogoutButton() {
@@ -343,24 +402,17 @@ class OrderItemFragment : Fragment() {
         }
     }
     
-    private fun openCustomizationModal(itemName: String) {
-        // Create mock menu item for now
-        val menuItem = MenuItem(
-            id = "mock_$itemName",
-            name = itemName,
-            sizes = listOf("Small", "medium", "Large"),
-            vegFlag = "Veg"
-        )
-        
+    private fun openCustomizationModal(menuItem: MenuItem) {
         val bundle = Bundle().apply {
             putParcelable("menuItem", menuItem)
         }
         findNavController().navigate(R.id.itemCustomizeFragment, bundle)
     }
     
-    private fun navigateToCategoryItems(categoryName: String) {
+    private fun navigateToCategoryItems(categoryName: String, categoryId: String) {
         val bundle = Bundle().apply {
             putString("categoryName", categoryName)
+            putString("categoryId", categoryId)
             putInt("tableNumber", tableNumber)
             putString("orderType", orderType.name)
         }
@@ -380,7 +432,110 @@ class OrderItemFragment : Fragment() {
             findNavController().navigate(R.id.givenOrderFragment)
         }
     }
-    
+
+    private fun filterMostBought(term: String) {
+        val normalized = term.lowercase()
+        val filteredItems = allMenuItems.filter { item ->
+            frequentItemIds.contains(item.id) &&
+                (normalized.isBlank() ||
+                    item.name.lowercase().contains(normalized) ||
+                    item.description.lowercase().contains(normalized))
+        }.take(4)
+        
+        val mostBoughtCards = listOf(
+            binding.mb1.root,
+            binding.mb2.root,
+            binding.mb3.root,
+            binding.mb4.root
+        )
+        
+        mostBoughtCards.forEachIndexed { index, cardView ->
+            if (index < filteredItems.size) {
+                val menuItem = filteredItems[index]
+                val tvName = cardView.findViewById<android.widget.TextView>(R.id.tvName)
+                val tvQty = cardView.findViewById<android.widget.TextView>(R.id.tvQty)
+                val btnAdd = cardView.findViewById<ViewGroup>(R.id.btnAdd)
+                
+                tvName?.text = menuItem.name
+                if (menuItem.sizes.isNullOrEmpty()) {
+                    tvQty?.visibility = View.GONE
+                } else {
+                    tvQty?.visibility = View.VISIBLE
+                    tvQty?.text = "qnty: ${menuItem.sizes.joinToString(",")}"
+                }
+                
+                val dotGreen = cardView.findViewById<View>(R.id.dotGreen)
+                val dotRed = cardView.findViewById<View>(R.id.dotRed)
+                when (menuItem.vegFlag) {
+                    "Veg" -> {
+                        dotGreen?.visibility = View.VISIBLE
+                        dotRed?.visibility = View.GONE
+                    }
+                    "NonVeg" -> {
+                        dotGreen?.visibility = View.GONE
+                        dotRed?.visibility = View.VISIBLE
+                    }
+                    else -> {
+                        dotGreen?.visibility = View.VISIBLE
+                        dotRed?.visibility = View.VISIBLE
+                    }
+                }
+                
+                btnAdd?.setOnClickListener {
+                    openCustomizationModal(menuItem)
+                }
+                
+                cardView.visibility = View.VISIBLE
+            } else {
+                cardView.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun filterCategories(term: String) {
+        val normalized = term.lowercase()
+        val filteredCategories = if (normalized.isBlank()) {
+            allCategories
+        } else {
+            allCategories.filter { category ->
+                category.name.lowercase().contains(normalized) ||
+                    allMenuItems.any { it.categoryId == category.id && (it.name.lowercase().contains(normalized) || it.description.lowercase().contains(normalized)) }
+            }
+        }
+        
+        val categoryCards = listOf(
+            binding.c1.root,
+            binding.c2.root,
+            binding.c3.root,
+            binding.c4.root,
+            binding.c5.root,
+            binding.c6.root,
+            binding.c7.root,
+            binding.c8.root,
+            binding.c9.root
+        )
+        
+        categoryCards.forEachIndexed { index, cardView ->
+            if (index < filteredCategories.size) {
+                val category = filteredCategories[index]
+                val tvCat = cardView.findViewById<android.widget.TextView>(R.id.tvCat)
+                val tvItems = cardView.findViewById<android.widget.TextView>(R.id.tvItems)
+                
+                tvCat?.text = category.name
+                val itemCount = allMenuItems.count { it.categoryId == category.id }
+                tvItems?.text = "Items $itemCount"
+                
+                cardView.setOnClickListener {
+                    navigateToCategoryItems(category.name, category.id)
+                }
+                
+                cardView.visibility = View.VISIBLE
+            } else {
+                cardView.visibility = View.GONE
+            }
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

@@ -58,16 +58,29 @@ class OrderTypeFragment : Fragment() {
         }
         
         binding.btnEatAway.setOnClickListener {
-            navigateToWhere(OrderType.DELIVERY)
+            navigateToWhere(OrderType.EAT_AWAY)
         }
     }
     
     private fun navigateToWhere(orderType: OrderType) {
-        // Navigate to Screen 2 with order type
-        val bundle = Bundle().apply {
-            putString("orderType", orderType.name)
+        when (orderType) {
+            OrderType.PARCEL -> {
+                // Navigate directly to item selection for PARCEL, skipping table selection
+                val bundle = Bundle().apply {
+                    putString("orderType", orderType.name)
+                    putInt("tableNumber", 0)  // Use 0 for non-DINE_IN orders
+                    putBoolean("showHeader", false)
+                }
+                findNavController().navigate(R.id.orderItemFragment, bundle)
+            }
+            else -> {
+                // Navigate to Screen 2 with order type for DINE_IN and EAT_AWAY
+                val bundle = Bundle().apply {
+                    putString("orderType", orderType.name)
+                }
+                findNavController().navigate(R.id.orderWhereFragment, bundle)
+            }
         }
-        findNavController().navigate(R.id.orderWhereFragment, bundle)
     }
     
     private fun setupAppbar() {

@@ -1,6 +1,8 @@
 package com.streatfeast.app.fragments
 
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +21,11 @@ import com.streatfeast.app.databinding.SheetItemCustomizeBinding
 import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModel
+import com.streatfeast.app.viewmodels.OrdersViewModelFactory
+import com.streatfeast.app.di.ServiceLocator
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class ItemCustomizeBottomSheet : Fragment() {
     
@@ -32,6 +39,11 @@ class ItemCustomizeBottomSheet : Fragment() {
     }
     
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
+    private val ordersViewModel: OrdersViewModel by viewModels {
+        OrdersViewModelFactory(
+            ServiceLocator.provideOrderRepository(requireContext().applicationContext)
+        )
+    }
     
     private var currentStep = 1
     private var selectedSize: String? = null
@@ -40,6 +52,7 @@ class ItemCustomizeBottomSheet : Fragment() {
     private var menuItem: MenuItem? = null
     private var orderItem: OrderItem? = null // For edit mode
     private var isEditMode = false
+    private var isEditingOrder = false // Flag to indicate we're editing an order item (not draft)
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +62,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             menuItem = args.getParcelable("menuItem")
             orderItem = args.getParcelable("orderItem")
             isEditMode = orderItem != null
+            isEditingOrder = args.getBoolean("isEditingOrder", false)
         }
     }
     
@@ -77,28 +91,16 @@ class ItemCustomizeBottomSheet : Fragment() {
             val item = orderItem!!
             sheetBinding.tvSheetTitle.text = item.nameSnapshot
             
-            // Pre-populate size
+            // Pre-populate size (only if present); avoid forcing defaults
             selectedSize = item.size
             when (item.size?.lowercase()) {
-                "small" -> {
-                    sheetBinding.rbSmall.isChecked = true
-                    sheetBinding.rbMedium.isChecked = false
-                    sheetBinding.rbLarge.isChecked = false
-                }
-                "medium" -> {
-                    sheetBinding.rbSmall.isChecked = false
-                    sheetBinding.rbMedium.isChecked = true
-                    sheetBinding.rbLarge.isChecked = false
-                }
-                "large" -> {
-                    sheetBinding.rbSmall.isChecked = false
-                    sheetBinding.rbMedium.isChecked = false
-                    sheetBinding.rbLarge.isChecked = true
-                }
+                "small" -> sheetBinding.rbSmall.isChecked = true
+                "medium" -> sheetBinding.rbMedium.isChecked = true
+                "large" -> sheetBinding.rbLarge.isChecked = true
                 else -> {
-                    // No size selected, default to Small
-                    sheetBinding.rbSmall.isChecked = true
-                    selectedSize = "Small"
+                    sheetBinding.rbSmall.isChecked = false
+                    sheetBinding.rbMedium.isChecked = false
+                    sheetBinding.rbLarge.isChecked = false
                 }
             }
             
@@ -125,16 +127,15 @@ class ItemCustomizeBottomSheet : Fragment() {
             // New item mode: use MenuItem
             menuItem?.let { item ->
                 sheetBinding.tvSheetTitle.text = item.name
-                
-                // Set default size if available
-                if (item.sizes.isNotEmpty()) {
-                    selectedSize = item.sizes[0]
-                }
+                // Do not preselect size; wait for user choice
+                selectedSize = null
+                sheetBinding.rgSize.clearCheck()
             }
         }
         
         updateStepVisibility()
         updateStepIndicator()
+        updateChipStyles()
     }
     
     private fun setupStep1() {
@@ -144,6 +145,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             sheetBinding.rbMedium.isChecked = false
             sheetBinding.rbLarge.isChecked = false
             selectedSize = "Small"
+            updateStepSummary()
         }
         
         sheetBinding.rbMedium.setOnClickListener {
@@ -151,6 +153,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             sheetBinding.rbMedium.isChecked = true
             sheetBinding.rbLarge.isChecked = false
             selectedSize = "Medium"
+            updateStepSummary()
         }
         
         sheetBinding.rbLarge.setOnClickListener {
@@ -158,6 +161,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             sheetBinding.rbMedium.isChecked = false
             sheetBinding.rbLarge.isChecked = true
             selectedSize = "Large"
+            updateStepSummary()
         }
         
         // Also use RadioGroup listener as backup
@@ -167,42 +171,82 @@ class ItemCustomizeBottomSheet : Fragment() {
                 R.id.rbMedium -> selectedSize = "Medium"
                 R.id.rbLarge -> selectedSize = "Large"
             }
+            updateStepSummary()
         }
         
-        // Set default selection only if not in edit mode (edit mode is handled in setupInitialState)
-        if (!isEditMode) {
-            sheetBinding.rbSmall.isChecked = true
-            selectedSize = "Small"
-        }
+        // Do not auto-select by default; wait for explicit user choice
     }
     
     private fun setupStep2() {
         sheetBinding.chipSour.setOnClickListener {
-            toggleChip(sheetBinding.chipSour)
             if (sheetBinding.chipSour.isChecked) {
-                chefTip = "Make it extra sour"
-                sheetBinding.etChefTip.setText("Make it extra sour")
-            } else {
-                sheetBinding.etChefTip.setText("")
-                chefTip = ""
+                applyChefTipPreset("Make it extra sour")
             }
+            updateChipStyles()
+            updateStepSummary()
         }
         
         sheetBinding.chipSpicy.setOnClickListener {
-            toggleChip(sheetBinding.chipSpicy)
             if (sheetBinding.chipSpicy.isChecked) {
-                chefTip = "Make it extra spicy"
-                sheetBinding.etChefTip.setText("Make it extra spicy")
-            } else {
-                sheetBinding.etChefTip.setText("")
-                chefTip = ""
+                applyChefTipPreset("Make it extra spicy")
             }
+            updateChipStyles()
+            updateStepSummary()
         }
+
+        sheetBinding.chipLessSalty.setOnClickListener {
+            if (sheetBinding.chipLessSalty.isChecked) {
+                applyChefTipPreset("Make it less salty")
+            }
+            updateChipStyles()
+            updateStepSummary()
+        }
+
+        sheetBinding.chipCrispier.setOnClickListener {
+            if (sheetBinding.chipCrispier.isChecked) {
+                applyChefTipPreset("Make it crispier")
+            }
+            updateChipStyles()
+            updateStepSummary()
+        }
+
+        sheetBinding.chipNoOnions.setOnClickListener {
+            if (sheetBinding.chipNoOnions.isChecked) {
+                applyChefTipPreset("No onions please")
+            }
+            updateChipStyles()
+            updateStepSummary()
+        }
+
+        sheetBinding.chipExtraSauce.setOnClickListener {
+            if (sheetBinding.chipExtraSauce.isChecked) {
+                applyChefTipPreset("Add extra sauce")
+            }
+            updateChipStyles()
+            updateStepSummary()
+        }
+
+        sheetBinding.chipMildSpice.setOnClickListener {
+            if (sheetBinding.chipMildSpice.isChecked) {
+                applyChefTipPreset("Make it mild spice")
+            }
+            updateChipStyles()
+            updateStepSummary()
+        }
+        
+        sheetBinding.etChefTip.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                chefTip = s?.toString()?.trim() ?: ""
+                updateStepSummary()
+            }
+        })
         
         sheetBinding.etChefTip.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                // Clear chip selection when user types
                 clearChipSelection()
+                updateChipStyles()
             }
         }
     }
@@ -212,6 +256,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             if (quantity > 1) {
                 quantity--
                 sheetBinding.tvQty.text = quantity.toString()
+                updateStepSummary()
             }
         }
         
@@ -219,6 +264,7 @@ class ItemCustomizeBottomSheet : Fragment() {
             if (quantity < 99) {
                 quantity++
                 sheetBinding.tvQty.text = quantity.toString()
+                updateStepSummary()
             }
         }
     }
@@ -275,8 +321,21 @@ class ItemCustomizeBottomSheet : Fragment() {
     }
     
     private fun addItemToDraft() {
-        if (isEditMode && orderItem != null) {
-            // Update existing item
+        if (isEditingOrder && orderItem != null) {
+            // Update order item directly (not draft)
+            val item = orderItem!!
+            lifecycleScope.launch {
+                ordersViewModel.updateOrderItem(
+                    itemId = item.id,
+                    quantity = quantity,
+                    size = selectedSize,
+                    chefTip = chefTip
+                )
+            }
+            // Navigate back after update
+            findNavController().popBackStack()
+        } else if (isEditMode && orderItem != null) {
+            // Update existing item in draft
             val item = orderItem!!
             draftViewModel.updateDraftItem(item.id) { currentItem ->
                 currentItem.copy(
@@ -286,7 +345,7 @@ class ItemCustomizeBottomSheet : Fragment() {
                 )
             }
         } else {
-            // Add new item
+            // Add new item to draft
             menuItem?.let { item ->
                 val newOrderItem = OrderItem(
                     itemId = item.id,
@@ -342,6 +401,20 @@ class ItemCustomizeBottomSheet : Fragment() {
             if (currentStep >= 2) R.drawable.sf_step_dot_active else R.drawable.sf_step_dot_inactive)
         sheetBinding.sd3.background = ContextCompat.getDrawable(requireContext(),
             if (currentStep >= 3) R.drawable.sf_step_dot_active else R.drawable.sf_step_dot_inactive)
+
+        updateStepSummary()
+    }
+
+    private fun updateStepSummary() {
+        val parts = mutableListOf<String>()
+        if (!selectedSize.isNullOrBlank()) {
+            parts.add("Size: $selectedSize")
+        }
+        if (chefTip.isNotBlank()) {
+            parts.add("Tip: $chefTip")
+        }
+        parts.add("Qty: $quantity")
+        sheetBinding.tvStepSummary.text = parts.joinToString(" • ")
     }
     
     private fun updateButtonConstraints() {
@@ -370,26 +443,44 @@ class ItemCustomizeBottomSheet : Fragment() {
         constraintSet.applyTo(constraintLayout)
     }
     
-    private fun toggleChip(chip: Chip) {
-        val isSelected = chip.isChecked
-        clearChipSelection()
-        
-        if (!isSelected) {
-            chip.isChecked = true
-            chip.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_primary)
-            chip.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_white))
+    private fun applyChefTipPreset(preset: String) {
+        chefTip = preset
+        sheetBinding.etChefTip.setText(preset)
+    }
+
+    private fun updateChipStyles() {
+        val selectedColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_primary)
+        val unselectedColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
+        val selectedTextColor = ContextCompat.getColor(requireContext(), R.color.sf_white)
+        val unselectedTextColor = ContextCompat.getColor(requireContext(), R.color.sf_text_secondary)
+
+        listOf(
+            sheetBinding.chipSour,
+            sheetBinding.chipSpicy,
+            sheetBinding.chipLessSalty,
+            sheetBinding.chipCrispier,
+            sheetBinding.chipNoOnions,
+            sheetBinding.chipExtraSauce,
+            sheetBinding.chipMildSpice
+        ).forEach { chip ->
+            if (chip.isChecked) {
+                chip.chipBackgroundColor = selectedColor
+                chip.setTextColor(selectedTextColor)
+            } else {
+                chip.chipBackgroundColor = unselectedColor
+                chip.setTextColor(unselectedTextColor)
+            }
         }
     }
     
     private fun clearChipSelection() {
         sheetBinding.chipSour.isChecked = false
         sheetBinding.chipSpicy.isChecked = false
-        
-        sheetBinding.chipSour.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
-        sheetBinding.chipSpicy.chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), R.color.sf_chip_bg)
-        
-        sheetBinding.chipSour.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
-        sheetBinding.chipSpicy.setTextColor(ContextCompat.getColor(requireContext(), R.color.sf_text_secondary))
+        sheetBinding.chipLessSalty.isChecked = false
+        sheetBinding.chipCrispier.isChecked = false
+        sheetBinding.chipNoOnions.isChecked = false
+        sheetBinding.chipExtraSauce.isChecked = false
+        sheetBinding.chipMildSpice.isChecked = false
     }
     
     override fun onDestroyView() {

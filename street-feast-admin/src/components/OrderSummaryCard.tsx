@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrdersStore, OrderType } from '../store/ordersStore';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
 import { toast } from './Toast';
+import { TableSelector } from './TableSelector';
+import { LicensePlateInput } from './LicensePlateInput';
+import { getOccupiedTables, getStoreId, supabase } from '../utils/supabase';
+
+// Helper function to format table number
+const formatTableNumber = (num: number): string => {
+  return `Table ${String(num).padStart(2, '0')}`;
+};
 
 export const OrderSummaryCard: React.FC = () => {
   const navigate = useNavigate();
@@ -11,9 +19,112 @@ export const OrderSummaryCard: React.FC = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showPlaceOrderDialog, setShowPlaceOrderDialog] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [occupiedTables, setOccupiedTables] = useState<number[]>([]);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [isRefreshingTables, setIsRefreshingTables] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Fetch occupied tables when order type is DineIn
+  useEffect(() => {
+    const fetchOccupiedTables = async () => {
+      if (draft.type === 'DineIn') {
+        setIsLoadingTables(true);
+        try {
+          const storeId = await getStoreId();
+          const occupied = await getOccupiedTables(storeId);
+          setOccupiedTables(occupied);
+        } catch (error) {
+          console.error('Error fetching occupied tables:', error);
+          setOccupiedTables([]);
+        } finally {
+          setIsLoadingTables(false);
+        }
+      } else {
+        setOccupiedTables([]);
+      }
+    };
+
+    fetchOccupiedTables();
+  }, [draft.type]);
+
+  // Real-time subscription to refresh occupied tables when orders change
+  useEffect(() => {
+    if (draft.type !== 'DineIn') return;
+
+    const channel = supabase
+      .channel('table-status-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+        },
+        async (payload) => {
+          console.log('[OrderSummaryCard] Order change detected, refreshing occupied tables:', payload.eventType);
+          try {
+            const storeId = await getStoreId();
+            const occupied = await getOccupiedTables(storeId);
+            setOccupiedTables(occupied);
+          } catch (error) {
+            console.error('[OrderSummaryCard] Error refreshing occupied tables:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[OrderSummaryCard] Table status subscription status:', status);
+      });
+
+    return () => {
+      console.log('[OrderSummaryCard] Cleaning up table status subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [draft.type]);
+
+  // Clear table/license when order type changes
+  useEffect(() => {
+    if (draft.type !== 'DineIn' && draft.tableNumber !== undefined) {
+      setDraft({ tableNumber: undefined });
+    }
+    if (draft.type !== 'EatAway' && draft.licensePlate !== undefined) {
+      setDraft({ licensePlate: undefined });
+    }
+  }, [draft.type, setDraft]);
+
+  // Handle manual table refresh
+  const handleRefreshTables = async () => {
+    if (draft.type !== 'DineIn') return;
+    
+    setIsRefreshingTables(true);
+    try {
+      const storeId = await getStoreId();
+      const occupied = await getOccupiedTables(storeId);
+      setOccupiedTables(occupied);
+      toast.success('Table status refreshed');
+    } catch (error) {
+      console.error('Error refreshing tables:', error);
+      toast.error('Failed to refresh table status');
+    } finally {
+      setIsRefreshingTables(false);
+    }
+  };
+
+  // Auto-expand when table is selected, auto-collapse when table changes
+  useEffect(() => {
+    if (draft.type === 'DineIn' && draft.tableNumber) {
+      setIsExpanded(true);
+    } else if (draft.type !== 'DineIn' || !draft.tableNumber) {
+      setIsExpanded(false);
+    }
+  }, [draft.type, draft.tableNumber]);
 
   const handleTypeChange = (type: OrderType) => {
-    setDraft({ type });
+    // Clear table/license when switching types
+    setDraft({ 
+      type,
+      tableNumber: undefined,
+      licensePlate: undefined
+    });
   };
 
   const handlePlaceOrderClick = () => {
@@ -85,8 +196,14 @@ export const OrderSummaryCard: React.FC = () => {
         </div>
       </div>
 
-      {/* Order Items List */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+      {/* Order Items List - Collapsible when table is selected */}
+      <div
+        className={`flex-1 overflow-y-auto px-6 py-4 min-h-0 transition-all duration-300 ease-in-out ${
+          draft.type === 'DineIn' && draft.tableNumber && !isExpanded
+            ? 'max-h-0 overflow-hidden opacity-0'
+            : 'max-h-full opacity-100'
+        }`}
+      >
         {draft.orderItems.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 mb-2">No items added yet</p>
@@ -158,13 +275,98 @@ export const OrderSummaryCard: React.FC = () => {
           >
             <option value="DineIn">Dine-in</option>
             <option value="Parcel">Parcel</option>
-            <option value="Delivery">Delivery</option>
+            <option value="EatAway">Eat Away</option>
           </select>
         </div>
       </div>
 
-      {/* Sticky Action Buttons */}
-      <div className="px-6 py-3 bg-white border-t sticky bottom-0">
+      {/* Table/License Selection Section */}
+      <div className="px-6 py-3 border-b">
+        {draft.type === 'DineIn' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">Select Table</label>
+              <button
+                onClick={handleRefreshTables}
+                disabled={isRefreshingTables || isLoadingTables}
+                className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                aria-label="Refresh table status"
+                title="Refresh table status"
+              >
+                <svg
+                  className={`w-5 h-5 transition-transform duration-300 ${isRefreshingTables ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+            {isLoadingTables ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-500">Loading tables...</p>
+              </div>
+            ) : (
+              <>
+                <TableSelector
+                  selectedTable={draft.tableNumber}
+                  occupiedTables={occupiedTables}
+                  onSelectTable={(tableNumber) => {
+                    setDraft({ tableNumber });
+                    setIsExpanded(true); // Expand when table is selected
+                  }}
+                />
+                {draft.tableNumber && (
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-sm text-gray-600">
+                      {formatTableNumber(draft.tableNumber)}
+                    </p>
+                    <button
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1"
+                      aria-label={isExpanded ? 'Collapse order summary' : 'Expand order summary'}
+                    >
+                      <svg
+                        className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        
+        {draft.type === 'EatAway' && (
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">License Plate</label>
+            <LicensePlateInput
+              value={draft.licensePlate}
+              onChange={(value) => setDraft({ licensePlate: value })}
+            />
+            {draft.licensePlate && draft.licensePlate.length === 4 && (
+              <p className="text-sm text-gray-600 mt-2">
+                License: {draft.licensePlate}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Sticky Action Buttons - Collapsible when table is selected */}
+      <div
+        className={`px-6 py-3 bg-white border-t sticky bottom-0 transition-all duration-300 ease-in-out ${
+          draft.type === 'DineIn' && draft.tableNumber && !isExpanded
+            ? 'max-h-0 overflow-hidden opacity-0 py-0'
+            : 'max-h-full opacity-100'
+        }`}
+      >
         <Button
           variant="primary"
           onClick={handlePlaceOrderClick}

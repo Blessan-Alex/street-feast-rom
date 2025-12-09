@@ -32,7 +32,7 @@ const ROLE_TARGETS: Record<string, Array<"chef" | "waiter" | "admin">> = {
   Accepted: ["chef"],
   InKitchen: ["chef", "admin"],
   Prepared: ["waiter", "admin"],
-  Delivered: [],
+  Delivered: ["admin"],
   Canceled: ["chef", "waiter"],
 };
 

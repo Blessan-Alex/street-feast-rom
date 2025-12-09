@@ -35,7 +35,7 @@
     <string name="chef_tip_label">Chef Tip</string>
     <string name="order_type_dinein">Dine-in</string>
     <string name="order_type_parcel">Parcel</string>
-    <string name="order_type_delivery">Delivery</string>
+    <string name="order_type_eat_away">Eat Away</string>
     <string name="items_count">%1$d items</string>
     <string name="time_ago_min">%1$d min ago</string>
     <string name="time_ago_now">Just now</string>

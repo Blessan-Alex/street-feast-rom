@@ -15,6 +15,7 @@ import androidx.navigation.fragment.NavHostFragment
 import com.onesignal.OneSignal
 import com.onesignal.notifications.INotificationClickEvent
 import com.onesignal.notifications.INotificationClickListener
+import com.onesignal.notifications.INotificationWillDisplayEvent
 import com.streatfeast.app.R
 import com.streatfeast.app.databinding.ActivityWaiterBinding
 import com.streatfeast.app.di.ServiceLocator
@@ -22,6 +23,7 @@ import com.streatfeast.app.models.UserRole
 import com.streatfeast.app.utils.NotificationHelper
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.AuthViewModelFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class WaiterActivity : AppCompatActivity() {
@@ -135,6 +137,48 @@ class WaiterActivity : AppCompatActivity() {
     }
 
     private fun setupOneSignalNotificationHandler() {
+        // Handle foreground notifications - show toast when notification received
+        OneSignal.Notifications.addForegroundLifecycleListener(object : com.onesignal.notifications.INotificationLifecycleListener {
+            override fun onWillDisplay(event: INotificationWillDisplayEvent) {
+                android.util.Log.d("WaiterActivity", "OneSignal notification received in foreground")
+
+                val additionalData = event.notification.additionalData
+                val orderNumber = (additionalData?.get("number") as? Number)?.toInt()
+                val status = additionalData?.get("status")?.toString()
+
+                if (status.equals("Prepared", true)) {
+                    val message = if (orderNumber != null) {
+                        "Order #$orderNumber is ready to be delivered"
+                    } else {
+                        "New order is ready to be delivered"
+                    }
+
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@WaiterActivity,
+                            message,
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        val navHostFragment = supportFragmentManager
+                            .findFragmentById(R.id.navHostFragment) as? NavHostFragment
+                        val navController = navHostFragment?.navController
+
+                        navController?.let { controller ->
+                            val currentDestination = controller.currentDestination?.id
+                            if (currentDestination != R.id.readyOrderFragment) {
+                                navigateToFragment(R.id.readyOrderFragment)
+                            }
+                        }
+                    }
+                }
+
+                // Display the notification
+                event.notification.display()
+            }
+        })
+        
+        // Handle notification clicks
         OneSignal.Notifications.addClickListener(object : INotificationClickListener {
             override fun onClick(event: INotificationClickEvent) {
                 android.util.Log.d("WaiterActivity", "OneSignal notification clicked")

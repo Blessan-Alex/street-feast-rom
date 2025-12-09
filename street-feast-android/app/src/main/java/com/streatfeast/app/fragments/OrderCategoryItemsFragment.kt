@@ -19,6 +19,13 @@ import com.streatfeast.app.databinding.FragmentOrderCategoryItemsBinding
 import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
+import com.streatfeast.app.viewmodels.MenuViewModel
+import com.streatfeast.app.viewmodels.MenuViewModelFactory
+import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.storage.StreetFeastDatabase
+import com.streatfeast.app.utils.Constants
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class OrderCategoryItemsFragment : Fragment() {
     
@@ -26,8 +33,15 @@ class OrderCategoryItemsFragment : Fragment() {
     private val binding get() = _binding!!
     
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
+    private val menuViewModel: MenuViewModel by viewModels {
+        val repository = ServiceLocator.provideMenuRepository(requireContext().applicationContext)
+        val db = StreetFeastDatabase.getInstance(requireContext())
+        val localDataSource = com.streatfeast.app.storage.MenuLocalDataSource(db)
+        MenuViewModelFactory(repository, localDataSource, Constants.DEFAULT_STORE_ID)
+    }
     
     private var categoryName: String = "Chinese"
+    private var categoryId: String? = null
     private var tableNumber: Int = 4
     private var orderType: OrderType = OrderType.DINE_IN
     private var showHeader: Boolean = false
@@ -51,6 +65,7 @@ class OrderCategoryItemsFragment : Fragment() {
         // Get arguments
         arguments?.let { args ->
             categoryName = args.getString("categoryName", "Chinese")
+            categoryId = args.getString("categoryId")
             tableNumber = args.getInt("tableNumber", 4)
             args.getString("orderType")?.let { typeString ->
                 orderType = try {
@@ -150,7 +165,7 @@ class OrderCategoryItemsFragment : Fragment() {
         return when (type) {
             OrderType.DINE_IN -> "Dine in"
             OrderType.PARCEL -> "Parcel"
-            OrderType.DELIVERY -> "Eat away"
+            OrderType.EAT_AWAY -> "Eat away"
         }
     }
     
@@ -257,14 +272,32 @@ class OrderCategoryItemsFragment : Fragment() {
     }
     
     private fun loadMenuItems() {
-        // Mock data for now - will be replaced with ViewModel/Repository later
-        allItems.clear()
-        allItems.addAll(generateMockItems())
-        filteredItems.clear()
-        filteredItems.addAll(allItems)
-        adapter.notifyDataSetChanged()
-        
         binding.tvCategory.text = categoryName
+        
+        // Load items from MenuViewModel based on categoryId
+        if (categoryId != null) {
+            menuViewModel.getItemsByCategory(categoryId!!).observe(viewLifecycleOwner) { items ->
+                allItems.clear()
+                allItems.addAll(items)
+                filterItems(binding.etSearch.text?.toString() ?: "")
+            }
+        } else {
+            // Fallback: find category by name if categoryId is not provided
+            menuViewModel.categories.observe(viewLifecycleOwner) { categories ->
+                val category = categories.find { it.name == categoryName }
+                if (category != null) {
+                    menuViewModel.getItemsByCategory(category.id).observe(viewLifecycleOwner) { items ->
+                        allItems.clear()
+                        allItems.addAll(items)
+                        filterItems(binding.etSearch.text?.toString() ?: "")
+                    }
+                } else {
+                    // If category not found, show empty list
+                    allItems.clear()
+                    filterItems(binding.etSearch.text?.toString() ?: "")
+                }
+            }
+        }
     }
     
     private fun filterItems(searchTerm: String) {
@@ -288,22 +321,6 @@ class OrderCategoryItemsFragment : Fragment() {
         findNavController().navigate(R.id.itemCustomizeFragment, bundle)
     }
     
-    private fun generateMockItems(): List<MenuItem> {
-        return listOf(
-            MenuItem(id = "1", name = "Ramen", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "2", name = "Spring Roll", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "3", name = "Dumplings", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "4", name = "Fried Rice", sizes = listOf("Small", "medium", "Large"), vegFlag = "Both"),
-            MenuItem(id = "5", name = "Noodles", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "6", name = "Soup", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "7", name = "Chicken", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "8", name = "Beef", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "9", name = "Pork", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "10", name = "Tofu", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "11", name = "Vegetables", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "12", name = "Seafood", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg")
-        )
-    }
     
     override fun onDestroyView() {
         super.onDestroyView()

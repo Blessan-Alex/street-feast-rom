@@ -3,7 +3,7 @@ import { supabase, getStoreId } from '../utils/supabase';
 import { toast } from '../components/Toast';
 
 // Order types
-export type OrderType = 'DineIn' | 'Parcel' | 'Delivery';
+export type OrderType = 'DineIn' | 'Parcel' | 'EatAway';
 export type OrderStatus = 'Created' | 'Accepted' | 'InKitchen' | 'Prepared' | 'Delivered' | 'Closed' | 'Canceled';
 
 // Order item (snapshot of menu item at time of order)
@@ -26,6 +26,8 @@ export interface Order {
   status: OrderStatus;
   createdAt: number;
   updatedAt: number;
+  tableNumber?: number;
+  licensePlate?: string;
   orderItems: OrderItem[];
 }
 
@@ -33,6 +35,8 @@ export interface Order {
 export interface DraftOrder {
   type: OrderType;
   chefTip: string;
+  tableNumber?: number;
+  licensePlate?: string;
   orderItems: OrderItem[];
 }
 
@@ -47,19 +51,8 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   Canceled: []
 };
 
-// Sequential order number counter
-const ORDER_COUNTER_KEY = 'sf.order.counter';
-
-const getNextOrderNumber = (): number => {
-  const current = parseInt(localStorage.getItem(ORDER_COUNTER_KEY) || '1000', 10);
-  const next = current + 1;
-  localStorage.setItem(ORDER_COUNTER_KEY, String(next));
-  return next;
-};
-
-export const clearOrderCounter = () => {
-  localStorage.removeItem(ORDER_COUNTER_KEY);
-};
+// Order numbers are now assigned by database trigger (orders_assign_number)
+// No need for localStorage counter - both admin and waiter use the same sequential numbering
 
 interface OrdersStore {
   orders: Order[];
@@ -139,7 +132,6 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       return { ok: false, error: 'Add at least one item to the order' };
     }
 
-    const orderNumber = getNextOrderNumber();
     const now = new Date().toISOString();
 
     try {
@@ -163,8 +155,9 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       }));
 
       // Prepare order JSONB for RPC
-      const orderJson = {
-        number: orderNumber,
+      // Note: number is set to null - database trigger will assign sequential number
+      const orderJson: any = {
+        number: null, // Let database trigger assign the number
         type: state.draft.type,
         chef_tip: state.draft.chefTip.trim(),
         status: 'Created',
@@ -173,6 +166,13 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         created_at: now,
         updated_at: now
       };
+      
+      // Add table_number or license_plate based on order type
+      if (state.draft.type === 'DineIn' && state.draft.tableNumber) {
+        orderJson.table_number = state.draft.tableNumber;
+      } else if (state.draft.type === 'EatAway' && state.draft.licensePlate) {
+        orderJson.license_plate = state.draft.licensePlate;
+      }
 
       // Call orders_upsert RPC
       const { data: orderId, error } = await supabase.rpc('orders_upsert', {
@@ -189,10 +189,22 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         return { ok: false, error: errorMessage };
       }
 
+      // Fetch the created order to get the assigned order number
+      const { data: createdOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('number')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError || !createdOrder) {
+        console.error('Failed to fetch created order number:', fetchError);
+        // Continue with order creation even if fetch fails
+      }
+
       // Update local state
       const order: Order = {
         id: orderId as string,
-        orderNumber,
+        orderNumber: createdOrder?.number || 0, // Use number assigned by database trigger
         type: state.draft.type,
         chefTip: state.draft.chefTip.trim(),
         status: 'Created',
@@ -273,7 +285,6 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
     try {
       if (isAddOn) {
         // Create new order with parent_order_id
-        const addOnOrderNumber = getNextOrderNumber();
         const now = new Date().toISOString();
         const storeId = await getStoreId();
 
@@ -293,8 +304,9 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
           }
         }));
 
+        // Note: number is set to null - database trigger will assign sequential number
         const orderJson = {
-          number: addOnOrderNumber,
+          number: null, // Let database trigger assign the number
           type: order.type,
           chef_tip: '',
           status: 'Created',
@@ -318,10 +330,21 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
           return false;
         }
 
+        // Fetch the created order to get the assigned order number
+        const { data: createdOrder, error: fetchError } = await supabase
+          .from('orders')
+          .select('number')
+          .eq('id', newOrderId)
+          .single();
+
+        if (fetchError) {
+          console.error('Failed to fetch created order number:', fetchError);
+        }
+
         // Update local state
         const newOrder: Order = {
           id: newOrderId as string,
-          orderNumber: addOnOrderNumber,
+          orderNumber: createdOrder?.number || 0, // Use number assigned by database trigger
           type: order.type,
           chefTip: '',
           status: 'Created',
@@ -506,6 +529,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
           status: (order.status || 'Created') as OrderStatus,
           createdAt: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
           updatedAt: order.updated_at ? new Date(order.updated_at).getTime() : Date.now(),
+          tableNumber: order.table_number || undefined,
+          licensePlate: order.license_plate || undefined,
           orderItems: orderItems.map((item: any) => ({
             id: item.id,
             itemId: item.sku || '',
@@ -548,6 +573,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         status: (supabaseOrder.status || 'Created') as OrderStatus,
         createdAt: supabaseOrder.created_at ? new Date(supabaseOrder.created_at).getTime() : Date.now(),
         updatedAt: supabaseOrder.updated_at ? new Date(supabaseOrder.updated_at).getTime() : Date.now(),
+        tableNumber: supabaseOrder.table_number || undefined,
+        licensePlate: supabaseOrder.license_plate || undefined,
         orderItems: (orderItems || []).map((item: any) => ({
           id: item.id,
           itemId: item.sku || '',
@@ -665,9 +692,16 @@ export function initOrdersRealtime(storeId: string): () => void {
                 toast.info(`Chef has accepted Order #${orderNumber}`);
               } else if (newStatus === 'Prepared') {
                 toast.success(`Chef has prepared Order #${orderNumber}`);
-              } else if (newStatus === 'Delivered' && oldStatus && oldStatus !== newStatus) {
-                // Only show Delivered toast if status actually changed (to avoid duplicates)
-                toast.info(`Waiter has delivered Order #${orderNumber}`);
+              } else if (newStatus === 'Delivered') {
+                // Show toast for delivered orders (check oldStatus to avoid duplicates on initial load)
+                if (oldStatus && oldStatus !== newStatus) {
+                  console.log('[Realtime] Showing Delivered toast for Order #' + orderNumber);
+                  toast.info(`Waiter has delivered Order #${orderNumber}`);
+                } else if (!oldStatus) {
+                  // If no oldStatus, it's likely a new subscription - still show toast
+                  console.log('[Realtime] Showing Delivered toast (no oldStatus) for Order #' + orderNumber);
+                  toast.info(`Waiter has delivered Order #${orderNumber}`);
+                }
               }
               
               // Show notification for status changes (works in both Electron and browser)

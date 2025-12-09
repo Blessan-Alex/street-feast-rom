@@ -366,6 +366,18 @@
             android:layout_height="wrap_content" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/tvMoreItems"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="+3 more"
+        android:textColor="#6F7384"
+        android:textSize="12sp"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:visibility="gone" />
+
     <!-- Mark all prepared button -->
     <Button
         android:id="@+id/btnMarkAllPrepared"

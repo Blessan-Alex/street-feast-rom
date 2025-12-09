@@ -6,15 +6,18 @@ import com.streatfeast.app.BuildConfig
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.models.OrderType
+import com.streatfeast.app.network.OccupiedTableResult
 import com.streatfeast.app.network.SupabaseOrderDto
 import com.streatfeast.app.network.SupabaseOrderItemDto
 import com.streatfeast.app.network.SupabaseStoreDto
 import com.streatfeast.app.storage.OrderEntity
 import com.streatfeast.app.storage.OrderItemEntity
 import com.streatfeast.app.storage.OrderLocalDataSource
+import com.google.gson.Gson
 import com.streatfeast.app.utils.Constants
 import com.streatfeast.app.utils.NotificationHelper
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -48,6 +51,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -61,7 +65,10 @@ class SupabaseOrderRepository(
      */
     private val storeId: String = Constants.DEFAULT_STORE_ID
 ) {
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val repoDispatcher = repoScope.coroutineContext
     private var realtimeChannel: RealtimeChannel? = null
+    private val realtimeMutex = Mutex()
 
     // Store multiple callbacks for new order notifications
     private val callbacks = mutableListOf<((orderId: String, orderNumber: Int?) -> Unit)>()
@@ -81,7 +88,7 @@ class SupabaseOrderRepository(
      * Returns null if no active store is found or if the query fails.
      */
     private suspend fun fetchStoreId(): String? = runCatching {
-        withContext(Dispatchers.IO) {
+        withContext(repoDispatcher) {
             val stores = client.postgrest["stores"]
                 .select {
                     filter { eq("is_active", true) }
@@ -126,10 +133,22 @@ class SupabaseOrderRepository(
         emitAll(localDataSource.observeOrdersByType(currentStoreId, status, type))
     }
 
+    fun observeEditableOrders(): Flow<List<Order>> = flow {
+        val currentStoreId = getStoreId()
+        val editableStatuses = listOf(
+            OrderStatus.CREATED,
+            OrderStatus.ACCEPTED,
+            OrderStatus.IN_KITCHEN,
+            OrderStatus.PREPARED
+        )
+        Log.d("SupabaseOrderRepository", "observeEditableOrders: storeId=$currentStoreId, statuses=${editableStatuses.map { it.toRemoteValue() }}")
+        emitAll(localDataSource.observeOrdersByStatuses(currentStoreId, editableStatuses))
+    }
+
     suspend fun refresh() {
         Log.d("SupabaseOrderRepository", "refresh() called")
         runCatching {
-            withContext(Dispatchers.IO) {
+            withContext(repoDispatcher) {
                 val currentStoreId = getStoreId()
                 Log.d("SupabaseOrderRepository", "refresh() fetching orders for storeId=$currentStoreId")
 
@@ -141,6 +160,14 @@ class SupabaseOrderRepository(
                     .decodeList<SupabaseOrderDto>()
 
                 Log.d("SupabaseOrderRepository", "refresh() fetched ${orders.size} orders")
+
+                // Log order status breakdown for debugging
+                val statusBreakdown = orders.groupBy { it.status }.mapValues { it.value.size }
+                Log.d("SupabaseOrderRepository", "Order status breakdown: $statusBreakdown")
+                
+                // Log order numbers and statuses
+                val orderDetails = orders.take(10).map { "${it.number}(${it.status})" }
+                Log.d("SupabaseOrderRepository", "Sample orders: ${orderDetails.joinToString(", ")}")
 
                 val orderIds = orders.map { it.id }
 
@@ -180,8 +207,19 @@ class SupabaseOrderRepository(
      */
     suspend fun addCallback(callback: (orderId: String, orderNumber: Int?) -> Unit) {
         callbacksMutex.withLock {
+            if (callbacks.contains(callback)) {
+                Log.d("SupabaseOrderRepository", "Callback already registered; skipping")
+                return
+            }
             callbacks.add(callback)
             Log.d("SupabaseOrderRepository", "Callback registered. Total callbacks: ${callbacks.size}")
+        }
+    }
+
+    suspend fun removeCallback(callback: (orderId: String, orderNumber: Int?) -> Unit) {
+        callbacksMutex.withLock {
+            callbacks.remove(callback)
+            Log.d("SupabaseOrderRepository", "Callback removed. Total callbacks: ${callbacks.size}")
         }
     }
 
@@ -199,126 +237,97 @@ class SupabaseOrderRepository(
         onNewOrder: ((orderId: String, orderNumber: Int?) -> Unit)? = null
     ) {
         // Register callback if provided (even if channel already exists)
-        onNewOrder?.let { callback ->
-            addCallback(callback)
-        }
-
-        // If channel already exists, just return - callbacks are already registered
-        if (realtimeChannel != null) {
-            Log.d("SupabaseOrderRepository", "Realtime channel already exists. Callback registered.")
-            return
-        }
+        onNewOrder?.let { callback -> addCallback(callback) }
 
         val currentStoreId = getStoreId()
         Log.d("SupabaseOrderRepository", "Starting realtime subscription for storeId=$currentStoreId")
 
         runCatching {
-            val channel = client.realtime.channel("realtime:public:orders")
+            realtimeMutex.withLock {
+                // If channel already exists, skip rejoin
+                if (realtimeChannel != null) {
+                    Log.d("SupabaseOrderRepository", "Realtime channel already exists. Callback registered.")
+                    return@withLock
+                }
 
-            // Listen to ALL Postgres actions for public.orders filtered by store_id
-            val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                table = "orders"
-                // Use typed filter API (same syntax as postgrest filters)
-                filter("store_id", FilterOperator.EQ, currentStoreId)
-                // OR, if you really want raw string:
-                // filter = "store_id=eq.$currentStoreId"
-            }
+                // Clean up any lingering channel
+                realtimeChannel?.let { existing ->
+                    runCatching { client.realtime.removeChannel(existing) }
+                        .onFailure { Log.e("SupabaseOrderRepository", "Error removing old channel", it) }
+                    realtimeChannel = null
+                }
 
-            // Collect the flow and refresh when something changes
-            scope.launch {
-                changeFlow.collect { action ->
-                    when (action) {
-                        is PostgresAction.Insert -> {
-                            Log.d(
-                                "SupabaseOrderRepository",
-                                "Realtime INSERT: ${action.record}"
-                            )
-                            
-                            // Extract order ID, number, and type from the insert record
-                            val orderId = action.record["id"]?.toString() ?: ""
-                            val orderNumber = (action.record["number"] as? Number)?.toInt()
-                            val orderType = action.record["type"]?.toString() ?: "Unknown"
-                            
-                            Log.d("SupabaseOrderRepository", "New order details: id=$orderId, number=$orderNumber, type=$orderType")
-                            
-                            // Check if this is a genuinely new order
-                            val isNewOrder = orderIdsMutex.withLock {
-                                if (orderId.isNotEmpty() && orderId !in previousOrderIds) {
-                                    previousOrderIds.add(orderId)
-                                    true
-                                } else {
-                                    false
+                val channel = client.realtime.channel("realtime:public:orders-${currentStoreId}-${System.currentTimeMillis()}")
+
+                val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                    table = "orders"
+                    filter("store_id", FilterOperator.EQ, currentStoreId)
+                }
+
+                repoScope.launch {
+                    changeFlow.collect { action ->
+                        when (action) {
+                            is PostgresAction.Insert -> {
+                                val orderId = action.record["id"]?.toString() ?: ""
+                                val orderNumber = (action.record["number"] as? Number)?.toInt()
+                                val orderType = action.record["type"]?.toString() ?: "Unknown"
+
+                                val isNewOrder = orderIdsMutex.withLock {
+                                    if (orderId.isNotEmpty() && orderId !in previousOrderIds) {
+                                        previousOrderIds.add(orderId)
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
-                            }
-                            
-                            // Invoke callbacks and show notification for new orders
-                            if (isNewOrder) {
-                                Log.d(
-                                    "SupabaseOrderRepository",
-                                    "New order detected: id=$orderId, number=$orderNumber, type=$orderType"
-                                )
-                                
-                                // Show local notification
-                                if (orderNumber != null) {
-                                    NotificationHelper.showNewOrderNotification(context, orderNumber)
-                                }
-                                
-                                // Invoke all registered callbacks
-                                callbacksMutex.withLock {
-                                    Log.d("SupabaseOrderRepository", "Invoking ${callbacks.size} registered callbacks")
-                                    callbacks.forEach { callback ->
-                                        try {
-                                            callback(orderId, orderNumber)
-                                        } catch (e: Exception) {
-                                            Log.e("SupabaseOrderRepository", "Error invoking callback: ${e.message}", e)
+
+                                if (isNewOrder) {
+                                    if (orderNumber != null) {
+                                        NotificationHelper.showNewOrderNotification(context, orderNumber)
+                                    }
+                                    callbacksMutex.withLock {
+                                        callbacks.forEach { callback ->
+                                            runCatching { callback(orderId, orderNumber) }
+                                                .onFailure { Log.e("SupabaseOrderRepository", "Error invoking callback", it) }
                                         }
                                     }
                                 }
+
+                                Log.d("SupabaseOrderRepository", "Calling refresh() after realtime INSERT event for order type: $orderType")
+                                refresh()
+                                Log.d("SupabaseOrderRepository", "Refresh() call completed for INSERT event")
                             }
-                            
-                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime INSERT event for order type: $orderType")
-                            refresh()
-                            Log.d("SupabaseOrderRepository", "Refresh() call completed for INSERT event")
-                        }
-                        is PostgresAction.Update -> {
-                            Log.d(
-                                "SupabaseOrderRepository",
-                                "Realtime UPDATE event received"
-                            )
-                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime UPDATE event")
-                            refresh()
-                            Log.d("SupabaseOrderRepository", "Refresh() call completed for UPDATE event")
-                        }
-                        is PostgresAction.Delete -> {
-                            Log.d(
-                                "SupabaseOrderRepository",
-                                "Realtime DELETE event received"
-                            )
-                            Log.d("SupabaseOrderRepository", "Calling refresh() after realtime DELETE event")
-                            refresh()
-                            Log.d("SupabaseOrderRepository", "Refresh() call completed for DELETE event")
-                        }
-                        is PostgresAction.Select -> {
-                            // Usually can be ignored
-                            Log.d(
-                                "SupabaseOrderRepository",
-                                "Realtime select: ${action.record}"
-                            )
+                            is PostgresAction.Update -> {
+                                val record = action.record
+                                val orderId = record?.get("id")?.toString()
+                                val orderNumber = (record?.get("number") as? Number)?.toInt()
+                                val newStatus = record?.get("status")?.toString()
+                                Log.d("SupabaseOrderRepository", "Realtime UPDATE event - Order #$orderNumber (ID: $orderId), Status: $newStatus")
+                                Log.d("SupabaseOrderRepository", "Calling refresh() after realtime UPDATE event")
+                                refresh()
+                                Log.d("SupabaseOrderRepository", "Refresh() call completed for UPDATE event")
+                            }
+                            is PostgresAction.Delete -> {
+                                Log.d("SupabaseOrderRepository", "Realtime DELETE event received")
+                                Log.d("SupabaseOrderRepository", "Calling refresh() after realtime DELETE event")
+                                refresh()
+                                Log.d("SupabaseOrderRepository", "Refresh() call completed for DELETE event")
+                            }
+                            is PostgresAction.Select -> {
+                                Log.d("SupabaseOrderRepository", "Realtime select: ${action.record}")
+                            }
                         }
                     }
                 }
-            }
 
-            // Subscribe to channel (this will connect Realtime if needed)
-            channel.subscribe()
-            Log.d("SupabaseOrderRepository", "Realtime channel subscribed successfully")
+                channel.subscribe()
+                Log.d("SupabaseOrderRepository", "Realtime channel subscribed successfully")
+                realtimeChannel = channel
 
-            realtimeChannel = channel
-
-            // Initial sync
-            scope.launch { 
-                Log.d("SupabaseOrderRepository", "Performing initial sync after realtime subscription")
-                refresh() 
+                repoScope.launch {
+                    Log.d("SupabaseOrderRepository", "Performing initial sync after realtime subscription")
+                    refresh()
+                }
             }
         }.onFailure { e ->
             Log.e("SupabaseOrderRepository", "Failed to start realtime subscription", e)
@@ -328,20 +337,18 @@ class SupabaseOrderRepository(
     suspend fun stopRealtime() {
         realtimeChannel?.let { ch ->
             Log.d("SupabaseOrderRepository", "Stopping realtime subscription")
-            CoroutineScope(Dispatchers.IO).launch {
-                runCatching {
-                    ch.unsubscribe()
-                    // In v3, removing the channel is not required: it is GC'd after unsubscribe
-                    Log.d("SupabaseOrderRepository", "Realtime channel unsubscribed")
-                }.onFailure { e ->
-                    Log.e("SupabaseOrderRepository", "Failed to stop realtime", e)
+            repoScope.launch {
+                realtimeMutex.withLock {
+                    runCatching { ch.unsubscribe() }
+                        .onFailure { Log.e("SupabaseOrderRepository", "Failed to unsubscribe realtime", it) }
+                    runCatching { client.realtime.removeChannel(ch) }
+                        .onFailure { Log.e("SupabaseOrderRepository", "Failed to remove realtime channel", it) }
+                    realtimeChannel = null
+                    callbacksMutex.withLock {
+                        callbacks.clear()
+                        Log.d("SupabaseOrderRepository", "Callbacks cleared")
+                    }
                 }
-            }
-            realtimeChannel = null
-            // Clear callbacks when stopping realtime
-            callbacksMutex.withLock {
-                callbacks.clear()
-                Log.d("SupabaseOrderRepository", "Callbacks cleared")
             }
         }
     }
@@ -368,7 +375,7 @@ class SupabaseOrderRepository(
         fromStatus: OrderStatus,
         toStatus: OrderStatus
     ): Result<Int> = runCatching {
-        withContext(Dispatchers.IO) {
+        withContext(repoDispatcher) {
             val currentStoreId = getStoreId()
             Log.d("SupabaseOrderRepository", "Bulk update: $fromStatus -> $toStatus for store: $currentStoreId")
             
@@ -423,7 +430,7 @@ class SupabaseOrderRepository(
         count: Int
     ) {
         // Use HTTP client to invoke Edge Function directly
-        withContext(Dispatchers.IO) {
+        withContext(repoDispatcher) {
             try {
                 val supabaseUrl = BuildConfig.SUPABASE_URL
                 val anonKey = BuildConfig.SUPABASE_ANON_KEY
@@ -469,7 +476,7 @@ class SupabaseOrderRepository(
 
     private suspend fun updateStatus(orderId: String, status: OrderStatus): Result<Unit> =
         runCatching {
-            withContext(Dispatchers.IO) {
+            withContext(repoDispatcher) {
                 client.postgrest["orders"].update(
                     {
                         set("status", status.toRemoteValue())
@@ -482,8 +489,543 @@ class SupabaseOrderRepository(
             }
         }
 
-    suspend fun registerDevice(playerId: String) = withContext(Dispatchers.IO) {
+    suspend fun registerDevice(playerId: String) = withContext(repoDispatcher) {
         client.postgrest.rpc("register_device", mapOf("player_id" to playerId))
+    }
+
+    /**
+     * Creates a new order via orders_upsert RPC.
+     * Validates table availability for DINE_IN orders and license plate format for EAT_AWAY orders.
+     */
+    suspend fun createOrder(
+        orderType: OrderType,
+        items: List<com.streatfeast.app.models.OrderItem>,
+        tableNumber: Int? = null,
+        licensePlate: String? = null,
+        chefTip: String = "",
+        isEdit: Boolean = false
+    ): Result<String> = runCatching {
+        withContext(repoDispatcher) {
+            val currentStoreId = getStoreId()
+            Log.d("SupabaseOrderRepository", "createOrder: type=${orderType.toRemoteValue()}, table=$tableNumber, license=$licensePlate, items=${items.size}")
+
+            // Get current user ID
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                error("User not authenticated")
+            }
+
+            var sanitizedLicensePlate = licensePlate
+                ?.filter { it.isDigit() }
+                ?.take(4)
+            // Validate based on order type
+            when (orderType) {
+                OrderType.DINE_IN -> {
+                    if (tableNumber == null || tableNumber !in 1..7) {
+                        error("DINE_IN orders require a table number between 1 and 7")
+                    }
+                    if (!isEdit) {
+                        // Check table availability only for new orders
+                        val isAvailable = checkTableAvailability(tableNumber, currentStoreId)
+                        if (!isAvailable) {
+                            error("Table $tableNumber is already occupied")
+                        }
+                    }
+                }
+                OrderType.EAT_AWAY -> {
+                    if (sanitizedLicensePlate.isNullOrEmpty() || !sanitizedLicensePlate.matches(Regex("^\\d{4}$"))) {
+                        error("EAT_AWAY orders require a 4-digit license plate")
+                    }
+                }
+                OrderType.PARCEL -> {
+                    // No validation needed for PARCEL
+                }
+            }
+
+            // Prepare order JSONB
+            val now = isoNowUtc()
+            val orderJson = buildMap<String, Any?> {
+                put("type", orderType.toRemoteValue())
+                put("chef_tip", chefTip.trim())
+                put("status", "Created")
+                put("created_by", userId)
+                put("parent_order_id", null)
+                put("created_at", now)
+                put("updated_at", now)
+                
+                // Add table_number or license_plate based on order type
+                if (orderType == OrderType.DINE_IN && tableNumber != null) {
+                    put("table_number", tableNumber)
+                } else if (orderType == OrderType.EAT_AWAY && sanitizedLicensePlate != null) {
+                    put("license_plate", sanitizedLicensePlate)
+                }
+            }
+
+            // Prepare items JSONB array
+            val itemsJson = items.map { item ->
+                buildMap<String, Any?> {
+                    put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
+                    put("sku", item.itemId)
+                    put("name", item.nameSnapshot)
+                    put("size", item.size)
+                    put("veg_flag", item.vegFlagSnapshot)
+                    put("quantity", item.qty)
+                    put("modifiers", mapOf("chefTip" to item.chefTip))
+                }
+            }
+
+            // Call orders_upsert RPC using HttpClient for JSONB support
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val anonKey = BuildConfig.SUPABASE_ANON_KEY
+            
+            val httpClient = HttpClient(OkHttp) {
+                // Remove ContentNegotiation - we'll serialize manually with Gson
+            }
+            
+            val gson = Gson()
+            val payload = mapOf(
+                "p_store_id" to currentStoreId,
+                "p_order" to orderJson,
+                "p_items" to itemsJson,
+                "p_actor_id" to userId
+            )
+            
+            // Serialize payload to JSON string manually
+            val payloadJson = gson.toJson(payload)
+            
+            val response = httpClient.post("$supabaseUrl/rest/v1/rpc/orders_upsert") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json)
+                    append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    append("apikey", anonKey)
+                    append(HttpHeaders.Accept, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(payloadJson) // Send as String instead of object
+            }
+            
+            val orderId = response.body<String>()
+            httpClient.close()
+
+            Log.d("SupabaseOrderRepository", "createOrder: Successfully created order $orderId")
+            
+            // Refresh local data
+            refresh()
+            
+            orderId
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "createOrder failed", e)
+    }
+
+    /**
+     * Checks if a table is available for a DINE_IN order.
+     * Uses get_occupied_tables() for consistency with UI display.
+     */
+    private suspend fun checkTableAvailability(tableNumber: Int, storeId: String): Boolean = runCatching {
+        withContext(repoDispatcher) {
+            val occupiedTables = client.postgrest.rpc(
+                "get_occupied_tables",
+                mapOf("p_store_id" to storeId)
+            ).decodeList<OccupiedTableResult>()
+            
+            val isOccupied = occupiedTables.any { it.tableNumber == tableNumber }
+            val isAvailable = !isOccupied
+            
+            Log.d("SupabaseOrderRepository", "checkTableAvailability: table=$tableNumber, available=$isAvailable, storeId=$storeId, occupiedTables=${occupiedTables.map { it.tableNumber }}")
+            isAvailable
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "checkTableAvailability failed for table=$tableNumber", e)
+    }.getOrElse { e ->
+        if (e is kotlinx.coroutines.CancellationException) {
+            Log.w("SupabaseOrderRepository", "checkTableAvailability cancellation; treating as available to avoid false block")
+            true
+        } else {
+            Log.w("SupabaseOrderRepository", "checkTableAvailability defaulting to false (occupied) due to error")
+            false
+        }
+    }
+
+    /**
+     * Gets list of occupied tables for a store.
+     * Returns tables with status IN ('Created', 'Accepted', 'InKitchen', 'Prepared').
+     */
+    suspend fun getOccupiedTables(storeId: String): Result<List<Int>> = runCatching {
+        withContext(repoDispatcher) {
+            val result = client.postgrest.rpc(
+                "get_occupied_tables",
+                mapOf("p_store_id" to storeId)
+            ).decodeList<OccupiedTableResult>()
+            
+            val occupiedTables = result.map { it.tableNumber }
+            
+            Log.d("SupabaseOrderRepository", "getOccupiedTables: $occupiedTables")
+            occupiedTables
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "Failed to fetch occupied tables", e)
+    }
+
+    /**
+     * Gets the store ID for fragment use.
+     * Exposes the private getStoreId() method for fragments.
+     */
+    suspend fun getStoreIdForFragment(): String = getStoreId()
+
+    /**
+     * Adds items to an existing order by creating a child order with parent_order_id.
+     * Fetches the parent order to get table/license information.
+     */
+    suspend fun addItemsToOrder(
+        parentOrderId: String,
+        items: List<com.streatfeast.app.models.OrderItem>
+    ): Result<String> = runCatching {
+        withContext(repoDispatcher) {
+            val currentStoreId = getStoreId()
+            Log.d("SupabaseOrderRepository", "addItemsToOrder: parentOrderId=$parentOrderId, items=${items.size}")
+
+            // Get current user ID
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                error("User not authenticated")
+            }
+
+            // Fetch parent order to get table/license
+            val parentOrder = client.postgrest["orders"]
+                .select {
+                    filter { eq("id", parentOrderId) }
+                }
+                .decodeSingle<SupabaseOrderDto>()
+
+            if (parentOrder.storeId != currentStoreId) {
+                error("Parent order does not belong to current store")
+            }
+
+            val orderType = parentOrder.type?.let { 
+                try {
+                    OrderType.fromString(it)
+                } catch (e: Exception) {
+                    null
+                }
+            } ?: OrderType.DINE_IN // Default fallback
+
+            // Prepare order JSONB
+            val now = isoNowUtc()
+            val orderJson = buildMap<String, Any?> {
+                put("type", orderType.toRemoteValue())
+                put("chef_tip", parentOrder.chefTip ?: "")
+                put("status", "Created")
+                put("created_by", userId)
+                put("parent_order_id", parentOrderId)
+                put("created_at", now)
+                put("updated_at", now)
+                
+                // Copy table_number or license_plate from parent order
+                parentOrder.tableNumber?.let { put("table_number", it) }
+                parentOrder.licensePlate?.let { put("license_plate", it) }
+            }
+
+            // Prepare items JSONB array
+            val itemsJson = items.map { item ->
+                buildMap<String, Any?> {
+                    put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
+                    put("sku", item.itemId)
+                    put("name", item.nameSnapshot)
+                    put("size", item.size)
+                    put("veg_flag", item.vegFlagSnapshot)
+                    put("quantity", item.qty)
+                    put("modifiers", mapOf("chefTip" to item.chefTip))
+                }
+            }
+
+            // Call orders_upsert RPC using HttpClient for JSONB support
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val anonKey = BuildConfig.SUPABASE_ANON_KEY
+            
+            val httpClient = HttpClient(OkHttp) {
+                // Remove ContentNegotiation - we'll serialize manually with Gson
+            }
+            
+            val gson = Gson()
+            val payload = mapOf(
+                "p_store_id" to currentStoreId,
+                "p_order" to orderJson,
+                "p_items" to itemsJson,
+                "p_actor_id" to userId
+            )
+            
+            // Serialize payload to JSON string manually
+            val payloadJson = gson.toJson(payload)
+            
+            val response = httpClient.post("$supabaseUrl/rest/v1/rpc/orders_upsert") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json)
+                    append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    append("apikey", anonKey)
+                    append(HttpHeaders.Accept, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(payloadJson) // Send as String instead of object
+            }
+            
+            val orderId = response.body<String>()
+            httpClient.close()
+
+            Log.d("SupabaseOrderRepository", "addItemsToOrder: Successfully created child order $orderId")
+            
+            // Refresh local data
+            refresh()
+            
+            orderId
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "addItemsToOrder failed", e)
+    }
+
+    /**
+     * Alters an existing order by replacing its items.
+     * Validates order status and user permissions.
+     */
+    suspend fun alterOrder(
+        orderId: String,
+        items: List<com.streatfeast.app.models.OrderItem>,
+        chefTip: String? = null
+    ): Result<Unit> = runCatching {
+        withContext(repoDispatcher) {
+            Log.d("SupabaseOrderRepository", "alterOrder: orderId=$orderId, items=${items.size}, chefTip=${chefTip?.take(20)}")
+
+            // Get current user ID
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                error("User not authenticated")
+            }
+
+            // Prepare items JSONB array
+            val itemsJson = items.map { item ->
+                buildMap<String, Any?> {
+                    put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
+                    put("sku", item.itemId)
+                    put("name", item.nameSnapshot)
+                    put("size", item.size)
+                    put("veg_flag", item.vegFlagSnapshot)
+                    put("quantity", item.qty)
+                    put("modifiers", mapOf("chefTip" to item.chefTip))
+                }
+            }
+
+            // Call alter_order RPC using HttpClient for JSONB support
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val anonKey = BuildConfig.SUPABASE_ANON_KEY
+            
+            val httpClient = HttpClient(OkHttp) {
+                // Remove ContentNegotiation - we'll serialize manually with Gson
+            }
+            
+            val gson = Gson()
+            val payload = buildMap<String, Any?> {
+                put("p_order_id", orderId)
+                put("p_items", itemsJson)
+                put("p_actor_id", userId)
+                if (chefTip != null) {
+                    put("p_chef_tip", chefTip)
+                }
+            }
+            
+            // Serialize payload to JSON string manually
+            val payloadJson = gson.toJson(payload)
+            
+            val response = httpClient.post("$supabaseUrl/rest/v1/rpc/alter_order") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json)
+                    append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    append("apikey", anonKey)
+                    append(HttpHeaders.Accept, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(payloadJson) // Send as String instead of object
+            }
+            
+            // Response should be the order ID (UUID as string)
+            val resultOrderId = response.body<String>()
+            httpClient.close()
+
+            Log.d("SupabaseOrderRepository", "alterOrder: Successfully altered order $resultOrderId")
+            
+            // Refresh local data
+            refresh()
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "alterOrder failed", e)
+        // Improve error messages to be status-specific
+        val errorMessage = when {
+            e.message?.contains("Cannot alter order with status: Delivered") == true -> 
+                "Cannot modify a delivered order"
+            e.message?.contains("Cannot alter order with status: Closed") == true -> 
+                "Cannot modify a closed order"
+            e.message?.contains("Cannot alter order with status: Canceled") == true -> 
+                "Cannot modify a canceled order"
+            e.message?.contains("does not exist") == true -> 
+                "Order not found"
+            e.message?.contains("permission") == true -> 
+                "You do not have permission to modify this order"
+            else -> e.message ?: "Failed to alter order"
+        }
+        throw Exception(errorMessage, e)
+    }
+
+    /**
+     * Updates an individual order item (quantity, size, chef tip).
+     * Validates order status and user permissions.
+     */
+    suspend fun updateOrderItem(
+        itemId: String,
+        quantity: Int? = null,
+        size: String? = null,
+        chefTip: String? = null
+    ): Result<Unit> = runCatching {
+        withContext(repoDispatcher) {
+            Log.d("SupabaseOrderRepository", "updateOrderItem: itemId=$itemId, quantity=$quantity, size=$size, chefTip=${chefTip?.take(20)}")
+
+            // Get current user ID
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                error("User not authenticated")
+            }
+
+            // Call update_order_item RPC using HttpClient
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val anonKey = BuildConfig.SUPABASE_ANON_KEY
+            
+            val httpClient = HttpClient(OkHttp) {
+                // Remove ContentNegotiation - we'll serialize manually with Gson
+            }
+            
+            val gson = Gson()
+            val payload = buildMap<String, Any?> {
+                put("p_item_id", itemId)
+                put("p_actor_id", userId)
+                if (quantity != null) {
+                    put("p_quantity", quantity)
+                }
+                if (size != null) {
+                    put("p_size", size)
+                }
+                if (chefTip != null) {
+                    put("p_chef_tip", chefTip)
+                }
+            }
+            
+            // Serialize payload to JSON string manually
+            val payloadJson = gson.toJson(payload)
+            
+            val response = httpClient.post("$supabaseUrl/rest/v1/rpc/update_order_item") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json)
+                    append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    append("apikey", anonKey)
+                    append(HttpHeaders.Accept, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(payloadJson) // Send as String instead of object
+            }
+            
+            httpClient.close()
+
+            Log.d("SupabaseOrderRepository", "updateOrderItem: Successfully updated item $itemId")
+            
+            // Refresh local data
+            refresh()
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "updateOrderItem failed", e)
+        // Improve error messages
+        val errorMessage = when {
+            e.message?.contains("Cannot modify item in order with status: Delivered") == true -> 
+                "Cannot modify item in a delivered order"
+            e.message?.contains("Cannot modify item in order with status: Closed") == true -> 
+                "Cannot modify item in a closed order"
+            e.message?.contains("Cannot modify item in order with status: Canceled") == true -> 
+                "Cannot modify item in a canceled order"
+            e.message?.contains("not found") == true -> 
+                "Order item not found"
+            e.message?.contains("permission") == true -> 
+                "You do not have permission to modify this order item"
+            else -> e.message ?: "Failed to update order item"
+        }
+        throw Exception(errorMessage, e)
+    }
+
+    /**
+     * Deletes an individual order item.
+     * Validates order status and user permissions.
+     */
+    suspend fun deleteOrderItem(
+        itemId: String
+    ): Result<Unit> = runCatching {
+        withContext(repoDispatcher) {
+            Log.d("SupabaseOrderRepository", "deleteOrderItem: itemId=$itemId")
+
+            // Get current user ID
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                error("User not authenticated")
+            }
+
+            // Call delete_order_item RPC using HttpClient
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val anonKey = BuildConfig.SUPABASE_ANON_KEY
+            
+            val httpClient = HttpClient(OkHttp) {
+                // Remove ContentNegotiation - we'll serialize manually with Gson
+            }
+            
+            val gson = Gson()
+            val payload = mapOf(
+                "p_item_id" to itemId,
+                "p_actor_id" to userId
+            )
+            
+            // Serialize payload to JSON string manually
+            val payloadJson = gson.toJson(payload)
+            
+            val response = httpClient.post("$supabaseUrl/rest/v1/rpc/delete_order_item") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json)
+                    append(HttpHeaders.Authorization, "Bearer $anonKey")
+                    append("apikey", anonKey)
+                    append(HttpHeaders.Accept, "application/json")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(payloadJson) // Send as String instead of object
+            }
+            
+            httpClient.close()
+
+            Log.d("SupabaseOrderRepository", "deleteOrderItem: Successfully deleted item $itemId")
+            
+            // Refresh local data
+            refresh()
+        }
+    }.onFailure { e ->
+        Log.e("SupabaseOrderRepository", "deleteOrderItem failed", e)
+        // Improve error messages
+        val errorMessage = when {
+            e.message?.contains("Cannot delete item from order with status: Delivered") == true -> 
+                "Cannot delete item from a delivered order"
+            e.message?.contains("Cannot delete item from order with status: Closed") == true -> 
+                "Cannot delete item from a closed order"
+            e.message?.contains("Cannot delete item from order with status: Canceled") == true -> 
+                "Cannot delete item from a canceled order"
+            e.message?.contains("Cannot delete the last item") == true -> 
+                "Cannot delete the last item in an order"
+            e.message?.contains("not found") == true -> 
+                "Order item not found"
+            e.message?.contains("permission") == true -> 
+                "You do not have permission to delete this order item"
+            else -> e.message ?: "Failed to delete order item"
+        }
+        throw Exception(errorMessage, e)
     }
 
     // --- DTO -> Entity mapping (store millis, not Instant) ---
@@ -497,7 +1039,9 @@ class SupabaseOrderRepository(
         createdBy = createdBy,
         createdAt = parseIsoToMillis(createdAt),
         updatedAt = parseIsoToMillis(updatedAt),
-        parentOrderId = parentOrderId
+        parentOrderId = parentOrderId,
+        tableNumber = tableNumber,
+        licensePlate = licensePlate
     )
 
     private fun SupabaseOrderItemDto.toEntity(): OrderItemEntity {

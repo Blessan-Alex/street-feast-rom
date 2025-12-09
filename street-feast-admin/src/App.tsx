@@ -18,12 +18,28 @@ import { initOrdersRealtime } from './store/ordersStore';
 import { loadFromStorage, saveToStorage } from './utils/storage';
 import { loadOrdersFromStorage, saveOrdersToStorage } from './utils/ordersStorage';
 import { getStoreId, supabase } from './utils/supabase';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 function App() {
-  // Load menu data from localStorage on mount
+  // Load menu data from backend first, fallback to localStorage
   useEffect(() => {
-    const data = loadFromStorage();
-    useMenuStore.setState(data);
+    const loadMenu = async () => {
+      try {
+        const result = await useMenuStore.getState().fetchMenuFromBackend();
+        if (!result.ok) {
+          // Fallback to localStorage if backend fetch fails
+          console.warn('Failed to fetch menu from backend, using localStorage fallback');
+          const data = loadFromStorage();
+          useMenuStore.setState(data);
+        }
+      } catch (error) {
+        console.error('Error loading menu:', error);
+        // Fallback to localStorage
+        const data = loadFromStorage();
+        useMenuStore.setState(data);
+      }
+    };
+    loadMenu();
   }, []);
 
   // Load orders from localStorage on mount (Supabase sync happens via API calls in ordersStore)
@@ -35,7 +51,7 @@ function App() {
   // Persist menu store changes to localStorage
   useEffect(() => {
     let isActive = true;
-    const unsubscribe = useMenuStore.subscribe((state) => {
+    const unsubscribe = useMenuStore.subscribe((state: ReturnType<typeof useMenuStore.getState>) => {
       if (isActive) {
         saveToStorage(state.categories, state.items, state.frequentItemIds);
       }
@@ -135,6 +151,113 @@ function App() {
       if (cleanup) {
         console.log('[App] Cleaning up realtime subscription on unmount');
         cleanup();
+      }
+    };
+  }, []);
+
+  // Initialize realtime subscription for menu tables
+  useEffect(() => {
+    console.log('[App] Setting up menu realtime subscription...');
+    let menuChannel: RealtimeChannel | null = null;
+
+    const setupMenuRealtime = async (): Promise<void> => {
+      try {
+        // Wait a bit for auth session to be established
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.warn('[App] No user session - menu realtime subscription skipped');
+          return;
+        }
+        
+        const storeId = await getStoreId();
+        if (!storeId) {
+          console.warn('[App] No store ID found, skipping menu realtime subscription');
+          return;
+        }
+
+        console.log('[App] Initializing menu realtime subscription for store:', storeId);
+        
+        // Subscribe to categories, items, and frequent_items tables
+        menuChannel = supabase
+          .channel('menu-changes')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'categories',
+              filter: `store_id=eq.${storeId}`
+            },
+            (payload) => {
+              console.log('[App] Menu change detected (categories):', payload);
+              // Refresh menu from backend
+              useMenuStore.getState().fetchMenuFromBackend();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'items',
+              filter: `store_id=eq.${storeId}`
+            },
+            (payload) => {
+              console.log('[App] Menu change detected (items):', payload);
+              // Refresh menu from backend
+              useMenuStore.getState().fetchMenuFromBackend();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'frequent_items',
+              filter: `store_id=eq.${storeId}`
+            },
+            (payload) => {
+              console.log('[App] Menu change detected (frequent_items):', payload);
+              // Refresh menu from backend
+              useMenuStore.getState().fetchMenuFromBackend();
+            }
+          )
+          .subscribe((status) => {
+            console.log('[App] Menu realtime subscription status:', status);
+          });
+
+        console.log('[App] Menu realtime subscription initialized');
+      } catch (error) {
+        console.error('[App] Failed to initialize menu realtime subscription:', error);
+      }
+    };
+
+    setupMenuRealtime();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        console.log('[App] User signed in, reinitializing menu realtime subscription...');
+        if (menuChannel) {
+          supabase.removeChannel(menuChannel);
+        }
+        setupMenuRealtime();
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[App] User signed out, cleaning up menu realtime subscription...');
+        if (menuChannel) {
+          supabase.removeChannel(menuChannel);
+          menuChannel = null;
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      if (menuChannel) {
+        console.log('[App] Cleaning up menu realtime subscription on unmount');
+        supabase.removeChannel(menuChannel);
       }
     };
   }, []);

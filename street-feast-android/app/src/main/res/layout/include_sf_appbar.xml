@@ -9,13 +9,43 @@
     android:paddingTop="18dp">
 
     <ImageView
+        android:id="@+id/ivNavBack"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_chev_left_20"
+        android:contentDescription="Navigate back"
+        android:padding="4dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/ivAppbarHandle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="8dp"
+        android:src="@drawable/ic_chev_down_20"
+        android:rotation="180"
+        android:contentDescription="Toggle app bar"
+        android:padding="4dp"
+        app:layout_constraintStart_toEndOf="@id/ivNavBack"
+        app:layout_constraintTop_toTopOf="@id/ivNavBack"
+        app:layout_constraintBottom_toBottomOf="@id/ivNavBack" />
+
+    <ImageView
         android:id="@+id/ivBrand"
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:src="@drawable/ic_cutlery"
         android:tint="@color/sf_text_primary"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/ivNavBack"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/ivNavBack"
+        android:layout_marginStart="8dp"/>
+        app:layout_constraintStart_toEndOf="@id/ivNavBack"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/ivNavBack"
+        android:layout_marginStart="8dp"/>
 
     <TextView
         android:id="@+id/tvBrand"
@@ -27,7 +57,7 @@
         android:textSize="18sp"
         android:textStyle="bold"
         app:layout_constraintStart_toEndOf="@id/ivBrand"
-        app:layout_constraintEnd_toStartOf="@id/tvDate"
+        app:layout_constraintEnd_toStartOf="@id/btnRefreshTables"
         app:layout_constraintTop_toTopOf="@id/ivBrand"
         app:layout_constraintBottom_toBottomOf="@id/ivBrand" />
 
@@ -35,13 +65,61 @@
         android:id="@+id/tvDate"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="16dp"
         android:text="Mon, Nov 28"
         android:textColor="@color/sf_text_muted"
         android:textSize="14sp"
-        app:layout_constraintStart_toEndOf="@id/tvBrand"
+        app:layout_constraintStart_toEndOf="@id/btnRefreshMenu"
         app:layout_constraintEnd_toStartOf="@id/btnLogout"
         app:layout_constraintTop_toTopOf="@id/ivBrand"
         app:layout_constraintBottom_toBottomOf="@id/ivBrand" />
+
+    <FrameLayout
+        android:id="@+id/btnRefreshTables"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:background="@drawable/sf_bg_circle_light"
+        android:layout_marginEnd="10dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Refresh table status"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/tvBrand"
+        app:layout_constraintEnd_toStartOf="@id/btnRefreshMenu"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/ivBrand">
+
+        <ImageView
+            android:id="@+id/ivRefreshTables"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_refresh" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/btnRefreshMenu"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:background="@drawable/sf_bg_circle_light"
+        android:layout_marginEnd="10dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Refresh menu"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/btnRefreshTables"
+        app:layout_constraintEnd_toStartOf="@id/tvDate"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/ivBrand">
+
+        <ImageView
+            android:id="@+id/ivRefreshMenu"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_refresh" />
+    </FrameLayout>
 
     <FrameLayout
         android:id="@+id/btnLogout"
@@ -51,7 +129,8 @@
         android:layout_marginEnd="10dp"
         app:layout_constraintStart_toEndOf="@id/tvDate"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/ivBrand">
 
         <ImageView
             android:layout_width="20dp"
@@ -59,6 +138,24 @@
             android:layout_gravity="center"
             android:src="@drawable/logout_24px" />
     </FrameLayout>
+
+    <TextView
+        android:id="@+id/badgeNewOrders"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="20dp"
+        android:minHeight="20dp"
+        android:background="@drawable/sf_badge_red"
+        android:text="0"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/tvTitle"
+        app:layout_constraintTop_toTopOf="@id/tvTitle" />
 
     <TextView
         android:id="@+id/tvTitle"

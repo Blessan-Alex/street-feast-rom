@@ -1,14 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
 import { MenuActionModal } from '../components/MenuActionModal';
-import { useMenuStore, Category } from '../store/menuStore';
+import { useMenuStore, Category, Item } from '../store/menuStore';
 import { toast } from '../components/Toast';
 
 export const MenuSummary: React.FC = () => {
   const navigate = useNavigate();
-  const { categories, items, deleteCategory } = useMenuStore();
+  const { categories, items, deleteCategory, fetchMenuFromBackend, saveMenuToBackend } = useMenuStore();
+  
+  // Fetch menu from backend on mount
+  useEffect(() => {
+    const loadMenu = async () => {
+      const result = await fetchMenuFromBackend();
+      if (!result.ok) {
+        // Fallback to localStorage (handled by fetchMenuFromBackend)
+        console.warn('Failed to fetch menu from backend, using localStorage fallback');
+      }
+    };
+    loadMenu();
+  }, [fetchMenuFromBackend]);
   
   const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
@@ -18,11 +30,11 @@ export const MenuSummary: React.FC = () => {
   const [showUploadOptions, setShowUploadOptions] = useState(false);
 
   const getCategoryItemCount = (categoryId: string) => {
-    return items.filter(item => item.categoryId === categoryId).length;
+    return items.filter((item: Item) => item.categoryId === categoryId).length;
   };
 
   const getCategoryItems = (categoryId: string) => {
-    return items.filter(item => item.categoryId === categoryId);
+    return items.filter((item: Item) => item.categoryId === categoryId);
   };
 
   const handleEdit = (category: Category) => {
@@ -56,16 +68,22 @@ export const MenuSummary: React.FC = () => {
   };
 
 
-  const confirmDeleteCategory = () => {
+  const confirmDeleteCategory = async () => {
     if (deletingCategory) {
       deleteCategory(deletingCategory.id);
       toast.success(`Category "${deletingCategory.name}" deleted successfully`);
       setDeletingCategory(null);
       setSelectedCategories(selectedCategories.filter(id => id !== deletingCategory.id));
+      
+      // Save to backend
+      const result = await saveMenuToBackend();
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to save changes to backend');
+      }
     }
   };
 
-  const confirmBulkDelete = () => {
+  const confirmBulkDelete = async () => {
     if (selectedCategories.length === 0) {
       setShowDeleteModal(false);
       return;
@@ -75,6 +93,12 @@ export const MenuSummary: React.FC = () => {
     toast.success(`Deleted ${ids.length} ${ids.length === 1 ? 'category' : 'categories'}`);
     setSelectedCategories([]);
     setShowDeleteModal(false);
+    
+    // Save to backend
+    const result = await saveMenuToBackend();
+    if (!result.ok) {
+      toast.error(result.error || 'Failed to save changes to backend');
+    }
   };
 
   const toggleCategorySelection = (categoryId: string) => {
@@ -85,9 +109,13 @@ export const MenuSummary: React.FC = () => {
     );
   };
 
-  const handleSaveChanges = () => {
-    // In a real app, this would save changes to the server
+  const handleSaveChanges = async () => {
+    const result = await saveMenuToBackend();
+    if (result.ok) {
     toast.success('Changes saved successfully!');
+    } else {
+      toast.error(result.error || 'Failed to save changes to backend');
+    }
   };
 
   // Empty state
@@ -139,7 +167,7 @@ export const MenuSummary: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6">
           {/* Categories Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {categories.map(category => {
+            {categories.map((category: Category) => {
               const itemCount = getCategoryItemCount(category.id);
               const isSelected = selectedCategories.includes(category.id);
               return (
@@ -326,7 +354,7 @@ export const MenuSummary: React.FC = () => {
                 <p className="text-center text-gray-500 py-8">No items in this category yet.</p>
               ) : (
                 <div className="space-y-3">
-                  {getCategoryItems(viewingCategory.id).map(item => (
+                  {getCategoryItems(viewingCategory.id).map((item: Item) => (
                     <div key={item.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">

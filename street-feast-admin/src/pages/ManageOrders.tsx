@@ -14,6 +14,22 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   Canceled: 'bg-status-canceled text-white'
 };
 
+// Helper function to format table number
+const formatTableNumber = (num: number): string => {
+  return `Table ${String(num).padStart(2, '0')}`;
+};
+
+// Helper function to format table/license display
+const formatTableLicense = (order: Order): string => {
+  if (order.type === 'DineIn' && order.tableNumber) {
+    return formatTableNumber(order.tableNumber);
+  }
+  if (order.type === 'EatAway' && order.licensePlate) {
+    return `License: ${order.licensePlate}`;
+  }
+  return '-';
+};
+
 export const ManageOrders: React.FC = () => {
   const { orders, updateStatus, getAllowedTransitions } = useOrdersStore();
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -122,6 +138,7 @@ export const ManageOrders: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order #</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Table/License</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chef Tip</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -139,6 +156,9 @@ export const ManageOrders: React.FC = () => {
                     <span className="text-sm text-gray-900">
                       {order.type === 'DineIn' ? 'Dine-in' : order.type}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{formatTableLicense(order)}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{order.orderItems.length}</span>
@@ -211,10 +231,15 @@ export const ManageOrders: React.FC = () => {
             {/* Content */}
             <div className="px-6 py-4">
               {/* Type */}
-              <div className="mb-4">
+              <div className="mb-4 flex items-center gap-2">
                 <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded text-sm font-medium">
                   {selectedOrder.type === 'DineIn' ? 'Dine-in' : selectedOrder.type}
                 </span>
+                {(selectedOrder.tableNumber || selectedOrder.licensePlate) && (
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
+                    {formatTableLicense(selectedOrder)}
+                  </span>
+                )}
               </div>
 
               {/* Chef Tip */}

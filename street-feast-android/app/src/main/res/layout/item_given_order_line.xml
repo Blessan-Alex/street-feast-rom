@@ -29,7 +29,7 @@
 
     <TextView
         android:id="@+id/badge"
-        android:layout_width="34dp"
+        android:layout_width="wrap_content"
         android:layout_height="22dp"
         android:layout_marginStart="10dp"
         android:background="@drawable/sf_badge_qty"
@@ -38,6 +38,9 @@
         android:textColor="@color/sf_text_primary"
         android:textSize="12sp"
         android:textStyle="bold"
+        android:minWidth="28dp"
+        android:maxLines="1"
+        android:ellipsize="end"
         app:layout_constraintStart_toEndOf="@id/tvItem"
         app:layout_constraintTop_toTopOf="@id/tvItem"/>
 

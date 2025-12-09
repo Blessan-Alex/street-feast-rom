@@ -24,6 +24,8 @@
             android:textColor="@color/sf_text_primary"
             android:textSize="17sp"
             android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toStartOf="@id/ivArrow"/>
@@ -35,6 +37,8 @@
             android:text="Items 10"
             android:textColor="@color/sf_text_secondary"
             android:textSize="14sp"
+            android:maxLines="1"
+            android:ellipsize="end"
             app:layout_constraintStart_toStartOf="@id/tvCat"
             app:layout_constraintTop_toBottomOf="@id/tvCat"
             app:layout_constraintEnd_toStartOf="@id/ivArrow"

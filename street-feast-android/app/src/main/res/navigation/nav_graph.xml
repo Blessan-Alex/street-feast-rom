@@ -20,11 +20,6 @@
         android:label="@string/nav_preparing" />
 
     <fragment
-        android:id="@+id/waiterReadyFragment"
-        android:name="com.streatfeast.app.fragments.WaiterReadyFragment"
-        android:label="@string/nav_ready" />
-
-    <fragment
         android:id="@+id/orderTypeFragment"
         android:name="com.streatfeast.app.fragments.OrderTypeFragment"
         android:label="New Order" />

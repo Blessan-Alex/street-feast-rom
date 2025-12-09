@@ -90,11 +90,6 @@
         android:label="Ready Orders" />
 
     <fragment
-        android:id="@+id/waiterReadyFragment"
-        android:name="com.streatfeast.app.fragments.WaiterReadyFragment"
-        android:label="@string/nav_ready" />
-
-    <fragment
         android:id="@+id/itemCustomizeFragment"
         android:name="com.streatfeast.app.fragments.ItemCustomizeBottomSheet"
         android:label="Customize Item">

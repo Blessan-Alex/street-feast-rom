@@ -12,18 +12,21 @@ import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.streatfeast.app.R
 import com.streatfeast.app.adapters.PreviewOrderAdapter
 import com.streatfeast.app.databinding.FragmentPreviewOrderHeaderBinding
 import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.models.MenuItem
+import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
+import com.streatfeast.app.dialogs.OrderModificationDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -44,7 +47,10 @@ class PreviewOrderHeaderFragment : Fragment() {
     
     private var tableNumber: Int = 4
     private var orderType: OrderType = OrderType.DINE_IN
+    private var licensePlate: String? = null
     private var existingOrderId: String? = null
+    private var isEditing: Boolean = false
+    private var currentOrder: Order? = null
     
     private lateinit var adapter: PreviewOrderAdapter
     
@@ -63,6 +69,7 @@ class PreviewOrderHeaderFragment : Fragment() {
         // Get arguments
         arguments?.let { args ->
             tableNumber = args.getInt("tableNumber", 4)
+            licensePlate = args.getString("licensePlate")
             args.getString("orderType")?.let { typeString ->
                 orderType = try {
                     OrderType.valueOf(typeString)
@@ -71,9 +78,10 @@ class PreviewOrderHeaderFragment : Fragment() {
                 }
             }
             existingOrderId = args.getString("existingOrderId")
+            isEditing = args.getBoolean("isEditing", false)
         }
         
-        // Load existing order items if editing existing order
+        // Load existing order items if editing existing order or adding items
         if (existingOrderId != null) {
             loadExistingOrderItems()
         }
@@ -200,6 +208,14 @@ class PreviewOrderHeaderFragment : Fragment() {
             }
         }
         
+        // Update button text based on edit mode
+        val placeOrderText = binding.placeOrderBar.root.findViewById<android.widget.TextView>(R.id.tvPlaceOrder)
+        if (isEditing) {
+            placeOrderText?.text = "Save Changes"
+        } else {
+            placeOrderText?.text = "Place order"
+        }
+        
         // Handle place order click
         binding.placeOrderBar.root.setOnClickListener {
             placeOrder()
@@ -225,25 +241,74 @@ class PreviewOrderHeaderFragment : Fragment() {
             adapter = PreviewOrderAdapter(
                 items = items,
                 onQuantityDecrease = { item ->
-                    draftViewModel.updateDraftItem(item.id) { currentItem ->
-                        currentItem.copy(qty = (currentItem.qty - 1).coerceAtLeast(1))
+                    if (isEditing) {
+                        val newQuantity = (item.qty - 1).coerceAtLeast(1)
+                        lifecycleScope.launch {
+                            ordersViewModel.updateOrderItem(item.id, quantity = newQuantity)
+                        }
+                    } else {
+                        draftViewModel.updateDraftItem(item.id) { currentItem ->
+                            currentItem.copy(qty = (currentItem.qty - 1).coerceAtLeast(1))
+                        }
                     }
                 },
                 onQuantityIncrease = { item ->
-                    draftViewModel.updateDraftItem(item.id) { currentItem ->
-                        currentItem.copy(qty = (currentItem.qty + 1).coerceAtMost(99))
+                    if (isEditing) {
+                        val newQuantity = (item.qty + 1).coerceAtMost(99)
+                        lifecycleScope.launch {
+                            ordersViewModel.updateOrderItem(item.id, quantity = newQuantity)
+                        }
+                    } else {
+                        draftViewModel.updateDraftItem(item.id) { currentItem ->
+                            currentItem.copy(qty = (currentItem.qty + 1).coerceAtMost(99))
+                        }
                     }
                 },
                 onAlterClick = { item ->
-                    // Navigate to customization with existing OrderItem
-                    openCustomizationForEdit(item)
+                    if (isEditing) {
+                        openCustomizationForEditInOrder(item)
+                    } else {
+                        openCustomizationForEdit(item)
+                    }
                 },
                 onRemoveClick = { item ->
-                    draftViewModel.removeDraftItem(item.id)
+                    if (isEditing) {
+                        showDeleteItemConfirmation(item)
+                    } else {
+                        draftViewModel.removeDraftItem(item.id)
+                    }
                 }
             )
             binding.rvPreview.adapter = adapter
         }
+    }
+    
+    private fun openCustomizationForEditInOrder(orderItem: OrderItem) {
+        val menuItem = MenuItem(
+            id = orderItem.itemId,
+            name = orderItem.nameSnapshot,
+            sizes = listOf("Small", "medium", "Large"),
+            vegFlag = orderItem.vegFlagSnapshot
+        )
+        
+        val bundle = Bundle().apply {
+            putParcelable("menuItem", menuItem)
+            putParcelable("orderItem", orderItem)
+            putBoolean("isEditingOrder", true)
+        }
+        findNavController().navigate(R.id.itemCustomizeFragment, bundle)
+    }
+    
+    private fun showDeleteItemConfirmation(item: OrderItem) {
+        OrderModificationDialog.showDeleteItemConfirmation(
+            requireContext(),
+            itemName = item.nameSnapshot,
+            onConfirm = {
+                lifecycleScope.launch {
+                    ordersViewModel.deleteOrderItem(item.id)
+                }
+            }
+        )
     }
     
     private fun loadExistingOrderItems() {
@@ -252,8 +317,14 @@ class PreviewOrderHeaderFragment : Fragment() {
             ordersViewModel.deliveredOrders.observe(viewLifecycleOwner) { orders ->
                 val order = orders.find { it.id == orderId }
                 order?.let {
-                    // Load existing items into draft
-                    draftViewModel.loadOrderItems(it.items)
+                    currentOrder = it
+                    if (isEditing) {
+                        // In edit mode, load all existing items for editing
+                        draftViewModel.loadOrderItems(it.items)
+                    } else {
+                        // In add items mode, start with empty draft (user adds new items)
+                        draftViewModel.clearDraft()
+                    }
                 }
             }
         }
@@ -263,9 +334,23 @@ class PreviewOrderHeaderFragment : Fragment() {
         val bundle = Bundle().apply {
             putInt("tableNumber", tableNumber)
             putString("orderType", orderType.name)
+            licensePlate?.let { putString("licensePlate", it) }
             existingOrderId?.let { putString("existingOrderId", it) }
+            putBoolean("isEditing", isEditing)
         }
         findNavController().navigate(R.id.previewOrderFragment, bundle)
+    }
+    
+    private fun performAlterOrder(items: List<OrderItem>, chefTip: String? = null) {
+        val orderId = existingOrderId ?: return
+        
+        viewLifecycleOwner.lifecycleScope.launch {
+            ordersViewModel.alterOrder(orderId, items, chefTip)
+            
+            // Navigate back or show success
+            Toast.makeText(requireContext(), "Order updated successfully", Toast.LENGTH_SHORT).show()
+            findNavController().popBackStack()
+        }
     }
     
     private fun openCustomizationForEdit(orderItem: OrderItem) {
@@ -296,26 +381,80 @@ class PreviewOrderHeaderFragment : Fragment() {
         if (items.isEmpty()) {
             // Show error message
             android.util.Log.e("PreviewOrderHeaderFragment", "Cannot place order: no items")
+            Toast.makeText(requireContext(), "Please add at least one item to the order", Toast.LENGTH_SHORT).show()
             return
         }
         
-        if (existingOrderId != null) {
-            // Update existing order - add items to it
-            // TODO: Implement addItemsToOrder in OrdersViewModel/Repository
+        if (isEditing && existingOrderId != null) {
+            // Edit mode: Alter existing order
+            val order = currentOrder
+            if (order == null) {
+                Toast.makeText(requireContext(), "Order not found", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            // Check status and show warning if needed
+            val status = order.status
+            if (OrderModificationDialog.requiresWarning(status)) {
+                // Show confirmation dialog
+                OrderModificationDialog.showPreparingOrderConfirmation(
+                    requireContext(),
+                    onConfirm = { performAlterOrder(items, order.chefTip) }
+                )
+            } else {
+                // Directly alter for Created/Accepted orders
+                performAlterOrder(items, order.chefTip)
+            }
+        } else if (existingOrderId != null) {
+            // Add items mode: Add items to existing order
             android.util.Log.d("PreviewOrderHeaderFragment", "Adding ${items.size} items to existing order $existingOrderId")
-            CoroutineScope(Dispatchers.Main).launch {
-                // TODO: Call repository to add items to existing order
-                draftViewModel.clearDraft()
-                findNavController().popBackStack(R.id.givenOrderFragment, false)
+            lifecycleScope.launch {
+                ordersViewModel.addItemsToOrder(existingOrderId!!, items)
+            }
+            
+            // Observe success/error
+            ordersViewModel.successMessage.observe(viewLifecycleOwner) { message ->
+                message?.let {
+                    Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
+                    ordersViewModel.clearSuccessMessage()
+                    draftViewModel.clearDraft()
+                    findNavController().popBackStack(R.id.givenOrderFragment, false)
+                }
+            }
+            
+            ordersViewModel.error.observe(viewLifecycleOwner) { error ->
+                error?.let {
+                    Toast.makeText(requireContext(), it, Toast.LENGTH_LONG).show()
+                    ordersViewModel.clearError()
+                }
             }
         } else {
             // Create new order
-            // TODO: Implement order placement via Supabase
-            android.util.Log.d("PreviewOrderHeaderFragment", "Placing new order with ${items.size} items")
-            CoroutineScope(Dispatchers.Main).launch {
-                // TODO: Call Supabase RPC orders_upsert
-                draftViewModel.clearDraft()
-                findNavController().popBackStack(R.id.orderTypeFragment, false)
+            lifecycleScope.launch {
+                ordersViewModel.createOrder(
+                    orderType = orderType,
+                    items = items,
+                    tableNumber = if (orderType == OrderType.DINE_IN) tableNumber else null,
+                    licensePlate = if (orderType == OrderType.EAT_AWAY) licensePlate else null,
+                    chefTip = "" // TODO: Get chef tip from UI if needed
+                )
+            }
+            
+            // Observe success/error
+            ordersViewModel.successMessage.observe(viewLifecycleOwner) { message ->
+                message?.let {
+                    Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
+                    ordersViewModel.clearSuccessMessage()
+                    draftViewModel.clearDraft()
+                    findNavController().popBackStack(R.id.orderTypeFragment, false)
+                }
+            }
+            
+            ordersViewModel.error.observe(viewLifecycleOwner) { error ->
+                error?.let {
+                    Toast.makeText(requireContext(), it, Toast.LENGTH_LONG).show()
+                    ordersViewModel.clearError()
+                }
             }
         }
     }

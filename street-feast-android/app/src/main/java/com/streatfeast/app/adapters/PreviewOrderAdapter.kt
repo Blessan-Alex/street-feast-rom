@@ -44,23 +44,28 @@ class PreviewOrderAdapter(
             tvName.text = item.nameSnapshot
             
             // Display amount/size - just show capitalized size (Small, Medium, Large)
-            val amountText = if (item.size != null) {
-                item.size.replaceFirstChar { it.uppercase() }
+            val amountText = item.size?.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+            if (amountText != null) {
+                tvAmount.visibility = View.VISIBLE
+                tvAmount.text = amountText
             } else {
-                "Standard"
+                tvAmount.visibility = View.GONE
             }
-            tvAmount.text = amountText
             
             // Display chef tip
-            val tipText = if (item.chefTip.isNotBlank()) {
-                "Chef tip : ${item.chefTip}"
+            if (item.chefTip.isNotBlank()) {
+                tvTip.visibility = View.VISIBLE
+                tvTip.text = "Chef tip : ${item.chefTip}"
             } else {
-                "Chef tip : none"
+                tvTip.visibility = View.GONE
             }
-            tvTip.text = tipText
             
             // Display quantity
             tvQty.text = item.qty.toString()
+            val qtyLabel = itemView.findViewById<TextView>(R.id.tvQtyLabel)
+            val showQty = item.qty > 0
+            tvQty.visibility = if (showQty) View.VISIBLE else View.GONE
+            qtyLabel?.visibility = tvQty.visibility
             
             // Handle quantity decrease
             btnMinus.setOnClickListener {

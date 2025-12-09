@@ -13,6 +13,8 @@ data class SupabaseOrderDto(
     @SerialName("created_by") val createdBy: String? = null,
     @SerialName("chef_tip") val chefTip: String? = null,
     @SerialName("parent_order_id") val parentOrderId: String? = null,
+    @SerialName("table_number") val tableNumber: Int? = null,
+    @SerialName("license_plate") val licensePlate: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String
 )
@@ -42,5 +44,10 @@ data class SupabaseStoreDto(
     val id: String,
     val name: String,
     @SerialName("is_active") val isActive: Boolean = true
+)
+
+@Serializable
+data class OccupiedTableResult(
+    @SerialName("table_number") val tableNumber: Int
 )
 

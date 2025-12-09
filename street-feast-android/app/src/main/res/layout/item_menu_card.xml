@@ -45,6 +45,11 @@
             android:textColor="@color/sf_text_primary"
             android:textSize="18sp"
             android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="14sp"
+            app:autoSizeMaxTextSize="18sp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/btnAdd"/>
@@ -56,6 +61,8 @@
             android:text="qnty: Small,mid,large"
             android:textColor="@color/sf_text_secondary"
             android:textSize="13sp"
+            android:maxLines="2"
+            android:ellipsize="end"
             app:layout_constraintTop_toBottomOf="@id/tvName"
             app:layout_constraintStart_toStartOf="@id/tvName"
             app:layout_constraintEnd_toStartOf="@id/btnAdd"/>

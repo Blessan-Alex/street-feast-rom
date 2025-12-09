@@ -24,7 +24,7 @@ object Constants {
     // Order Type Values (Firestore)
     const val TYPE_DINE_IN = "DineIn"
     const val TYPE_PARCEL = "Parcel"
-    const val TYPE_DELIVERY = "Delivery"
+    const val TYPE_EAT_AWAY = "EatAway"
     
     // Notification Channel
     const val NOTIFICATION_CHANNEL_ID = "order_updates"

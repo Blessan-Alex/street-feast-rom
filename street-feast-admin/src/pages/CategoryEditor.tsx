@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { useMenuStore } from '../store/menuStore';
+import { useMenuStore, Item } from '../store/menuStore';
 import { toast } from '../components/Toast';
 
 interface ItemFormData {
@@ -16,7 +16,7 @@ interface ItemFormData {
 export const CategoryEditor: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addCategory, addItems, updateCategory, items: storeItems } = useMenuStore();
+  const { addCategory, addItems, updateCategory, items: storeItems, saveMenuToBackend } = useMenuStore();
   
   // Check if we're editing an existing category
   const editingCategory = location.state?.category || null;
@@ -26,8 +26,8 @@ export const CategoryEditor: React.FC = () => {
   const [items, setItems] = useState<ItemFormData[]>(() => {
     if (editingCategoryId) {
       // Load existing items for this category
-      const categoryItems = storeItems.filter(item => item.categoryId === editingCategoryId);
-      return categoryItems.map(item => ({
+      const categoryItems = storeItems.filter((item: Item) => item.categoryId === editingCategoryId);
+      return categoryItems.map((item: Item) => ({
         id: item.id,
         name: item.name,
         sizes: item.sizes,
@@ -112,7 +112,7 @@ export const CategoryEditor: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) {
       toast.error('Please fix validation errors');
       return;
@@ -120,90 +120,102 @@ export const CategoryEditor: React.FC = () => {
 
     const now = Date.now();
 
-    if (editingCategoryId) {
-      // Update existing category
-      updateCategory(editingCategoryId, {
-        name: categoryName,
-        updatedAt: now
-      });
-
-      // Update items (remove old ones and add new ones)
-      // For simplicity on Day 1, we'll just add new items
-      // A full implementation would handle updates/deletes properly
-      items
-        .filter(item => !item.id.startsWith('temp-'))
-        .map(item => ({
-          ...item,
-          categoryId: editingCategoryId,
-          isActive: true,
-          createdAt: now,
+    try {
+      if (editingCategoryId) {
+        // Update existing category
+        updateCategory(editingCategoryId, {
+          name: categoryName,
           updatedAt: now
-        }));
-      
-      toast.success('Category updated successfully!');
-    } else {
-      // Create new category
-      const categoryId = `cat-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      
-      addCategory({
-        id: categoryId,
-        name: categoryName,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now
-      });
+        });
 
-      // Add items
-      const newItems: any[] = [];
-      
-      items.forEach((item, index) => {
-        if (item.vegFlag === 'Both') {
-          // Create two separate items for "Both" vegFlag
-          newItems.push(
-            {
-              id: `item-${Date.now()}-${index}-veg-${Math.random().toString(36).substring(7)}`,
-              categoryId,
-              name: `${item.name} (Veg)`,
-              sizes: item.sizes,
-              vegFlag: 'Veg' as const,
-              flavors: item.flavors,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now
-            },
-            {
-              id: `item-${Date.now()}-${index}-nonveg-${Math.random().toString(36).substring(7)}`,
-              categoryId,
-              name: `${item.name} (Non-Veg)`,
-              sizes: item.sizes,
-              vegFlag: 'NonVeg' as const,
-              flavors: item.flavors,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now
-            }
-          );
-        } else {
-          // Single item for Veg or NonVeg
-          newItems.push({
-            id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
-            categoryId,
-            name: item.name,
-            sizes: item.sizes,
-            vegFlag: item.vegFlag,
-            flavors: item.flavors,
+        // Update items (remove old ones and add new ones)
+        // For simplicity on Day 1, we'll just add new items
+        // A full implementation would handle updates/deletes properly
+        items
+          .filter(item => !item.id.startsWith('temp-'))
+          .map(item => ({
+            ...item,
+            categoryId: editingCategoryId,
             isActive: true,
             createdAt: now,
             updatedAt: now
-          });
-        }
-      });
+          }));
+        
+        toast.success('Category updated successfully!');
+      } else {
+        // Create new category
+        const categoryId = crypto.randomUUID();
+        
+        addCategory({
+          id: categoryId,
+          name: categoryName,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now
+        });
 
-      addItems(newItems);
-      toast.success(`Category "${categoryName}" created with ${items.length} items!`);
+        // Add items
+        const newItems: any[] = [];
+        
+        items.forEach((item) => {
+          if (item.vegFlag === 'Both') {
+            // Create two separate items for "Both" vegFlag
+            newItems.push(
+              {
+                id: crypto.randomUUID(),
+                categoryId,
+                name: `${item.name} (Veg)`,
+                sizes: item.sizes,
+                vegFlag: 'Veg' as const,
+                flavors: item.flavors,
+                isActive: true,
+                createdAt: now,
+                updatedAt: now
+              },
+              {
+                id: crypto.randomUUID(),
+                categoryId,
+                name: `${item.name} (Non-Veg)`,
+                sizes: item.sizes,
+                vegFlag: 'NonVeg' as const,
+                flavors: item.flavors,
+                isActive: true,
+                createdAt: now,
+                updatedAt: now
+              }
+            );
+          } else {
+            // Single item for Veg or NonVeg
+            newItems.push({
+              id: crypto.randomUUID(),
+              categoryId,
+              name: item.name,
+              sizes: item.sizes,
+              vegFlag: item.vegFlag,
+              flavors: item.flavors,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now
+            });
+          }
+        });
+
+        addItems(newItems);
+        toast.success(`Category "${categoryName}" created with ${items.length} items!`);
+      }
+
+      // Save to backend
+      const result = await saveMenuToBackend();
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to save menu to backend');
+        return;
+      }
+
+      navigate('/menu/summary');
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      toast.error(error.message || 'Failed to save category');
     }
-
-    navigate('/menu/summary');
   };
 
   return (

@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Dialog } from '../components/Dialog';
-import { useMenuStore } from '../store/menuStore';
-import { useOrdersStore, clearOrderCounter } from '../store/ordersStore';
+import { useMenuStore, Item } from '../store/menuStore';
+import { useOrdersStore } from '../store/ordersStore';
 import { clearStorage } from '../utils/storage';
 import { clearOrdersStorage } from '../utils/ordersStorage';
 import { logout } from '../utils/auth';
 import { toast } from '../components/Toast';
 
 export const Settings: React.FC = () => {
-  const { items, frequentItemIds, setFrequentItems } = useMenuStore();
+  const { items, frequentItemIds, setFrequentItems, updateFrequentItemsInBackend } = useMenuStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -47,10 +47,17 @@ export const Settings: React.FC = () => {
     setSelectedIds(newSelected);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setFrequentItems(selectedIds);
+    
+    // Save to backend
+    const result = await updateFrequentItemsInBackend(selectedIds);
+    if (result.ok) {
     toast.success('Frequent items saved successfully!');
     setHasChanges(false);
+    } else {
+      toast.error(result.error || 'Failed to save frequent items to backend');
+    }
   };
 
   const handleReset = () => {
@@ -76,9 +83,9 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
     toast.success('Template downloaded successfully');
   };
 
-  const getItemById = (id: string) => items.find(item => item.id === id);
+  const getItemById = (id: string) => items.find((item: Item) => item.id === id);
   const selectedItems = selectedIds.map(id => getItemById(id)).filter(item => item !== undefined);
-  const availableItems = items.filter(item => !selectedIds.includes(item.id));
+  const availableItems = items.filter((item: Item) => !selectedIds.includes(item.id));
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -123,7 +130,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
                 <p className="text-sm text-gray-500 italic">All items are already selected</p>
               ) : (
                 <div className="grid md:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                  {availableItems.map(item => (
+                  {availableItems.map((item: Item) => (
                     <label
                       key={item.id}
                       className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
@@ -258,7 +265,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
 // Danger Zone Component
 const DangerZone: React.FC = () => {
   const navigate = useNavigate();
-  const resetMenu = useMenuStore(state => state.reset);
+  const resetMenu = useMenuStore((state: ReturnType<typeof useMenuStore.getState>) => state.reset);
   const resetOrders = useOrdersStore(state => state.reset);
   const [showFirstDialog, setShowFirstDialog] = useState(false);
   const [showSecondDialog, setShowSecondDialog] = useState(false);
@@ -272,7 +279,7 @@ const DangerZone: React.FC = () => {
     // Clear localStorage
     clearStorage();
     clearOrdersStorage();
-    clearOrderCounter();
+    // Note: Order counter is now managed by database trigger, no need to clear localStorage
     
     // Logout
     await logout();

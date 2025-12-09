@@ -25,6 +25,7 @@ import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
+import com.streatfeast.app.dialogs.OrderModificationDialog
 
 @RequiresApi(Build.VERSION_CODES.O)
 class GivenOrderFragment : Fragment() {
@@ -82,15 +83,36 @@ class GivenOrderFragment : Fragment() {
     private fun setupOrderCardAdapter() {
         orderCardAdapter = GivenOrderCardAdapter(
             onAlterOrderClick = { order, item ->
-                // TODO: Open ItemCustomizeBottomSheet in edit mode
-                android.util.Log.d("GivenOrderFragment", "Alter order: ${order.id}, item: ${item.id}")
+                // Check order status and show confirmation if needed
+                val status = order.status
+                if (!OrderModificationDialog.canModifyOrder(status)) {
+                    // Show error - cannot alter
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        OrderModificationDialog.getModificationErrorMessage(status),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    return@GivenOrderCardAdapter
+                }
+                
+                // Show confirmation dialog if order is being prepared
+                if (OrderModificationDialog.requiresWarning(status)) {
+                    OrderModificationDialog.showPreparingOrderConfirmation(
+                        requireContext(),
+                        onConfirm = { navigateToEditOrder(order) }
+                    )
+                } else {
+                    // Navigate directly for Created/Accepted orders
+                    navigateToEditOrder(order)
+                }
             },
             onAddItemsClick = { order ->
-                // Navigate to preview order with existing order context
+                // Navigate to preview order with existing order context (add items mode)
                 val bundle = Bundle().apply {
                     putString("existingOrderId", order.id)
                     putString("orderType", order.type.name)
                     putInt("tableNumber", extractTableNumber(order))
+                    order.licensePlate?.let { putString("licensePlate", it) }
                 }
                 findNavController().navigate(R.id.previewOrderFragment, bundle)
             }
@@ -98,6 +120,18 @@ class GivenOrderFragment : Fragment() {
 
         binding.rvGivenBody.layoutManager = LinearLayoutManager(requireContext())
         binding.rvGivenBody.adapter = orderCardAdapter
+    }
+    
+    private fun navigateToEditOrder(order: Order) {
+        // Navigate to preview order with edit mode
+        val bundle = Bundle().apply {
+            putString("existingOrderId", order.id)
+            putBoolean("isEditing", true)  // Key flag for edit mode
+            putString("orderType", order.type.name)
+            putInt("tableNumber", extractTableNumber(order))
+            order.licensePlate?.let { putString("licensePlate", it) }
+        }
+        findNavController().navigate(R.id.previewOrderFragment, bundle)
     }
 
     private fun setupSearch() {
@@ -111,7 +145,9 @@ class GivenOrderFragment : Fragment() {
     }
 
     private fun observeDeliveredOrders() {
-        viewModel.deliveredOrders.observe(viewLifecycleOwner) { orders ->
+        // Observe editable orders instead of just delivered orders
+        // Editable orders: Created, Accepted, InKitchen, Prepared
+        viewModel.editableOrders.observe(viewLifecycleOwner) { orders ->
             allOrders = orders
             updateTableChips(orders)
             filterOrders()
@@ -149,7 +185,11 @@ class GivenOrderFragment : Fragment() {
                 true
             } else {
                 order.orderNumber.toString().contains(searchQuery) ||
-                extractTableNumber(order).toString().contains(searchQuery)
+                extractTableNumber(order).toString().contains(searchQuery) ||
+                order.items.any { item ->
+                    item.nameSnapshot.lowercase().contains(searchQuery) ||
+                    item.chefTip.lowercase().contains(searchQuery)
+                }
             }
 
             matchesTable && matchesSearch
@@ -189,9 +229,8 @@ class GivenOrderFragment : Fragment() {
     }
 
     private fun extractTableNumber(order: Order): Int {
-        // TODO: Extract table number from order metadata
-        // For now, using a placeholder - in real implementation, this should come from order
-        return order.orderNumber % 20 + 1 // Placeholder: derive from order number
+        // Extract table number from order model
+        return order.tableNumber ?: 0
     }
 
     override fun onDestroyView() {

@@ -44,10 +44,7 @@ class GivenOrderCardAdapter(
 
         @RequiresApi(Build.VERSION_CODES.O)
         fun bind(order: Order) {
-            // Extract table number - for now using order number as placeholder
-            // In real implementation, table number should come from order metadata
-            val tableNumber = extractTableNumber(order)
-            
+            val tableNumber = order.tableNumber ?: extractTableNumber(order)
             binding.tvTableOrder.text = "Table $tableNumber - #${order.orderNumber}"
             binding.tvTimeAgo.text = DateTimeUtils.getTimeAgo(order.updatedAt)
             
@@ -74,8 +71,20 @@ class GivenOrderCardAdapter(
                 val tvTips = itemView.findViewById<TextView>(R.id.tvTips)
                 val btnAlter = itemView.findViewById<TextView>(R.id.btnAlter)
                 
-                // Hide alter button for given orders (only show in preview order)
-                btnAlter.visibility = View.GONE
+                // Show alter button if order status allows modification
+                val canModify = order.status != com.streatfeast.app.models.OrderStatus.DELIVERED &&
+                        order.status != com.streatfeast.app.models.OrderStatus.CLOSED &&
+                        order.status != com.streatfeast.app.models.OrderStatus.CANCELED
+                
+                if (canModify) {
+                    btnAlter.visibility = View.VISIBLE
+                    btnAlter.isEnabled = true
+                    btnAlter.setOnClickListener {
+                        onAlterOrderClick(order, item)
+                    }
+                } else {
+                    btnAlter.visibility = View.GONE
+                }
                 
                 // Set stripe color based on veg flag
                 val stripeColor = if (item.isVeg) {
@@ -87,11 +96,14 @@ class GivenOrderCardAdapter(
                 
                 // Bind item data
                 tvItem.text = item.nameSnapshot
-                badge.text = "x${item.qty}"
+                if (item.qty > 0) {
+                    badge.text = "x${item.qty}"
+                    badge.visibility = View.VISIBLE
+                } else {
+                    badge.visibility = View.GONE
+                }
                 tvSize.text = if (item.size != null) "Size: ${item.size}" else "Size: -"
                 tvTips.text = if (item.chefTip.isNotBlank()) "Tips: ${item.chefTip}" else "Tips: None"
-                
-                // Alter button is hidden, so no click listener needed
                 
                 binding.llItems.addView(itemView)
             }

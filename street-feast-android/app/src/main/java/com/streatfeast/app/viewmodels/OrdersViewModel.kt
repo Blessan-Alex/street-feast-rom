@@ -9,6 +9,7 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.switchMap
 import com.streatfeast.app.models.Order
+import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.repositories.SupabaseOrderRepository
@@ -48,6 +49,10 @@ class OrdersViewModel(
 
     val deliveredOrders: LiveData<List<Order>> =
         repository.observeOrders(OrderStatus.DELIVERED).asLiveData()
+
+    // Editable orders: Created, Accepted, InKitchen, Prepared (can be modified)
+    val editableOrders: LiveData<List<Order>> =
+        repository.observeEditableOrders().asLiveData()
 
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
@@ -122,6 +127,103 @@ class OrdersViewModel(
     fun markAllDelivered() {
         performBulkAction("All orders marked as delivered") {
             repository.markAllDelivered()
+        }
+    }
+
+    fun createOrder(
+        orderType: OrderType,
+        items: List<OrderItem>,
+        tableNumber: Int? = null,
+        licensePlate: String? = null,
+        chefTip: String = "",
+        isEdit: Boolean = false
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            val result = repository.createOrder(orderType, items, tableNumber, licensePlate, chefTip, isEdit)
+            
+            _isLoading.value = false
+            
+            result.onSuccess { orderId ->
+                _successMessage.value = "Order created successfully"
+                Log.d("OrdersViewModel", "Order created: $orderId")
+                // Refresh orders to show the new order
+                refresh()
+            }.onFailure { e ->
+                val errorMessage = e.message ?: "Failed to create order"
+                _error.value = errorMessage
+                Log.e("OrdersViewModel", "Failed to create order", e)
+            }
+        }
+    }
+
+    fun addItemsToOrder(
+        parentOrderId: String,
+        items: List<OrderItem>
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            val result = repository.addItemsToOrder(parentOrderId, items)
+            
+            _isLoading.value = false
+            
+            result.onSuccess { orderId ->
+                _successMessage.value = "Items added to order successfully"
+                Log.d("OrdersViewModel", "Items added to order: $orderId")
+                // Refresh orders to show the updated order
+                refresh()
+            }.onFailure { e ->
+                val errorMessage = e.message ?: "Failed to add items to order"
+                _error.value = errorMessage
+                Log.e("OrdersViewModel", "Failed to add items to order", e)
+            }
+        }
+    }
+
+    fun alterOrder(
+        orderId: String,
+        items: List<OrderItem>,
+        chefTip: String? = null
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            val result = repository.alterOrder(orderId, items, chefTip)
+            
+            _isLoading.value = false
+            
+            result.onSuccess {
+                _successMessage.value = "Order altered successfully"
+                Log.d("OrdersViewModel", "Order altered: $orderId")
+                // Refresh orders to show the updated order
+                refresh()
+            }.onFailure { e ->
+                val errorMessage = e.message ?: "Failed to alter order"
+                _error.value = errorMessage
+                Log.e("OrdersViewModel", "Failed to alter order", e)
+            }
+        }
+    }
+
+    fun updateOrderItem(
+        itemId: String,
+        quantity: Int? = null,
+        size: String? = null,
+        chefTip: String? = null
+    ) {
+        performAction("Order item updated successfully") {
+            repository.updateOrderItem(itemId, quantity, size, chefTip)
+        }
+    }
+
+    fun deleteOrderItem(itemId: String) {
+        performAction("Order item deleted successfully") {
+            repository.deleteOrderItem(itemId)
         }
     }
 
