@@ -9,10 +9,13 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.switchMap
 import com.streatfeast.app.models.Order
+import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.repositories.SupabaseOrderRepository
+import com.streatfeast.app.repositories.MarkItemPreparedResult
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class OrdersViewModel(
     private val repository: SupabaseOrderRepository
@@ -48,6 +51,10 @@ class OrdersViewModel(
 
     val deliveredOrders: LiveData<List<Order>> =
         repository.observeOrders(OrderStatus.DELIVERED).asLiveData()
+
+    // Editable orders: Created, Accepted, InKitchen, Prepared (can be modified)
+    val editableOrders: LiveData<List<Order>> =
+        repository.observeEditableOrders().asLiveData()
 
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
@@ -122,6 +129,166 @@ class OrdersViewModel(
     fun markAllDelivered() {
         performBulkAction("All orders marked as delivered") {
             repository.markAllDelivered()
+        }
+    }
+
+    fun markItemPrepared(
+        orderId: String,
+        itemId: String,
+        onComplete: (Result<MarkItemPreparedResult>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.markItemPrepared(orderId, itemId)
+            result.onFailure { _error.postValue(it.message ?: "Failed to mark item prepared") }
+            onComplete(result)
+        }
+    }
+
+    fun createOrder(
+        orderType: OrderType,
+        items: List<OrderItem>,
+        tableNumber: Int? = null,
+        licensePlate: String? = null,
+        chefTip: String = "",
+        isEdit: Boolean = false
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            val result = repository.createOrder(orderType, items, tableNumber, licensePlate, chefTip, isEdit)
+            
+            result.onSuccess { orderId ->
+                _successMessage.value = "Order created successfully"
+                Log.d("OrdersViewModel", "Order created: $orderId")
+                // Refresh orders to show the new order
+                refresh()
+                _isLoading.value = false
+            }.onFailure { e ->
+                // If table is occupied for DINE_IN, try to find existing order and add items instead
+                if (orderType == OrderType.DINE_IN && 
+                    tableNumber != null && 
+                    !isEdit &&
+                    e.message?.contains("already occupied", ignoreCase = true) == true) {
+                    
+                    Log.d("OrdersViewModel", "Table $tableNumber is occupied. Attempting to find existing order and add items instead.")
+                    
+                    // Try to find existing order and add items to it
+                    val editableOrdersSnapshot = editableOrders.value
+                    val existingOrder = editableOrdersSnapshot?.find { order ->
+                        order.type == OrderType.DINE_IN && 
+                        order.tableNumber == tableNumber &&
+                        order.status in listOf(
+                            OrderStatus.CREATED,
+                            OrderStatus.ACCEPTED,
+                            OrderStatus.IN_KITCHEN,
+                            OrderStatus.PREPARED
+                        )
+                    }
+                    
+                    if (existingOrder != null) {
+                        Log.d("OrdersViewModel", "Found existing order ${existingOrder.id} for table $tableNumber. Adding items instead.")
+                        val addResult = repository.addItemsToOrder(existingOrder.id, items)
+                        addResult.onSuccess { orderId ->
+                            _successMessage.value = "Items added to existing order successfully"
+                            Log.d("OrdersViewModel", "Items added to existing order: $orderId")
+                            refresh()
+                            _isLoading.value = false
+                        }.onFailure { addError ->
+                            val errorMessage = addError.message ?: "Failed to add items to order"
+                            _error.value = errorMessage
+                            Log.e("OrdersViewModel", "Failed to add items to existing order", addError)
+                            _isLoading.value = false
+                        }
+                    } else {
+                        // Couldn't find existing order even though table is occupied
+                        val errorMessage = e.message ?: "Failed to create order"
+                        _error.value = errorMessage
+                        Log.e("OrdersViewModel", "Table occupied but couldn't find existing order", e)
+                        _isLoading.value = false
+                    }
+                } else {
+                    val errorMessage = e.message ?: "Failed to create order"
+                    _error.value = errorMessage
+                    Log.e("OrdersViewModel", "Failed to create order", e)
+                    _isLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun addItemsToOrder(
+        parentOrderId: String,
+        items: List<OrderItem>
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            val result = repository.addItemsToOrder(parentOrderId, items)
+            
+            _isLoading.value = false
+            
+            result.onSuccess { orderId ->
+                _successMessage.value = "Items added to order successfully"
+                Log.d("OrdersViewModel", "Items added to order: $orderId")
+                // Refresh orders to show the updated order
+                refresh()
+            }.onFailure { e ->
+                val errorMessage = e.message ?: "Failed to add items to order"
+                _error.value = errorMessage
+                Log.e("OrdersViewModel", "Failed to add items to order", e)
+            }
+        }
+    }
+
+    fun alterOrder(
+        orderId: String,
+        items: List<OrderItem>,
+        chefTip: String? = null
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            
+            // Use alterOrderV2 which cancels old order and creates new one (atomic operation)
+            val result = repository.alterOrderV2(orderId, items, chefTip)
+            
+            _isLoading.value = false
+            
+            result.onSuccess { (newOrderId, newOrderNumber) ->
+                _successMessage.value = "Order #$newOrderNumber updated successfully"
+                Log.d("OrdersViewModel", "Order altered: old=$orderId, new=$newOrderId (#$newOrderNumber)")
+                
+                // Force refresh all order lists to ensure canceled orders are filtered out
+                // The repository should already filter canceled orders, but force refresh
+                refresh()
+                
+                // Also trigger a manual refresh after a small delay to ensure DB transaction completes
+                kotlinx.coroutines.delay(500)
+                refresh()
+            }.onFailure { e ->
+                val errorMessage = e.message ?: "Failed to alter order"
+                _error.value = errorMessage
+                Log.e("OrdersViewModel", "Failed to alter order", e)
+            }
+        }
+    }
+
+    fun updateOrderItem(
+        itemId: String,
+        quantity: Int? = null,
+        size: String? = null,
+        chefTip: String? = null
+    ) {
+        performAction("Order item updated successfully") {
+            repository.updateOrderItem(itemId, quantity, size, chefTip)
+        }
+    }
+
+    fun deleteOrderItem(itemId: String) {
+        performAction("Order item deleted successfully") {
+            repository.deleteOrderItem(itemId)
         }
     }
 

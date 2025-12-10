@@ -127,6 +127,23 @@
                 app:layout_constraintBottom_toBottomOf="@id/stepLine"
                 app:layout_constraintEnd_toEndOf="parent" />
 
+            <TextView
+                android:id="@+id/tvStepSummary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/sf_text_secondary"
+                android:textSize="13sp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="11sp"
+                app:autoSizeMaxTextSize="14sp"
+                app:autoSizeStepGranularity="1sp"
+                app:layout_constraintTop_toBottomOf="@id/stepLine"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
+
             <!-- ========== STEP 1: Amount ========== -->
             <TextView
                 android:id="@+id/tvStepTitle1"
@@ -136,8 +153,8 @@
                 android:textColor="@color/sf_text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:layout_marginTop="14dp"
-                app:layout_constraintTop_toBottomOf="@id/stepLine"
+                android:layout_marginTop="10dp"
+                app:layout_constraintTop_toBottomOf="@id/tvStepSummary"
                 app:layout_constraintStart_toStartOf="parent"/>
 
             <androidx.cardview.widget.CardView
@@ -178,8 +195,7 @@
                             android:id="@+id/rbSmall"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
-                            android:button="@drawable/sf_radio_selector"
-                            android:checked="true"/>
+                            android:button="@drawable/sf_radio_selector"/>
                     </LinearLayout>
 
                     <LinearLayout
@@ -237,7 +253,7 @@
                 android:layout_marginTop="14dp"
                 android:orientation="vertical"
                 android:visibility="gone"
-                app:layout_constraintTop_toBottomOf="@id/stepLine"
+                app:layout_constraintTop_toBottomOf="@id/tvStepSummary"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintBottom_toTopOf="@id/btnBack">
@@ -250,52 +266,134 @@
                     android:textSize="16sp"
                     android:textStyle="bold"/>
 
-                <LinearLayout
+                <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:overScrollMode="never"
+                    android:scrollbars="none">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Suggestion :"
-                        android:textColor="@color/sf_text_secondary"
-                        android:textSize="13sp"/>
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chipSour"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:layout_marginStart="10dp"
-                        android:text="Sour"
-                        app:chipCornerRadius="18dp"
-                        app:chipBackgroundColor="#E7F0FF"
-                        android:textColor="@color/sf_primary"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Suggestion :"
+                            android:textColor="@color/sf_text_secondary"
+                            android:textSize="13sp"/>
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chipSpicy"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:layout_marginStart="8dp"
-                        android:text="Spicy"
-                        app:chipCornerRadius="18dp"
-                        app:chipBackgroundColor="@color/sf_chip_bg"
-                        android:textColor="@color/sf_text_secondary"/>
-                </LinearLayout>
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/chipGroupSuggestions"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipSour"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="8dp"
+                                android:text="Sour"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="#E7F0FF"
+                                android:textColor="@color/sf_primary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipSpicy"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="Spicy"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipLessSalty"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="Less salty"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipCrispier"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="Crispier"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipNoOnions"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="No onions"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipExtraSauce"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="Extra sauce"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chipMildSpice"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:text="Mild spice"
+                                android:checkable="true"
+                                app:chipCornerRadius="18dp"
+                                app:chipBackgroundColor="@color/sf_chip_bg"
+                                android:textColor="@color/sf_text_secondary"/>
+                        </com.google.android.material.chip.ChipGroup>
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <TextView
+                    android:id="@+id/tvTipKeywords"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Spicy • Less salt • Extra crispy • No onions • Extra sauce"
+                    android:textColor="@color/sf_text_secondary"
+                    android:textSize="12sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"/>
 
                 <EditText
                     android:id="@+id/etChefTip"
                     android:layout_width="match_parent"
-                    android:layout_height="54dp"
+                    android:layout_height="wrap_content"
+                    android:minLines="3"
+                    android:maxLines="5"
                     android:layout_marginTop="14dp"
                     android:background="@drawable/sf_bg_search"
                     android:hint="Type here"
                     android:paddingStart="18dp"
                     android:paddingEnd="18dp"
                     android:textColor="@color/sf_text_primary"
-                    android:textColorHint="@color/sf_text_secondary"/>
+                    android:textColorHint="@color/sf_text_secondary"
+                    android:scrollbars="vertical"
+                    android:nestedScrollingEnabled="true"
+                    android:inputType="textMultiLine"/>
             </LinearLayout>
 
             <!-- ========== STEP 3: Quantity (initially GONE) ========== -->
@@ -306,7 +404,7 @@
                 android:layout_marginTop="14dp"
                 android:orientation="vertical"
                 android:visibility="gone"
-                app:layout_constraintTop_toBottomOf="@id/stepLine"
+                app:layout_constraintTop_toBottomOf="@id/tvStepSummary"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintBottom_toTopOf="@id/btnBack">

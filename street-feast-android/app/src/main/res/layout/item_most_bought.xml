@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="0dp"
-    android:layout_height="88dp"
-    android:layout_marginBottom="8dp"
+    android:layout_width="190dp"
+    android:layout_height="130dp"
+    android:layout_marginEnd="8dp"
     app:cardCornerRadius="@dimen/sf_radius_xl"
     app:cardUseCompatPadding="true"
     app:cardElevation="4dp"
@@ -17,14 +17,13 @@
         android:paddingTop="12dp"
         android:paddingBottom="12dp">
 
-        <!-- small red/green dots - properly positioned inside card -->
         <View
             android:id="@+id/dotGreen"
             android:layout_width="6dp"
             android:layout_height="6dp"
             android:background="@drawable/sf_dot_green"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"/>
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <View
             android:id="@+id/dotRed"
@@ -32,33 +31,8 @@
             android:layout_height="6dp"
             android:layout_marginStart="6dp"
             android:background="@drawable/sf_dot_red"
-            app:layout_constraintTop_toTopOf="@id/dotGreen"
-            app:layout_constraintStart_toEndOf="@id/dotGreen"/>
-
-        <TextView
-            android:id="@+id/tvName"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="Ramen"
-            android:textColor="@color/sf_text_primary"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            app:layout_constraintTop_toBottomOf="@id/dotGreen"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnAdd"
-            android:layout_marginTop="8dp"/>
-
-        <TextView
-            android:id="@+id/tvQty"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="Small, Mid, Large"
-            android:textColor="@color/sf_text_secondary"
-            android:textSize="13sp"
-            app:layout_constraintTop_toBottomOf="@id/tvName"
-            app:layout_constraintStart_toStartOf="@id/tvName"
-            app:layout_constraintEnd_toStartOf="@id/btnAdd"
-            android:layout_marginTop="4dp"/>
+            app:layout_constraintStart_toEndOf="@id/dotGreen"
+            app:layout_constraintTop_toTopOf="@id/dotGreen" />
 
         <FrameLayout
             android:id="@+id/btnAdd"
@@ -76,6 +50,40 @@
                 android:src="@drawable/ic_plus_20" />
         </FrameLayout>
 
+        <TextView
+            android:id="@+id/tvName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="0dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="8dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="Ramen Very Long Name That Should Become Ramen..."
+            android:textColor="@color/sf_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:autoSizeMaxTextSize="18sp"
+            app:autoSizeMinTextSize="14sp"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/dotGreen" />
+
+        <TextView
+            android:id="@+id/tvQty"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Small, Mid, Large (long...)"
+            android:textColor="@color/sf_text_secondary"
+            android:textSize="13sp"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            app:layout_constraintStart_toStartOf="@id/tvName"
+            app:layout_constraintTop_toBottomOf="@id/tvName" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>
-

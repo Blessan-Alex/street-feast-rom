@@ -20,6 +20,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:text="Table 05 - #1254"
             android:textColor="#111111"
             android:textSize="18sp"
@@ -84,15 +86,18 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvItem1Name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:text="Spicy Ramen Burger"
                     android:textColor="#111111"
                     android:textSize="15sp"
@@ -118,18 +123,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Size: Large"
                 android:textColor="#6F7384"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/tvItem1Tips"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Tips: Extra hot sauce, no onions"
                 android:textColor="#A0A7BC"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/preparedIcon1"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            app:tint="#2ECC71"
+            android:src="@drawable/ic_check_white_20"
+            android:contentDescription="@null" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switchItem1"
@@ -160,15 +179,18 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvItem2Name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:text="Truffle Fries"
                     android:textColor="#111111"
                     android:textSize="15sp"
@@ -194,18 +216,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Size: Mid"
                 android:textColor="#6F7384"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/tvItem2Tips"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Tips: Side of aioli"
                 android:textColor="#A0A7BC"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/preparedIcon2"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            app:tint="#2ECC71"
+            android:src="@drawable/ic_check_white_20"
+            android:contentDescription="@null" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switchItem2"
@@ -213,7 +249,7 @@
             android:layout_height="wrap_content" />
     </LinearLayout>
 
-    <!-- Item 3 (green bar, ON switch) -->
+    <!-- Item 3 -->
     <LinearLayout
         android:id="@+id/item3"
         android:layout_width="match_parent"
@@ -236,15 +272,18 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvItem3Name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:text="Classic Milkshake"
                     android:textColor="#111111"
                     android:textSize="15sp"
@@ -270,18 +309,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Size: Small"
                 android:textColor="#6F7384"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/tvItem3Tips"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Tips: Vanilla"
                 android:textColor="#A0A7BC"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/preparedIcon3"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            app:tint="#2ECC71"
+            android:src="@drawable/ic_check_white_20"
+            android:contentDescription="@null" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switchItem3"
@@ -313,15 +366,18 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvItem4Name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:text="Avocado Toast"
                     android:textColor="#111111"
                     android:textSize="15sp"
@@ -347,24 +403,50 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Size: -"
                 android:textColor="#6F7384"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/tvItem4Tips"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Tips: Gluten-free bread"
                 android:textColor="#A0A7BC"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/preparedIcon4"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            app:tint="#2ECC71"
+            android:src="@drawable/ic_check_white_20"
+            android:contentDescription="@null" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switchItem4"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvMoreItems"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="+3 more"
+        android:textColor="#6F7384"
+        android:textSize="12sp"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:visibility="gone" />
 
     <!-- Mark all prepared button -->
     <Button
@@ -380,4 +462,3 @@
         android:textStyle="bold" />
 
 </LinearLayout>
-

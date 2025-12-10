@@ -11,6 +11,7 @@ object Constants {
     
     // Default Store ID (can be made dynamic in future)
     const val DEFAULT_STORE_ID = "default"
+    const val DEFAULT_TABLE_COUNT = 7
     
     // Order Status Values (Firestore)
     const val STATUS_CREATED = "Created"
@@ -24,7 +25,7 @@ object Constants {
     // Order Type Values (Firestore)
     const val TYPE_DINE_IN = "DineIn"
     const val TYPE_PARCEL = "Parcel"
-    const val TYPE_DELIVERY = "Delivery"
+    const val TYPE_EAT_AWAY = "EatAway"
     
     // Notification Channel
     const val NOTIFICATION_CHANNEL_ID = "order_updates"

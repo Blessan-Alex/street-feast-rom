@@ -32,7 +32,7 @@ const ROLE_TARGETS: Record<string, Array<"chef" | "waiter" | "admin">> = {
   Accepted: ["chef"],
   InKitchen: ["chef", "admin"],
   Prepared: ["waiter", "admin"],
-  Delivered: [],
+  Delivered: ["admin"],
   Canceled: ["chef", "waiter"],
 };
 
@@ -127,12 +127,100 @@ function resolveNotificationCopy(status: string, orderNumber?: number) {
   }
 }
 
+interface ItemPreparedPayload {
+  type: "ITEM_PREPARED";
+  orderId: string;
+  orderNumber: number;
+  itemId: string;
+  itemName: string;
+  storeId: string;
+  tableNumber?: number | null;
+  licensePlate?: string | null;
+  orderType: string;
+}
+
+interface OrderAlteredPayload {
+  type: "ORDER_ALTERED";
+  orderId: string;
+  orderNumber: number;
+  storeId: string;
+  status: string;
+  tableNumber?: number | null;
+  licensePlate?: string | null;
+  orderType: string;
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const payload = (await req.json()) as OrderPayload | BulkUpdatePayload;
+  const payload = (await req.json()) as OrderPayload | BulkUpdatePayload | ItemPreparedPayload | OrderAlteredPayload;
+
+  // Handle order altered notifications (from alter_order_v2 RPC)
+  if (payload.type === "ORDER_ALTERED") {
+    const alteredPayload = payload as OrderAlteredPayload;
+    const { storeId, orderNumber, orderId, tableNumber, licensePlate, orderType } = alteredPayload;
+
+    if (!storeId || !orderNumber || !orderId) {
+      return new Response("Bad payload", { status: 202 });
+    }
+
+    try {
+      const subscriptionIds = await fetchSubscriptionIds(storeId, ["waiter", "admin"]);
+      
+      const heading = `Order #${orderNumber} has been updated`;
+      const content = `Order #${orderNumber} has been modified. Please refresh to see changes.`;
+      
+      await notifyOneSignal(subscriptionIds, heading, content, {
+        status: "OrderAltered",
+        orderId,
+        orderNumber,
+        tableNumber: tableNumber ?? null,
+        licensePlate: licensePlate ?? null,
+        orderType,
+        storeId,
+      });
+    } catch (error) {
+      console.error("Order altered notification failed", error);
+      return new Response("Error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
+  }
+
+  // Handle item prepared notifications (from mark_item_prepared RPC)
+  if (payload.type === "ITEM_PREPARED") {
+    const itemPayload = payload as ItemPreparedPayload;
+    const { storeId, orderNumber, itemName, orderId, itemId, tableNumber, licensePlate, orderType } = itemPayload;
+
+    if (!storeId || !orderNumber || !itemName) {
+      return new Response("Bad payload", { status: 202 });
+    }
+
+    try {
+      const subscriptionIds = await fetchSubscriptionIds(storeId, ["waiter", "admin"]);
+      
+      const heading = `Item ready for order #${orderNumber}`;
+      const content = `${itemName} is prepared`;
+      
+      await notifyOneSignal(subscriptionIds, heading, content, {
+        status: "ItemPrepared",
+        orderId,
+        orderNumber,
+        itemId,
+        tableNumber: tableNumber ?? null,
+        licensePlate: licensePlate ?? null,
+        orderType,
+        storeId,
+      });
+    } catch (error) {
+      console.error("Item prepared notification failed", error);
+      return new Response("Error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
+  }
 
   // Handle bulk update notifications
   if (payload.type === "BULK_UPDATE") {

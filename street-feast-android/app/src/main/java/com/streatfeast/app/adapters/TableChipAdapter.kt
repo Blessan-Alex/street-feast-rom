@@ -11,7 +11,8 @@ import com.streatfeast.app.R
 data class TableChip(
     val tableNumber: Int,
     val orderNumber: Int,
-    val orderId: String
+    val orderId: String,
+    val label: String
 )
 
 class TableChipAdapter(
@@ -26,7 +27,7 @@ class TableChipAdapter(
         private val tvTableChip: TextView = itemView.findViewById(R.id.tvTableChip)
 
         fun bind(chip: TableChip) {
-            tvTableChip.text = "Table ${chip.tableNumber} #${chip.orderNumber}"
+            tvTableChip.text = chip.label
             
             val isSelected = selectedChip?.orderId == chip.orderId
             if (isSelected) {

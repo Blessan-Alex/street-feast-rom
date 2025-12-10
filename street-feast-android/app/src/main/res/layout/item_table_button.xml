@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="100dp"
+    app:cardCornerRadius="@dimen/sf_radius_m"
+    app:cardUseCompatPadding="true"
+    app:cardElevation="@dimen/sf_elev_soft"
+    app:cardBackgroundColor="@color/sf_surface_soft2">
+
+    <TextView
+        android:id="@+id/tvTable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="1"
+
+        android:textColor="@color/sf_text_primary"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:singleLine="true"
+        app:autoSizeTextType="uniform"
+        app:autoSizeMinTextSize="12sp"
+        app:autoSizeMaxTextSize="24sp"
+        app:autoSizeStepGranularity="1sp" />
+
+</androidx.cardview.widget.CardView>
+

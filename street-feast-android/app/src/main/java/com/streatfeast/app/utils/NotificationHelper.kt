@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.streatfeast.app.R
@@ -27,6 +28,14 @@ object NotificationHelper {
             ).apply {
                 description = context.getString(R.string.notif_channel_orders)
                 enableVibration(true)
+                // Prefer long sound if available; fallback to default
+                val soundUri = resolveLongSoundUri(context)
+                if (soundUri != null) {
+                    setSound(soundUri, android.media.AudioAttributes.Builder()
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                        .build())
+                }
             }
             
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -90,7 +99,7 @@ object NotificationHelper {
         notificationManager.notify(orderNumber, notification)
         
         // Play sound
-        SoundManager.playSound(context, Constants.SOUND_PING)
+        SoundManager.playSoundWithFallback(context, Constants.SOUND_PING, loopMillis = 0)
     }
     
     /**
@@ -150,7 +159,7 @@ object NotificationHelper {
         notificationManager.notify(orderNumber, notification)
         
         // Play sound
-        SoundManager.playSound(context, Constants.SOUND_PING)
+        SoundManager.playSoundWithFallback(context, Constants.SOUND_PING, loopMillis = 0)
     }
     
     /**
@@ -169,7 +178,16 @@ object NotificationHelper {
         notificationManager.notify(orderNumber, notification)
         
         // Play buzzer sound
-        SoundManager.playSound(context, Constants.SOUND_BUZZER)
+        SoundManager.playSoundWithFallback(context, Constants.SOUND_BUZZER, loopMillis = 0)
+    }
+
+    private fun resolveLongSoundUri(context: Context): Uri? {
+        val resId = context.resources.getIdentifier("ping_long", "raw", context.packageName)
+        return if (resId != 0) {
+            Uri.parse("android.resource://${context.packageName}/$resId")
+        } else {
+            null
+        }
     }
 }
 

@@ -35,7 +35,7 @@
     <string name="chef_tip_label">Chef Tip</string>
     <string name="order_type_dinein">Dine-in</string>
     <string name="order_type_parcel">Parcel</string>
-    <string name="order_type_delivery">Delivery</string>
+    <string name="order_type_eat_away">Eat Away</string>
     <string name="items_count">%1$d items</string>
     <string name="time_ago_min">%1$d min ago</string>
     <string name="time_ago_now">Just now</string>
@@ -70,4 +70,16 @@
     <string name="google_crash_reporting_api_key" translatable="false">AIzaSyBF0wlB7mQNWoYFpv_D79v0pliBFLcLqb0</string>
     <string name="google_storage_bucket" translatable="false">street-feast-22c58.firebasestorage.app</string>
     <string name="project_id" translatable="false">street-feast-22c58</string>
+    <string name="create_order">Create Order</string>
+    <string name="dine_in">Dine In</string>
+    <string name="parcel">Parcel</string>
+    <string name="eat_away">Eat Away</string>
+    <string name="cd_refresh_menu">Refresh Menu</string>
+    <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_toggle_app_bar">Navigate Back\n</string>
+    <string name="cd_brand">Brand</string>
+    <string name="street_feast">Street Feast</string>
+    <string name="cd_refresh_table_status">Refresh Table Status</string>
+    <string name="cd_logout">Logout Button</string>
+    <string name="waiter_page">Waiter Page</string>
 </resources>

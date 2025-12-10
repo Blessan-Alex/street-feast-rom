@@ -7,8 +7,10 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.content.ContextCompat
 import androidx.constraintlayout.widget.ConstraintSet
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
@@ -19,6 +21,14 @@ import com.streatfeast.app.databinding.FragmentOrderCategoryItemsBinding
 import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
+import com.streatfeast.app.viewmodels.MenuViewModel
+import com.streatfeast.app.viewmodels.MenuViewModelFactory
+import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.storage.StreetFeastDatabase
+import com.streatfeast.app.utils.Constants
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.streatfeast.app.navigation.OrderNavArgs
 
 class OrderCategoryItemsFragment : Fragment() {
     
@@ -26,11 +36,19 @@ class OrderCategoryItemsFragment : Fragment() {
     private val binding get() = _binding!!
     
     private val draftViewModel: OrderDraftViewModel by viewModels({ requireActivity() })
+    private val menuViewModel: MenuViewModel by viewModels {
+        val repository = ServiceLocator.provideMenuRepository(requireContext().applicationContext)
+        val db = StreetFeastDatabase.getInstance(requireContext())
+        val localDataSource = com.streatfeast.app.storage.MenuLocalDataSource(db)
+        MenuViewModelFactory(repository, localDataSource, Constants.DEFAULT_STORE_ID)
+    }
     
     private var categoryName: String = "Chinese"
+    private var categoryId: String? = null
     private var tableNumber: Int = 4
     private var orderType: OrderType = OrderType.DINE_IN
     private var showHeader: Boolean = false
+    private var licensePlate: String? = null
     
     private lateinit var adapter: MenuItemAdapter
     private val allItems = mutableListOf<MenuItem>()
@@ -51,6 +69,7 @@ class OrderCategoryItemsFragment : Fragment() {
         // Get arguments
         arguments?.let { args ->
             categoryName = args.getString("categoryName", "Chinese")
+            categoryId = args.getString("categoryId")
             tableNumber = args.getInt("tableNumber", 4)
             args.getString("orderType")?.let { typeString ->
                 orderType = try {
@@ -60,8 +79,18 @@ class OrderCategoryItemsFragment : Fragment() {
                 }
             }
             showHeader = args.getBoolean("showHeader", false)
+            licensePlate = args.getString("licensePlate")
         }
         
+        // When header is shown, pad the appbar for status bar insets like OrderTypeFragment
+        if (showHeader) {
+            ViewCompat.setOnApplyWindowInsetsListener(binding.appbar.root) { v, insets ->
+                val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                v.setPadding(v.paddingLeft, sys.top + v.paddingTop, v.paddingRight, v.paddingBottom)
+                insets
+            }
+        }
+
         setupScreenState()
         setupTableHandle()
         setupStepper()
@@ -70,6 +99,7 @@ class OrderCategoryItemsFragment : Fragment() {
         setupRecyclerView()
         setupPreviewBar()
         setupBottomNavigation()
+        setupAppbar()
         loadMenuItems()
     }
     
@@ -78,30 +108,30 @@ class OrderCategoryItemsFragment : Fragment() {
         constraintSet.clone(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
         
         if (showHeader) {
+            // Update searchWrap constraint to be below ivUp (apply constraint first)
+            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
+            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.ivUp, ConstraintSet.BOTTOM, 8)
+            constraintSet.applyTo(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
+            
             // Show breadcrumbs, hide table handle
             binding.appbar.root.visibility = View.VISIBLE
             binding.tvCreateOrder.visibility = View.VISIBLE
             binding.stepper.root.visibility = View.VISIBLE
             binding.ivUp.visibility = View.VISIBLE
             binding.tableHandle.root.visibility = View.GONE
-            
-            // Update searchWrap constraint to be below ivUp
-            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
-            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.ivUp, ConstraintSet.BOTTOM, 8)
         } else {
+            // Update searchWrap constraint to be below tableHandle (apply constraint first)
+            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
+            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.tableHandle, ConstraintSet.BOTTOM, 8)
+            constraintSet.applyTo(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
+            
             // Hide breadcrumbs, show table handle
             binding.appbar.root.visibility = View.GONE
             binding.tvCreateOrder.visibility = View.GONE
             binding.stepper.root.visibility = View.GONE
             binding.ivUp.visibility = View.GONE
             binding.tableHandle.root.visibility = View.VISIBLE
-            
-            // Update searchWrap constraint to be below tableHandle
-            constraintSet.clear(R.id.searchWrap, ConstraintSet.TOP)
-            constraintSet.connect(R.id.searchWrap, ConstraintSet.TOP, R.id.tableHandle, ConstraintSet.BOTTOM, 8)
         }
-        
-        constraintSet.applyTo(binding.root as androidx.constraintlayout.widget.ConstraintLayout)
     }
     
     private fun setupTableHandle() {
@@ -150,16 +180,15 @@ class OrderCategoryItemsFragment : Fragment() {
         return when (type) {
             OrderType.DINE_IN -> "Dine in"
             OrderType.PARCEL -> "Parcel"
-            OrderType.DELIVERY -> "Eat away"
+            OrderType.EAT_AWAY -> "Eat away"
         }
     }
     
     private fun setupUpArrow() {
-        binding.ivUp.setOnClickListener {
-            collapseBreadcrumbs()
-        }
+        // Remove the click listener - only keep swipe gesture
+        binding.ivUp.setOnClickListener(null)
         
-        // Add swipe gesture detector for upward arrow
+        // Keep only the swipe gesture detector
         binding.ivUp.setOnTouchListener(object : View.OnTouchListener {
             private var startY = 0f
             private val swipeThreshold = 100f // Minimum distance for swipe
@@ -168,7 +197,7 @@ class OrderCategoryItemsFragment : Fragment() {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         startY = event.y
-                        return true
+                        return false // Don't consume DOWN event
                     }
                     MotionEvent.ACTION_UP -> {
                         val deltaY = startY - event.y // Positive if swiped up
@@ -177,6 +206,7 @@ class OrderCategoryItemsFragment : Fragment() {
                             collapseBreadcrumbs()
                             return true
                         }
+                        return false
                     }
                 }
                 return false
@@ -234,11 +264,13 @@ class OrderCategoryItemsFragment : Fragment() {
         
         // Handle preview bar click - navigate to preview order (Screen 10)
         binding.previewBar.root.setOnClickListener {
-            val bundle = Bundle().apply {
-                putInt("tableNumber", tableNumber)
-                putString("orderType", orderType.name)
-            }
-            findNavController().navigate(R.id.previewOrderFragment, bundle)
+            val navArgs = OrderNavArgs(
+                orderType = orderType,
+                tableNumber = tableNumber,
+                licensePlate = licensePlate,
+                showHeader = false
+            )
+            findNavController().navigate(R.id.previewOrderFragment, navArgs.toBundle())
         }
     }
     
@@ -256,15 +288,46 @@ class OrderCategoryItemsFragment : Fragment() {
         }
     }
     
+    private fun setupAppbar() {
+        val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
+        navBack?.setOnClickListener {
+            // Navigate directly to orderItemFragment
+            val bundle = Bundle().apply {
+                putString("orderType", orderType.name)
+                putInt("tableNumber", tableNumber)
+                putBoolean("showHeader", showHeader) // Keep current state
+            }
+            findNavController().navigate(R.id.orderItemFragment, bundle)
+        }
+    }
+    
     private fun loadMenuItems() {
-        // Mock data for now - will be replaced with ViewModel/Repository later
-        allItems.clear()
-        allItems.addAll(generateMockItems())
-        filteredItems.clear()
-        filteredItems.addAll(allItems)
-        adapter.notifyDataSetChanged()
-        
         binding.tvCategory.text = categoryName
+        
+        // Load items from MenuViewModel based on categoryId
+        if (categoryId != null) {
+            menuViewModel.getItemsByCategory(categoryId!!).observe(viewLifecycleOwner) { items ->
+                allItems.clear()
+                allItems.addAll(items)
+                filterItems(binding.etSearch.text?.toString() ?: "")
+            }
+        } else {
+            // Fallback: find category by name if categoryId is not provided
+            menuViewModel.categories.observe(viewLifecycleOwner) { categories ->
+                val category = categories.find { it.name == categoryName }
+                if (category != null) {
+                    menuViewModel.getItemsByCategory(category.id).observe(viewLifecycleOwner) { items ->
+                        allItems.clear()
+                        allItems.addAll(items)
+                        filterItems(binding.etSearch.text?.toString() ?: "")
+                    }
+                } else {
+                    // If category not found, show empty list
+                    allItems.clear()
+                    filterItems(binding.etSearch.text?.toString() ?: "")
+                }
+            }
+        }
     }
     
     private fun filterItems(searchTerm: String) {
@@ -288,22 +351,6 @@ class OrderCategoryItemsFragment : Fragment() {
         findNavController().navigate(R.id.itemCustomizeFragment, bundle)
     }
     
-    private fun generateMockItems(): List<MenuItem> {
-        return listOf(
-            MenuItem(id = "1", name = "Ramen", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "2", name = "Spring Roll", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "3", name = "Dumplings", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "4", name = "Fried Rice", sizes = listOf("Small", "medium", "Large"), vegFlag = "Both"),
-            MenuItem(id = "5", name = "Noodles", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "6", name = "Soup", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "7", name = "Chicken", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "8", name = "Beef", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "9", name = "Pork", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg"),
-            MenuItem(id = "10", name = "Tofu", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "11", name = "Vegetables", sizes = listOf("Small", "medium", "Large"), vegFlag = "Veg"),
-            MenuItem(id = "12", name = "Seafood", sizes = listOf("Small", "medium", "Large"), vegFlag = "NonVeg")
-        )
-    }
     
     override fun onDestroyView() {
         super.onDestroyView()

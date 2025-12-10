@@ -19,6 +19,10 @@ interface OrderDao {
     fun observeByStatusAndType(storeId: String, status: String, type: String): Flow<List<OrderWithItems>>
 
     @Transaction
+    @Query("SELECT * FROM orders WHERE storeId = :storeId AND status IN (:statuses) ORDER BY createdAt DESC")
+    fun observeByStatuses(storeId: String, statuses: List<String>): Flow<List<OrderWithItems>>
+
+    @Transaction
     @Query("SELECT * FROM orders WHERE id = :orderId")
     suspend fun getOrder(orderId: String): OrderWithItems?
 

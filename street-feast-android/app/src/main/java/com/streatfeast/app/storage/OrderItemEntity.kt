@@ -17,7 +17,8 @@ data class OrderItemEntity(
     val size: String?,
     val vegFlag: String?,
     val quantity: Int,
-    val chefTip: String?
+    val chefTip: String?,
+    val isPrepared: Boolean
 )
 
 

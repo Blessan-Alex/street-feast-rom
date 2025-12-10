@@ -16,7 +16,8 @@ import com.streatfeast.app.databinding.ItemReadyOrderCardBinding
 import com.streatfeast.app.models.Order
 
 class ReadyOrderCardAdapter(
-    private val onDeliverClick: (Order) -> Unit
+    private val onDeliverClick: (Order) -> Unit,
+    private val isLoadingOrderId: (String) -> Boolean = { false }
 ) : ListAdapter<Order, ReadyOrderCardAdapter.ViewHolder>(OrderDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -25,8 +26,9 @@ class ReadyOrderCardAdapter(
             parent,
             false
         )
-        return ViewHolder(binding, onDeliverClick)
+        return ViewHolder(binding, onDeliverClick, isLoadingOrderId)
     }
+    
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -35,15 +37,22 @@ class ReadyOrderCardAdapter(
 
     class ViewHolder(
         private val binding: ItemReadyOrderCardBinding,
-        private val onDeliverClick: (Order) -> Unit
+        private val onDeliverClick: (Order) -> Unit,
+        private val isLoadingOrderId: (String) -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
         @RequiresApi(Build.VERSION_CODES.O)
         fun bind(order: Order) {
-            // Extract table number - for now using order number as placeholder
+            // Extract table number from order
             val tableNumber = extractTableNumber(order)
             
-            binding.tvTableOrder.text = "Table $tableNumber - #${order.orderNumber}"
+            // Display table number or license plate based on order type
+            val displayText = when {
+                tableNumber > 0 -> "Table $tableNumber - #${order.orderNumber}"
+                !order.licensePlate.isNullOrBlank() -> "License ${order.licensePlate} - #${order.orderNumber}"
+                else -> "Order #${order.orderNumber}"
+            }
+            binding.tvTableOrder.text = displayText
             
             // Clear existing items
             binding.llItems.removeAllViews()
@@ -82,15 +91,28 @@ class ReadyOrderCardAdapter(
             }
             
             // Handle deliver click
+            val isDelivering = isLoadingOrderId(order.id)
+            binding.btnDeliver.isEnabled = !isDelivering
+            
+            if (isDelivering) {
+                // Show loading state
+                binding.btnDeliver.text = "Delivering..."
+                binding.btnDeliver.alpha = 0.6f
+            } else {
+                binding.btnDeliver.text = "Deliver"
+                binding.btnDeliver.alpha = 1.0f
+            }
+            
             binding.btnDeliver.setOnClickListener {
+                if (!isDelivering) {
                 onDeliverClick(order)
+                }
             }
         }
         
         private fun extractTableNumber(order: Order): Int {
-            // TODO: Extract table number from order metadata
-            // For now, using a placeholder - in real implementation, this should come from order
-            return order.orderNumber % 20 + 1 // Placeholder: derive from order number
+            // Extract table number from order model
+            return order.tableNumber ?: 0
         }
     }
 

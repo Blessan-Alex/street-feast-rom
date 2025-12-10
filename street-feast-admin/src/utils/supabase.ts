@@ -57,3 +57,23 @@ export async function getStoreId(): Promise<string> {
   throw new Error('Store ID not found. Please set up a store in the database or set VITE_STORE_ID environment variable.');
 }
 
+// Get occupied tables for a store
+export async function getOccupiedTables(storeId: string): Promise<number[]> {
+  try {
+    const { data, error } = await supabase.rpc('get_occupied_tables', {
+      p_store_id: storeId
+    });
+
+    if (error) {
+      console.error('Failed to fetch occupied tables:', error);
+      return [];
+    }
+
+    // Map response from [{table_number: 1}, ...] to [1, ...]
+    return (data || []).map((row: { table_number: number }) => row.table_number);
+  } catch (error) {
+    console.error('Error fetching occupied tables:', error);
+    return [];
+  }
+}
+

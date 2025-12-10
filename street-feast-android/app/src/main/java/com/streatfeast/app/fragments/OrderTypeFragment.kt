@@ -12,6 +12,7 @@ import com.streatfeast.app.R
 import com.streatfeast.app.databinding.FragmentOrderTypeBinding
 import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.models.OrderType
+import com.streatfeast.app.navigation.OrderNavArgs
 import com.streatfeast.app.viewmodels.AuthViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,7 +35,7 @@ class OrderTypeFragment : Fragment() {
     
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
+
         setupStepper()
         setupButtons()
         setupAppbar()
@@ -58,21 +59,28 @@ class OrderTypeFragment : Fragment() {
         }
         
         binding.btnEatAway.setOnClickListener {
-            navigateToWhere(OrderType.DELIVERY)
+            navigateToWhere(OrderType.EAT_AWAY)
         }
     }
     
     private fun navigateToWhere(orderType: OrderType) {
-        // Navigate to Screen 2 with order type
-        val bundle = Bundle().apply {
-            putString("orderType", orderType.name)
+        val args = OrderNavArgs(orderType = orderType)
+        if (orderType == OrderType.PARCEL) {
+            // Parcel skips table selection
+            val parcelArgs = args.copy(tableNumber = 0, showHeader = false)
+            findNavController().navigate(
+                R.id.orderItemFragment,
+                parcelArgs.toBundle()
+            )
+        } else {
+            findNavController().navigate(R.id.orderWhereFragment, args.toBundle())
         }
-        findNavController().navigate(R.id.orderWhereFragment, bundle)
     }
     
     private fun setupAppbar() {
-        // btnClose removed from app bar
-        // Users can use system back button instead
+        // Hide back button since this is the home page - users can't go back from here
+        val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
+        navBack?.visibility = View.GONE
         
         // Update date if needed (can be done programmatically)
         // For now, date is set in XML

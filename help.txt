@@ -1,156 +1,288 @@
-You’re in a **navigation ping-pong loop** caused by **more than one place doing “auth/role routing”**.
+Not quite production-level yet — the proposed fixes are *correct*, but a senior-level plan needs: **clear contracts, data model fixes, UI/state separation, backend event design, acceptance criteria, and rollback-safe sequencing**.
 
-### What your log proves (the loop)
-
-1. **LoginActivity** says: `isAuthenticated changed to: true` → **Navigating to MainActivity**
-2. **ChefPageActivity** opens (role CHEF)
-3. Then **MainActivity opens again** while you’re already in Chef:
-   `ApplicationService.onActivityCreated: MainActivity@...`
-4. MainActivity says: `routing to role-specific activity` → launches **ChefPageActivity again**
-5. ChefPageActivity gets destroyed/created repeatedly → looks like “chef page ↔ login/main loop”.
-
-So the core issue is: **LoginActivity always goes to MainActivity**, and **MainActivity also routes to Chef**, and/or **ChefPageActivity sends you back to MainActivity/Login** on a guard. Multiple routers = infinite loop.
+Below is a **complete production-grade plan** you can paste into Cursor. It includes *exact tasks*, *file-level changes*, and *how to implement per-item notifications properly*.
 
 ---
 
-## Fix (clean architecture): ONLY ONE router in the whole app
+# ✅ Production-Grade Plan (Chef page fixes + per-item prepared notifications)
 
-Create a single **AuthGateActivity (Router)** and make it the **only** place that decides:
+## Scope
 
-* Not logged in → LoginActivity
-* Logged in + role=CHEF → ChefPageActivity
-* Logged in + role=WAITER → Waiter/MainActivity
+Fix 3 Chef-side issues:
 
-Then **remove role-routing from LoginActivity/MainActivity/ChefPageActivity** (they should only show UI, and only send you to Login on logout/expired session).
+1. Wrong “Table XX” label (uses orderNumber instead of real tableNumber + orderType)
+2. Veg/Non-veg indicator incorrectly changes when prepared toggle changes
+3. Per-item prepared toggles currently local-only; implement per-item notifications (server-driven)
 
 ---
 
-## 1) AuthGateActivity (Launcher + only router)
+## Phase 1 — Table label correctness (UI + model contract)
 
-**Manifest**
+### 1.1 Create a shared mapper: `OrderDisplayMapper`
 
-```xml
-<activity
-    android:name=".activities.AuthGateActivity"
-    android:exported="true">
-    <intent-filter>
-        <action android:name="android.intent.action.MAIN"/>
-        <category android:name="android.intent.category.LAUNCHER"/>
-    </intent-filter>
-</activity>
+**Add file:** `ui/OrderDisplayMapper.kt`
 
-<activity android:name=".activities.LoginActivity" android:exported="false"/>
-<activity android:name=".activities.MainActivity" android:exported="false"/>
-<activity android:name=".activities.ChefPageActivity" android:exported="false"/>
-```
+Responsibilities:
 
-**AuthGateActivity.kt**
+* Convert an `Order` into:
+
+  * `locationLabel` (Table X / EatAway #### / Parcel)
+  * `headerLabel` (Location + order number e.g. “Table 3 · #41”)
+
+Rules:
+
+* DINE_IN: use `order.tableNumber` only if valid: `in 1..tableCount` (use `DEFAULT_TABLE_COUNT = 7` for now)
+* EAT_AWAY: use `order.licensePlate` else “----”
+* PARCEL: “Parcel”
+* If invalid dine-in table number → “Table ?”
+
+Example:
 
 ```kotlin
-class AuthGateActivity : AppCompatActivity() {
+object OrderDisplayMapper {
+    const val DEFAULT_TABLE_COUNT = 7
 
-    private var routed = false
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        lifecycleScope.launch {
-            // IMPORTANT: avoid routing twice (config change / multiple emissions)
-            if (routed) return@launch
-            routed = true
-
-            val session = authRepo.currentSession() // supabase session
-            if (session == null) {
-                openAndClear(LoginActivity::class.java)
-                return@launch
+    fun locationLabel(order: Order, tableCount: Int = DEFAULT_TABLE_COUNT): String {
+        return when (order.type) {
+            OrderType.DINE_IN -> {
+                val t = order.tableNumber
+                if (t != null && t in 1..tableCount) "Table $t" else "Table ?"
             }
-
-            val userId = session.user.id
-            val roleRaw = authRepo.fetchUserRole(userId) // from users table
-            val role = roleRaw.trim().uppercase() // normalize "chef" vs "CHEF"
-
-            when (role) {
-                "CHEF" -> openAndClear(ChefPageActivity::class.java)
-                "WAITER" -> openAndClear(MainActivity::class.java)
-                else -> openAndClear(LoginActivity::class.java) // or a RoleSelect screen
-            }
+            OrderType.EAT_AWAY -> "EatAway ${order.licensePlate?.takeIf { it.length == 4 } ?: "----"}"
+            OrderType.PARCEL -> "Parcel"
         }
     }
 
-    private fun openAndClear(target: Class<*>) {
-        startActivity(Intent(this, target).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
-        finish()
+    fun headerLabel(order: Order, tableCount: Int = DEFAULT_TABLE_COUNT): String {
+        return "${locationLabel(order, tableCount)} · #${order.orderNumber}"
     }
 }
 ```
 
+### 1.2 Update ChefPageFragment to use mapper (remove formatTableNumber usage)
+
+**Modify:** `ChefPageFragment`
+
+* Replace every `formatTableNumber(order.orderNumber)` with:
+
+  * `OrderDisplayMapper.locationLabel(order)`
+* Replace header text to:
+
+  * `OrderDisplayMapper.headerLabel(order)`
+
+### 1.3 Ensure Order model includes correct fields everywhere
+
+Verify Chef flow is actually receiving:
+
+* `Order.tableNumber`
+* `Order.type`
+* `Order.licensePlate` (for EatAway)
+
+If missing in DTO mapping:
+
+* Update parsing/serialization in repository layer to include these fields.
+
+**Acceptance Criteria**
+
+* Chef list shows “Table 1..7” only for dine-in
+* EatAway shows “EatAway 1234”
+* Parcel shows “Parcel”
+* Never prints 40/41 as table labels
+
 ---
 
-## 2) LoginActivity: DO NOT open MainActivity directly anymore
+## Phase 2 — Veg indicator must not react to prepared toggle (UI separation)
 
-After login success, just go to the router:
+### 2.1 Separate “veg indicator” from “prepared state”
+
+Current bug: you reuse a color bar for veg/non-veg but recolor it for prepared.
+
+**Fix:** keep veg indicator purely based on `item.isVeg` (or `vegFlagSnapshot`).
+
+Prepared state must be shown using:
+
+* the switch itself
+* optional alpha change on whole row
+* optional checkmark icon (recommended for clarity)
+
+### 2.2 Implement in bindItemToView
+
+**Modify binding logic** inside your item rendering:
+
+* Set veg bar color ONCE:
+
+  * green if veg, red if non-veg
+* On switch change:
+
+  * do NOT change veg bar color
+  * update row alpha OR show a small prepared check icon
+
+Recommended:
 
 ```kotlin
-private fun onLoginSuccess() {
-    startActivity(Intent(this, AuthGateActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-    })
-    finish()
+val vegColor = if (item.isVeg) 0xFF2ECC71.toInt() else 0xFFF5515F.toInt()
+vegBar.setBackgroundColor(vegColor)
+
+val prepared = itemPreparedStates[item.id] == true
+row.alpha = if (prepared) 0.6f else 1f
+preparedIcon.visibility = if (prepared) View.VISIBLE else View.GONE
+
+switchView.setOnCheckedChangeListener(null)
+switchView.isChecked = prepared
+switchView.setOnCheckedChangeListener { _, checked ->
+    itemPreparedStates[item.id] = checked
+    row.alpha = if (checked) 0.6f else 1f
+    preparedIcon.visibility = if (checked) View.VISIBLE else View.GONE
+    checkIfAllPrepared()
 }
 ```
 
-✅ This prevents “Login → Main → Chef → Main → Chef …”
+**Important:** `setOnCheckedChangeListener(null)` before `isChecked` prevents recycled-view bugs.
+
+**Acceptance Criteria**
+
+* Veg bar never changes color when toggling prepared
+* Prepared state is clearly visible, but independent from veg/non-veg
 
 ---
 
-## 3) MainActivity & ChefPageActivity: remove any “routeToRole” logic
+## Phase 3 — Per-item prepared notifications (production approach)
 
-They should **never** decide where to go **if logged in**.
-They should only do this:
+### Reality check (important)
 
-* If session becomes null (logout/expired) → go Login (clear task)
+Client-only “send notification to waiter” is **not production-safe**, because:
 
-Example guard (same for both activities):
+* Chef app doesn’t have waiter device IDs
+* Notification sending must be centralized, audited, and retried server-side
 
-```kotlin
-override fun onStart() {
-    super.onStart()
-    if (authRepo.currentSession() == null) {
-        startActivity(Intent(this, LoginActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
-        finish()
-    }
-}
-```
-
-🚫 Don’t do: “if logged in → go MainActivity” inside ChefPageActivity.
-That’s exactly what creates the ping-pong.
+✅ Correct approach: **write an item-prepared event to DB**, and trigger notifications from backend.
 
 ---
 
-## 4) One more likely bug: role casing mismatch
+## Phase 3A — Data model for per-item prepared state
 
-Your log shows:
-`Found user - role: chef` (lowercase)
+You need a durable place to record item prepared state.
 
-If you compare against `"CHEF"` without normalization, some screens may think role is invalid and kick to Login/Main. Always normalize:
+Choose one:
 
-```kotlin
-val role = dbRole.trim().uppercase()
-```
+### Option A (best): order_items table has `is_prepared`
+
+* Add column `is_prepared boolean default false`
+* Each item toggle updates the DB row
+
+### Option B: a separate table `order_item_events`
+
+* Insert event rows like `{order_id, item_id, status, created_at}`
+* Slightly heavier but great for audit/history
+
+**Recommended:** Option A if you just need current state.
 
 ---
 
-### Quick checklist to find the exact line causing it
+## Phase 3B — Backend notification trigger
 
-Search your code for:
+Implement one backend mechanism:
 
-* `Navigating to MainActivity` (your debug print)
-* `routing to role-specific activity`
-* `startActivity(Intent(... MainActivity::class.java))` inside ChefPageActivity
-* auth observers (`authState`, `isAuthenticated`) inside **more than one activity**
+### Option 1: DB trigger + Edge Function
 
-If you paste your `MainActivity` routing code + `ChefPageActivity` “validate user” method, I can point to the exact if/else that’s causing the bounce and rewrite it cleanly.
+* When `order_items.is_prepared` becomes true:
+
+  * trigger calls edge function with payload (orderId, itemName, orderNumber, storeId)
+  * edge function sends OneSignal to waiter devices for that store
+
+### Option 2: RPC function `mark_item_prepared(order_id, item_id)`
+
+RPC does:
+
+* updates DB
+* sends notification
+* returns updated “all prepared?” state
+
+**Recommended for simplicity:** Option 2 (RPC)
+
+RPC contract:
+
+* Inputs: `order_id uuid`, `item_id uuid`
+* Output:
+
+  * `all_prepared boolean`
+  * `order_number int`
+  * `table_number int`
+  * `license_plate text`
+  * `order_type text`
+
+---
+
+## Phase 3C — Android client changes (Chef)
+
+### 3.1 Add API call in OrdersViewModel
+
+**Add:** `markItemPrepared(orderId, itemId)`
+
+* calls Supabase RPC
+* returns `allPrepared`
+
+### 3.2 Update toggle handler
+
+On checked = true:
+
+* call `viewModel.markItemPrepared(order.id, item.id)`
+* update local UI only after success (or optimistically with rollback)
+
+If RPC returns `allPrepared == true`:
+
+* also call existing `markPrepared(order.id)` (so the “order ready” status + ready-order notification still happens)
+
+**Acceptance Criteria**
+
+* Toggling one item sends waiter notification (server-driven)
+* When last item is toggled, order-level “Prepared” flow still occurs
+* Toggle state persists after app restart (because it’s stored in DB)
+
+---
+
+## Phase 4 — UX & reliability hardening (must for production)
+
+### 4.1 Disable toggles while network call in-flight
+
+* Prevent double taps and race conditions
+* Show loading (tiny progress on row or disable switch)
+
+### 4.2 Handle failures gracefully
+
+* If RPC fails:
+
+  * revert switch
+  * show toast/snackbar “Could not mark prepared. Try again.”
+
+### 4.3 Avoid fragment crash from async callbacks
+
+* Ensure all UI updates happen if fragment is added/started:
+
+  * `if (!isAdded) return`
+  * use `viewLifecycleOwner.lifecycleScope`
+
+---
+
+# Rollout Order (safe sequencing)
+
+1. Phase 1 (label mapper + Chef uses order.tableNumber/type) ✅ low risk
+2. Phase 2 (veg indicator separation) ✅ UI-only
+3. Phase 3A/3B (backend item prepared persistence + notifications) ✅ backend first
+4. Phase 3C (Chef client uses RPC) ✅ then ship
+5. Phase 4 (hardening)
+
+---
+
+# Quick “Cursor Checklist” (paste this)
+
+* Create `OrderDisplayMapper.kt` and update ChefPageFragment to use it instead of `formatTableNumber(order.orderNumber)`
+* Ensure `Order` includes `tableNumber`, `type`, `licensePlate` in Chef data pipeline
+* Refactor item row binding: veg bar depends only on `isVeg`; prepared state uses alpha/check icon; fix switch listener recycling
+* Implement backend RPC `mark_item_prepared(order_id, item_id)` that updates DB + sends OneSignal to waiter store devices; returns `all_prepared`
+* Update Chef app toggle to call RPC; if last item → also call existing `markPrepared(order.id)`
+* Add UX hardening: disable toggle while in-flight, revert on error, lifecycle-safe UI updates
+
+---
+
+If you paste your `ChefPageFragment` item-row layout XML (the one with the red/green bar + switch), I can give you the exact UI change (checkmark view id + constraints) so Cursor can apply it without guessing.

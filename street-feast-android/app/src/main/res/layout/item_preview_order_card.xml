@@ -22,6 +22,8 @@
             android:textColor="@color/sf_text_primary"
             android:textSize="20sp"
             android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toStartOf="@id/tvAmount"/>
@@ -62,6 +64,8 @@
             android:text="Chef tip : make it Spicer"
             android:textColor="@color/sf_text_secondary"
             android:textSize="15sp"
+            android:maxLines="2"
+            android:ellipsize="end"
             app:layout_constraintTop_toBottomOf="@id/tvName"
             app:layout_constraintStart_toStartOf="@id/tvName"
             app:layout_constraintEnd_toEndOf="parent"/>

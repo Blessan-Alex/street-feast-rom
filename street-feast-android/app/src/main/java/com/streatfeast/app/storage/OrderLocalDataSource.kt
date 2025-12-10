@@ -27,6 +27,12 @@ class OrderLocalDataSource(
             .map { list -> list.map { it.toModel() } }
     }
 
+    fun observeOrdersByStatuses(storeId: String, statuses: List<OrderStatus>): Flow<List<Order>> {
+        val statusStrings = statuses.map { it.toRemoteValue() }
+        return orderDao.observeByStatuses(storeId, statusStrings)
+            .map { list -> list.map { it.toModel() } }
+    }
+
     suspend fun getOrder(orderId: String): Order? {
         return orderDao.getOrder(orderId)?.toModel()
     }
@@ -62,6 +68,8 @@ private fun OrderWithItems.toModel(): Order {
         createdAt = Instant.ofEpochMilli(order.createdAt),   // <-- Long -> Instant
         updatedAt = Instant.ofEpochMilli(order.updatedAt),   // <-- Long -> Instant
         parentOrderId = order.parentOrderId,
+        tableNumber = order.tableNumber,
+        licensePlate = order.licensePlate,
         items = items.map { it.toModel() }
     )
 }
@@ -73,5 +81,6 @@ private fun OrderItemEntity.toModel(): OrderItem = OrderItem(
     size = size,
     vegFlagSnapshot = vegFlag ?: "Veg",
     qty = quantity,
-    chefTip = chefTip ?: ""
+    chefTip = chefTip ?: "",
+    isPrepared = isPrepared
 )

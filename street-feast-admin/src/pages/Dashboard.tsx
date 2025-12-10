@@ -1,11 +1,48 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrdersStore } from '../store/ordersStore';
 import { Button } from '../components/Button';
+import { getStoreId } from '../utils/supabase';
+
+// Helper function to format table number
+const formatTableNumber = (num: number): string => {
+  return `Table ${String(num).padStart(2, '0')}`;
+};
+
+// Helper function to get table/license badge text
+const getTableLicenseBadge = (order: { type: string; tableNumber?: number; licensePlate?: string }): string | null => {
+  if (order.type === 'DineIn' && order.tableNumber) {
+    return formatTableNumber(order.tableNumber);
+  }
+  if (order.type === 'EatAway' && order.licensePlate) {
+    return `License: ${order.licensePlate}`;
+  }
+  return null;
+};
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const orders = useOrdersStore(state => state.orders);
+
+  // Debug: Log order breakdown by status
+  useEffect(() => {
+    const logOrderBreakdown = async () => {
+      const storeId = await getStoreId();
+      console.log('[Dashboard] Current orders:', orders);
+      console.log('[Dashboard] Store ID:', storeId);
+      console.log('[Dashboard] Orders by status:', {
+        Created: orders.filter(o => o.status === 'Created').length,
+        Accepted: orders.filter(o => o.status === 'Accepted').length,
+        InKitchen: orders.filter(o => o.status === 'InKitchen').length,
+        Prepared: orders.filter(o => o.status === 'Prepared').length,
+        Delivered: orders.filter(o => o.status === 'Delivered').length,
+        Closed: orders.filter(o => o.status === 'Closed').length,
+        Canceled: orders.filter(o => o.status === 'Canceled').length,
+      });
+      console.log('[Dashboard] All order IDs:', orders.map(o => ({ id: o.id, number: o.orderNumber, status: o.status })));
+    };
+    logOrderBreakdown();
+  }, [orders]);
 
   // Compute KPIs
   const kpis = useMemo(() => {
@@ -130,11 +167,16 @@ export const Dashboard: React.FC = () => {
                 {newOrders.map(order => (
                   <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-900">Order #{order.orderNumber}</span>
                         <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
                           {order.type}
                         </span>
+                        {getTableLicenseBadge(order) && (
+                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-800 rounded">
+                            {getTableLicenseBadge(order)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
                         <span>{order.orderItems.length} items</span>
@@ -177,11 +219,16 @@ export const Dashboard: React.FC = () => {
                 {readyOrders.map(order => (
                   <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-900">Order #{order.orderNumber}</span>
                         <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded">
                           {order.type}
                         </span>
+                        {getTableLicenseBadge(order) && (
+                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-800 rounded">
+                            {getTableLicenseBadge(order)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
                         <span>{order.orderItems.length} items</span>

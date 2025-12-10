@@ -18,7 +18,18 @@ class AuthGateActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        checkAndRoute()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Re-check auth state when app comes back from background
+        if (routed) {
+            checkAndRoute()
+        }
+    }
+    
+    private fun checkAndRoute() {
         lifecycleScope.launch {
             // IMPORTANT: avoid routing twice (config change / multiple emissions)
             if (routed) {

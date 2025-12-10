@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CompoundButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -24,6 +26,7 @@ import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.utils.DateTimeUtils
+import com.streatfeast.app.ui.OrderDisplayMapper
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
@@ -43,7 +46,8 @@ private data class ItemViewConfig(
     val sizeView: TextView,
     val tipsView: TextView,
     val switchView: androidx.appcompat.widget.SwitchCompat,
-    val colorBar: View
+    val colorBar: View,
+    val preparedIcon: ImageView
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -61,6 +65,7 @@ class ChefPageFragment : Fragment() {
     
     private var currentOrder: Order? = null
     private val itemPreparedStates = mutableMapOf<String, Boolean>() // itemId -> isPrepared
+    private val itemLoadingStates = mutableSetOf<String>() // itemId loading RPC
     private val tabViews = mutableMapOf<String, LinearLayout>() // orderId -> tab view
     private var selectedTabOrderId: String? = null
     private lateinit var viewPager: ViewPager2
@@ -114,6 +119,7 @@ class ChefPageFragment : Fragment() {
         
         setupCloseButton()
         setupDate()
+        setupRefreshButton()
         setupLogoutButton()
         setupTabs()
         setupViewPager()
@@ -133,6 +139,36 @@ class ChefPageFragment : Fragment() {
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
+    }
+    
+    private fun setupRefreshButton() {
+        val refreshButton = binding.btnRefresh
+        val refreshIcon = binding.root.findViewById<android.widget.ImageView>(com.streatfeast.app.R.id.ivRefresh)
+        var isRefreshing = false
+        
+        refreshButton.setOnClickListener {
+            if (!isRefreshing) {
+                isRefreshing = true
+                refreshIcon.animate()
+                    .rotationBy(360f)
+                    .setDuration(500)
+                    .withEndAction {
+                        refreshIcon.rotation = 0f
+                        isRefreshing = false
+                    }
+                    .start()
+                
+                Toast.makeText(requireContext(), "Refreshing orders...", Toast.LENGTH_SHORT).show()
+                viewModel.refresh()
+            }
+        }
+        
+        // Observe loading state to show feedback
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (!isLoading && isRefreshing) {
+                Toast.makeText(requireContext(), "Orders refreshed", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     
     private fun setupLogoutButton() {
@@ -252,7 +288,7 @@ class ChefPageFragment : Fragment() {
                 when (order.type) {
                     OrderType.DINE_IN -> com.streatfeast.app.R.drawable.ic_cutlery
                     OrderType.PARCEL -> com.streatfeast.app.R.drawable.ic_bag
-                    OrderType.DELIVERY -> com.streatfeast.app.R.drawable.ic_bag
+                    OrderType.EAT_AWAY -> com.streatfeast.app.R.drawable.ic_bag
                     else -> com.streatfeast.app.R.drawable.ic_cutlery
                 }
             )
@@ -273,7 +309,7 @@ class ChefPageFragment : Fragment() {
             ).apply {
                 marginStart = (6 * resources.displayMetrics.density).toInt()
             }
-            text = "Table ${formatTableNumber(order.orderNumber)}"
+            text = OrderDisplayMapper.locationLabel(order)
             // Use different color for new orders
             val textColor = when (order.status) {
                 OrderStatus.CREATED -> 0xFFFF9800.toInt() // Orange for new orders
@@ -422,15 +458,16 @@ class ChefPageFragment : Fragment() {
         val tvTableHeader = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvTableHeader)
         val tvLastUpdated = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvLastUpdated)
         val badgeRunningLate = cardView.findViewById<TextView>(com.streatfeast.app.R.id.badgeRunningLate)
+        val tvMoreItems = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvMoreItems)
         
-        tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
+        tvTableHeader.text = OrderDisplayMapper.headerLabel(order)
         tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
         
         // Running late badge
         val isLate = isOrderRunningLate(order)
         badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
         
-        // Items - show up to 4 items
+        // Items - show up to 4 items, plus overflow indicator
         val itemsToShow = order.items.take(4)
         val itemConfigs = listOf(
             ItemViewConfig(
@@ -440,7 +477,8 @@ class ChefPageFragment : Fragment() {
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem1Size),
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem1Tips),
                 cardView.findViewById(com.streatfeast.app.R.id.switchItem1),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar1)
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar1),
+                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon1)
             ),
             ItemViewConfig(
                 cardView.findViewById(com.streatfeast.app.R.id.item2),
@@ -449,7 +487,8 @@ class ChefPageFragment : Fragment() {
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem2Size),
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem2Tips),
                 cardView.findViewById(com.streatfeast.app.R.id.switchItem2),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar2)
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar2),
+                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon2)
             ),
             ItemViewConfig(
                 cardView.findViewById(com.streatfeast.app.R.id.item3),
@@ -458,7 +497,8 @@ class ChefPageFragment : Fragment() {
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem3Size),
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem3Tips),
                 cardView.findViewById(com.streatfeast.app.R.id.switchItem3),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar3)
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar3),
+                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon3)
             ),
             ItemViewConfig(
                 cardView.findViewById(com.streatfeast.app.R.id.item4),
@@ -467,7 +507,8 @@ class ChefPageFragment : Fragment() {
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem4Size),
                 cardView.findViewById(com.streatfeast.app.R.id.tvItem4Tips),
                 cardView.findViewById(com.streatfeast.app.R.id.switchItem4),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar4)
+                cardView.findViewById(com.streatfeast.app.R.id.colorBar4),
+                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon4)
             )
         )
         
@@ -476,7 +517,19 @@ class ChefPageFragment : Fragment() {
                 val config = itemConfigs[index]
                 // Log item tip for debugging
                 android.util.Log.d("ChefPageFragment", "Item ${item.nameSnapshot} chefTip: '${item.chefTip}'")
-                bindItemToView(item, config.itemView, config.nameView, config.qtyView, config.sizeView, config.tipsView, config.switchView, config.colorBar, order.chefTip)
+                bindItemToView(
+                    order.id,
+                    item,
+                    config.itemView,
+                    config.nameView,
+                    config.qtyView,
+                    config.sizeView,
+                    config.tipsView,
+                    config.switchView,
+                    config.colorBar,
+                    config.preparedIcon,
+                    order.chefTip
+                )
                 config.itemView.visibility = View.VISIBLE
             }
         }
@@ -486,6 +539,14 @@ class ChefPageFragment : Fragment() {
             if (index < itemConfigs.size) {
                 itemConfigs[index].itemView.visibility = View.GONE
             }
+        }
+
+        val remainingCount = order.items.size - itemsToShow.size
+        if (remainingCount > 0) {
+            tvMoreItems.visibility = View.VISIBLE
+            tvMoreItems.text = "+$remainingCount more"
+        } else {
+            tvMoreItems.visibility = View.GONE
         }
         
         // Update bottom buttons
@@ -525,6 +586,7 @@ class ChefPageFragment : Fragment() {
     }
     
     private fun bindItemToView(
+        orderId: String,
         item: OrderItem,
         itemView: LinearLayout,
         nameView: TextView,
@@ -533,10 +595,13 @@ class ChefPageFragment : Fragment() {
         tipsView: TextView,
         switchView: androidx.appcompat.widget.SwitchCompat,
         colorBar: View,
+        preparedIcon: ImageView,
         globalTip: String
     ) {
         nameView.text = item.nameSnapshot
+        nameView.visibility = View.VISIBLE
         qtyView.text = "x${item.qty}"
+        qtyView.visibility = View.VISIBLE
         
         // Only show Size if it has a value
         if (item.size != null && item.size.isNotBlank()) {
@@ -561,30 +626,96 @@ class ChefPageFragment : Fragment() {
             tipsView.visibility = View.GONE
         }
         
-        // Get prepared state for this item
-        val isPrepared = itemPreparedStates[item.id] ?: false
-        switchView.isChecked = isPrepared
-        
-        // Update color bar
-        colorBar.setBackgroundColor(
-            if (isPrepared) 0xFF2ECC71.toInt() else 0xFFF5515F.toInt()
-        )
-        
-        // Set switch listener
-        switchView.setOnCheckedChangeListener(null) // Remove previous listener
-        switchView.setOnCheckedChangeListener { _, isChecked ->
-            itemPreparedStates[item.id] = isChecked
-            colorBar.setBackgroundColor(
-                if (isChecked) 0xFF2ECC71.toInt() else 0xFFF5515F.toInt()
-            )
-            checkIfAllPrepared()
+        // Veg indicator is independent of prepared state
+        val vegColor = if (item.isVeg) 0xFF2ECC71.toInt() else 0xFFF5515F.toInt()
+        colorBar.setBackgroundColor(vegColor)
+
+        // Prepared state (persisted where available)
+        val preparedInitial = itemPreparedStates[item.id] ?: item.isPrepared
+        itemPreparedStates[item.id] = preparedInitial
+
+        fun applyPreparedUi(prepared: Boolean, loading: Boolean = false) {
+            itemView.alpha = when {
+                loading -> 0.4f
+                prepared -> 0.6f
+                else -> 1f
+            }
+            preparedIcon.visibility = if (prepared) View.VISIBLE else View.GONE
+            switchView.isEnabled = !loading
         }
+
+        switchView.setOnCheckedChangeListener(null)
+        switchView.isChecked = preparedInitial
+        applyPreparedUi(preparedInitial, itemLoadingStates.contains(item.id))
+
+        lateinit var listener: CompoundButton.OnCheckedChangeListener
+        listener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
+            // Only handle toggle on; prevent accidental off toggle
+            if (!isChecked) {
+                switchView.setOnCheckedChangeListener(null)
+                switchView.isChecked = itemPreparedStates[item.id] == true
+                switchView.setOnCheckedChangeListener(listener)
+                return@OnCheckedChangeListener
+            }
+
+            val previous = itemPreparedStates[item.id] ?: preparedInitial
+            itemLoadingStates.add(item.id)
+            applyPreparedUi(previous, loading = true)
+            switchView.isEnabled = false
+
+            if (!isAdded) return@OnCheckedChangeListener
+
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewModel.markItemPrepared(orderId, item.id) { result ->
+                    if (!isAdded) return@markItemPrepared
+
+                    itemLoadingStates.remove(item.id)
+                    val success = result.getOrNull()
+
+                    if (result.isSuccess) {
+                        itemPreparedStates[item.id] = true
+                        switchView.setOnCheckedChangeListener(null)
+                        switchView.isChecked = true
+                        switchView.setOnCheckedChangeListener(listener)
+                        applyPreparedUi(true, loading = false)
+
+                        // Show local toast
+                        Toast.makeText(
+                            requireContext(),
+                            "${item.nameSnapshot} has been prepared",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        if (success?.allPrepared == true) {
+                            viewModel.markPrepared(orderId)
+                        }
+                    } else {
+                        itemPreparedStates[item.id] = previous
+                        switchView.setOnCheckedChangeListener(null)
+                        switchView.isChecked = previous
+                        switchView.setOnCheckedChangeListener(listener)
+                        applyPreparedUi(previous, loading = false)
+                        Toast.makeText(
+                            requireContext(),
+                            "Could not mark prepared. Try again.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    switchView.isEnabled = true
+                }
+            }
+        }
+
+        switchView.setOnCheckedChangeListener(listener)
     }
     
     private fun checkIfAllPrepared() {
         val order = currentOrder ?: return
         val allPrepared = order.items.all { item ->
-            itemPreparedStates[item.id] == true
+            val prepared = itemPreparedStates[item.id] ?: item.isPrepared
+            itemPreparedStates[item.id] = prepared
+            prepared
         }
         
         if (allPrepared && order.items.isNotEmpty()) {
@@ -609,8 +740,8 @@ class ChefPageFragment : Fragment() {
         }
         
         binding.btnDelivery.setOnClickListener {
-            viewModel.setOrderTypeFilter(OrderType.DELIVERY)
-            updateButtonStyles(OrderType.DELIVERY)
+            viewModel.setOrderTypeFilter(OrderType.EAT_AWAY)
+            updateButtonStyles(OrderType.EAT_AWAY)
         }
         
         // Observe filter changes and update button styles
@@ -646,7 +777,7 @@ class ChefPageFragment : Fragment() {
         }
         
         // Style Delivery button
-        if (selectedFilter == OrderType.DELIVERY) {
+        if (selectedFilter == OrderType.EAT_AWAY) {
             binding.btnDelivery.setBackgroundResource(com.streatfeast.app.R.drawable.bg_black_pill)
             binding.btnDelivery.setTextColor(android.graphics.Color.WHITE)
             binding.btnDelivery.elevation = 4f // Add shadow/elevation for selected
@@ -718,11 +849,6 @@ class ChefPageFragment : Fragment() {
                 viewModel.clearSuccessMessage()
             }
         }
-    }
-    
-    // Helper functions
-    private fun formatTableNumber(orderNumber: Int): String {
-        return String.format("%02d", orderNumber % 100)
     }
     
     private fun isOrderRunningLate(order: Order): Boolean {

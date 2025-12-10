@@ -2,20 +2,21 @@
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="100dp"
-    android:layout_margin="6dp"
-    app:cardCornerRadius="22dp"
+    android:layout_height="wrap_content"
+    android:minHeight="100dp"
+    android:layout_margin="2dp"
+    app:cardCornerRadius="18dp"
     app:cardUseCompatPadding="true"
     app:cardElevation="5dp"
     app:cardBackgroundColor="@color/sf_card_bg">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:paddingStart="16dp"
         android:paddingEnd="12dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp">
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
 
         <View
             android:id="@+id/dotG"
@@ -24,8 +25,8 @@
             android:layout_marginStart="4dp"
             android:layout_marginTop="4dp"
             android:background="@drawable/sf_dot_green"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"/>
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <View
             android:id="@+id/dotR"
@@ -33,37 +34,13 @@
             android:layout_height="6dp"
             android:layout_marginStart="6dp"
             android:background="@drawable/sf_dot_red"
-            app:layout_constraintTop_toTopOf="@id/dotG"
-            app:layout_constraintStart_toEndOf="@id/dotG"/>
-
-        <TextView
-            android:id="@+id/tvName"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Ramen"
-            android:textColor="@color/sf_text_primary"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnAdd"/>
-
-        <TextView
-            android:id="@+id/tvDesc"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="qnty: Small,mid,large"
-            android:textColor="@color/sf_text_secondary"
-            android:textSize="13sp"
-            app:layout_constraintTop_toBottomOf="@id/tvName"
-            app:layout_constraintStart_toStartOf="@id/tvName"
-            app:layout_constraintEnd_toStartOf="@id/btnAdd"/>
+            app:layout_constraintStart_toEndOf="@id/dotG"
+            app:layout_constraintTop_toTopOf="@id/dotG" />
 
         <FrameLayout
             android:id="@+id/btnAdd"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="@drawable/sf_bg_circle_dark"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
@@ -73,9 +50,43 @@
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_plus_20"/>
+                android:src="@drawable/ic_plus_20" />
         </FrameLayout>
+
+        <TextView
+            android:id="@+id/tvName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:text="Very very long item name will become like this..."
+            android:textColor="@color/sf_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            app:layout_constraintStart_toEndOf="@id/dotR"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/tvDesc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="10dp"
+            android:text="qnty: Small, mid, large"
+            android:textColor="@color/sf_text_secondary"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            app:layout_constraintStart_toStartOf="@id/tvName"
+            app:layout_constraintEnd_toStartOf="@id/btnAdd"
+            app:layout_constraintTop_toBottomOf="@id/tvName"
+            app:layout_constraintBottom_toBottomOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>
-

@@ -3,8 +3,11 @@ package com.streatfeast.app.activities
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.view.animation.Animation
+import android.view.animation.TranslateAnimation
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.snackbar.Snackbar
 import com.streatfeast.app.databinding.ActivityLoginBinding
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.AuthViewModelFactory
@@ -67,13 +70,27 @@ class LoginActivity : AppCompatActivity() {
         // Observe errors
         viewModel.error.observe(this) { error ->
             if (error != null) {
-                binding.tvError.text = error
-                binding.tvError.visibility = View.VISIBLE
+                // Friendly snackbar + shake inputs
+                Snackbar.make(binding.root, error, Snackbar.LENGTH_LONG).show()
+                playShake(binding.etEmail)
+                playShake(binding.etPassword)
+                binding.btnLogin.isEnabled = true
+                binding.btnLogin.text = "Login"
+                binding.progressBar.visibility = View.GONE
                 viewModel.clearError()
             } else {
                 binding.tvError.visibility = View.GONE
             }
         }
+    }
+
+    private fun playShake(target: View) {
+        val shake: Animation = TranslateAnimation(0f, 12f, 0f, 0f).apply {
+            duration = 150
+            repeatCount = 2
+            repeatMode = Animation.REVERSE
+        }
+        target.startAnimation(shake)
     }
 }
 

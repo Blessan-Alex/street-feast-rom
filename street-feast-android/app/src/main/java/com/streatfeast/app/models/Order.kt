@@ -18,17 +18,20 @@ data class Order @RequiresApi(Build.VERSION_CODES.O) constructor(
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
     val parentOrderId: String? = null,
+    val tableNumber: Int? = null,
+    val licensePlate: String? = null,
     var items: List<OrderItem> = emptyList() // populated from subcollection
 ) : Parcelable
 
 enum class OrderType {
-    DINE_IN, PARCEL, DELIVERY;
+    DINE_IN, PARCEL, EAT_AWAY;
     
     companion object {
         fun fromString(value: String): OrderType = when(value) {
             "DineIn" -> DINE_IN
             "Parcel" -> PARCEL
-            "Delivery" -> DELIVERY
+            "EatAway" -> EAT_AWAY
+            "Delivery" -> EAT_AWAY  // Backward compatibility
             else -> DINE_IN
         }
     }
@@ -36,13 +39,13 @@ enum class OrderType {
     fun toDisplayString(): String = when(this) {
         DINE_IN -> "Dine-in"
         PARCEL -> "Parcel"
-        DELIVERY -> "Delivery"
+        EAT_AWAY -> "Eat Away"
     }
     
     fun toRemoteValue(): String = when(this) {
         DINE_IN -> "DineIn"
         PARCEL -> "Parcel"
-        DELIVERY -> "Delivery"
+        EAT_AWAY -> "EatAway"
     }
 }
 

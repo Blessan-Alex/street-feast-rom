@@ -38,6 +38,11 @@ class ReadyOrderFragment : Fragment() {
     }
 
     private lateinit var adapter: ReadyOrderCardAdapter
+    private val seenOrderIds = mutableSetOf<String>()
+    private var previousOrdersList: List<Order> = emptyList()
+    private val deliveringOrderIds = mutableSetOf<String>()
+    private var allReadyOrders: List<Order> = emptyList()
+    private var filteredReadyOrders: List<Order> = emptyList()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -54,6 +59,7 @@ class ReadyOrderFragment : Fragment() {
         setupAppbar()
         setupLogoutButton()
         setupRecyclerView()
+        setupSearch()
         setupBottomNavigation()
         observeReadyOrders()
         observeMessages()
@@ -62,8 +68,10 @@ class ReadyOrderFragment : Fragment() {
     }
 
     private fun setupAppbar() {
-        // btnClose removed from app bar
-        // Users can use system back button instead
+        val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
+        navBack?.setOnClickListener {
+            findNavController().navigate(R.id.givenOrderFragment)
+        }
     }
 
     private fun setupLogoutButton() {
@@ -96,12 +104,31 @@ class ReadyOrderFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        adapter = ReadyOrderCardAdapter { order ->
-            viewModel.markDelivered(order.id)
-        }
+        adapter = ReadyOrderCardAdapter(
+            onDeliverClick = { order ->
+                deliveringOrderIds.add(order.id)
+                // Notify adapter that loading state changed
+                val position = adapter.currentList.indexOfFirst { it.id == order.id }
+                if (position >= 0) {
+                    adapter.notifyItemChanged(position)
+                }
+                viewModel.markDelivered(order.id)
+            },
+            isLoadingOrderId = { orderId -> deliveringOrderIds.contains(orderId) }
+        )
 
         binding.rvReady.layoutManager = LinearLayoutManager(requireContext())
         binding.rvReady.adapter = adapter
+    }
+
+    private fun setupSearch() {
+        binding.etSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                filterReadyOrders()
+            }
+        })
     }
 
     private fun setupBottomNavigation() {
@@ -120,15 +147,45 @@ class ReadyOrderFragment : Fragment() {
 
     private fun observeReadyOrders() {
         viewModel.readyOrders.observe(viewLifecycleOwner) { orders ->
-            adapter.submitList(orders)
+            // Update cached list and filter (badge removed)
+            allReadyOrders = orders
+            filterReadyOrders()
+            previousOrdersList = orders
         }
     }
+
+    private fun filterReadyOrders() {
+        val term = binding.etSearch.text?.toString()?.lowercase()?.trim() ?: ""
+        filteredReadyOrders = allReadyOrders.filter { order ->
+            val tableMatch = order.tableNumber?.toString()?.contains(term) == true
+            val orderNumMatch = order.orderNumber.toString().contains(term)
+            val itemMatch = order.items.any { item ->
+                val name = item.nameSnapshot.lowercase()
+                val tip = item.chefTip.lowercase()
+                name.contains(term) || tip.contains(term)
+            }
+            term.isBlank() || tableMatch || orderNumMatch || itemMatch
+        }
+        adapter.submitList(filteredReadyOrders)
+    }
+    
+    // Notification badge removed (not used)
 
     private fun observeMessages() {
         viewModel.error.observe(viewLifecycleOwner) { error ->
             error?.let {
                 Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                 viewModel.clearError()
+                // Clear loading state on error
+                val clearedIds = deliveringOrderIds.toSet()
+                deliveringOrderIds.clear()
+                // Notify adapter of changes
+                clearedIds.forEach { orderId ->
+                    val position = adapter.currentList.indexOfFirst { it.id == orderId }
+                    if (position >= 0) {
+                        adapter.notifyItemChanged(position)
+                    }
+                }
             }
         }
 
@@ -136,6 +193,8 @@ class ReadyOrderFragment : Fragment() {
             message?.let {
                 Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                 viewModel.clearSuccessMessage()
+                // Clear loading state on success (order will be removed from list automatically)
+                deliveringOrderIds.clear()
             }
         }
     }

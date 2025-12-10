@@ -1,282 +1,107 @@
-Reviewing the current chef page implementation to map existing functionality to the new frontend.
+Below is a focused, senior-level implementation plan, phase by phase, aligned with the issues and the production-grade guidance in `help.txt`. Each phase includes goals, concrete steps, ownership hints (client vs backend), and acceptance criteria.
 
+---
 
-[3 tools called]
+## Phase 0 — Safety Net: Navigation Arg Contract
+**Goal:** Stop losing order context (table, license, orderId, mode).
 
+- Add `OrderNavArgs.kt` (data class + `from(bundle)` + `toBundle()`).
+- Fields: `orderType`, `tableNumber`, `licensePlate`, `showHeader`, `existingOrderId`, `isEditing`, `chefTip`, `orderId`.
+- Refactor all fragments that navigate in the order flow (`OrderType`, `OrderWhere`, `OrderItem`, `PreviewOrder`, `PreviewOrderHeader`, `ItemCustomize`) to read/write args only via `OrderNavArgs`.
+- Update nav actions to pass `args.toBundle()`.
 
-Reviewing the current fragment implementations to understand the backend logic:
+**Acceptance:** No fragment in the order flow accesses raw bundle keys; navigating back and forth preserves table/license/edit flags.
 
+---
 
-[5 tools called]
+## Phase 1 — EatAway License Propagation (High Impact)
+**Goal:** Eat Away orders place successfully with 4-digit license.
 
+- In `OrderWhereFragment`: include `licensePlate` when navigating for EatAway.
+- In `OrderItemFragment`: read `licensePlate` from args; pass it onward to preview/header.
+- In `PreviewOrderFragment`: show license, require exactly 4 digits, disable Place Order until valid.
 
-Checking the adapters to understand how items are displayed:
+**Acceptance:** Entering 4 digits once is enough; no “need 4 digit license number” error on place order.
 
+---
 
-[4 tools called]
+## Phase 2 — Table Selection UI (Reachable on Small Screens)
+**Goal:** All table buttons reachable; future-proof for dynamic counts.
 
+- Minimal option: wrap content (appbar→bottom nav) in `NestedScrollView` with `clipToPadding=false`; ensure bottom padding so row 7 isn’t cut.
+- Better option: RecyclerView grid (span=2) bound to a list (initially 1..7); reuse occupied state styling.
+- Keep occupied state logic; keep selection behavior.
 
-Checking the Order model for table information and reviewing the navigation structure:
+**Acceptance:** On smallest screen and large font, table 7 is selectable (scroll if needed).
 
+---
 
-[3 tools called]
+## Phase 3 — Given Orders Table Display Sanitization
+**Goal:** No bogus table numbers (40/41) shown; non–dine-in labeled correctly.
 
+- Add `TableDisplayMapper.kt`: for DineIn enforce 1..7 else “Table ?”/hidden; for EatAway show `EatAway ####`; for Parcel show “Parcel”.
+- Update `GivenOrderFragment` to build chips using mapper; dedupe by `orderId` (not raw table number).
 
-## Implementation plan: Chef page redesign
+**Acceptance:** Chips never show >7; EatAway/Parcel render meaningful labels.
 
-### Current state
-- Two fragments: `ChefNewOrdersFragment` (CREATED) and `ChefPreparingFragment` (IN_KITCHEN)
-- RecyclerView lists with adapters
-- Shared `OrdersViewModel` with `newOrders` and `preparingOrders`
-- Functions: `acceptOrder()`, `markPrepared()`, `acceptAllOrders()`, `markAllPrepared()`
-- Order model: `id`, `orderNumber`, `type`, `chefTip`, `status`, `items[]`
-- OrderItem: `nameSnapshot`, `size`, `qty`, `vegFlagSnapshot`
+---
 
-### New design requirements
-- Single page with tabs (one tab per order/table)
-- Single order view per tab
-- Per-item switches (new)
-- "Mark All Prepared" button
-- "Eat away" and "Parcel" buttons (map to order type)
-- Table number display (not in backend yet)
-- "RUNNING LATE" badge (new)
-- Last updated time
+## Phase 4 — Add-Items/Edit “Table Occupied” Fix
+**Goal:** Editing/adding items to an existing DineIn order must not be blocked by occupancy.
 
-### Implementation strategy
+- Backend (preferred): In `orders_upsert` or a new RPC, skip table-availability check when `parent_order_id` is set or `isEdit=true`.
+- Frontend: stop creating child DineIn orders for add-items. Instead, either:
+  - Use an `append_items_to_order(order_id, items[])` RPC, or
+  - Merge and call `alter_order` on the same orderId, or
+  - Use `update_order_item` for qty/size changes and `delete_order_item` for removals.
+- Keep table locked to the parent’s table; do not revalidate occupancy for edits/adds.
 
-#### Phase 1: Create new layout and drawables
-1. Create `chef_page.xml` from help.txt
-2. Create all drawable XMLs referenced
-3. Create placeholder icons (`ic_close`, `ic_cutlery`, `ic_bag`)
+**Acceptance:** Add-items/edit flows succeed for occupied tables; no duplicate child orders; orderId stays the same.
 
-#### Phase 2: Create new fragment
-1. Create `ChefPageFragment.kt` (replaces both fragments)
-2. Use the new layout
-3. Map existing ViewModel logic to new UI IDs
+---
 
-#### Phase 3: Backend mapping strategy
+## Phase 5 — Notification Sound (3–5s, Reliable)
+**Goal:** Consistent audible cue in foreground/background.
 
-**ID mapping (old → new):**
+- Add `res/raw/ping_long.wav` (3–5s) or loop existing ping for up to 5s with a timed stop.
+- Set channel sound in `NotificationHelper.createNotificationChannel` with `setSound(uri, audioAttributes)`; create channel once.
+- Foreground: if still using `SoundManager`, add try/catch, optional looping with delayed stop.
 
-| Old Element | New ID | Mapping Strategy |
-|------------|--------|------------------|
-| `btnAcceptAll` | `btnMarkAllPrepared` | Map to `viewModel.markAllPrepared()` (for preparing orders) |
-| `btnMarkAllPrepared` | `btnMarkAllPrepared` | Keep same logic |
-| `rvNewOrders` / `rvPreparingOrders` | Dynamic tabs + card | Replace RecyclerView with tab-based single order view |
-| Order items in adapter | `tvItemXName`, `tvItemXQty`, etc. | Bind from `order.items` list |
-| Order number | `tvTableHeader`, `tvTabSelectedNumber` | Use `order.orderNumber` |
-| Time ago | `tvLastUpdated` | Use `DateTimeUtils.getTimeAgo(order.updatedAt)` |
+**Acceptance:** Background notifications play the long sound via channel; foreground play is stable (no crashes, no infinite loop).
 
-**New features (frontend only for now):**
+---
 
-1. Table tabs
-   - Use `order.orderNumber` as tab identifier
-   - Format: "Table {orderNumber % 100}" (e.g., Table 05 for #1254)
-   - Backend: add `tableNumber` later
+## Phase 6 — Crash Hardening (Realtime + Navigation)
+**Goal:** Chef/waiter apps don’t crash when the other updates.
 
-2. Per-item switches
-   - Frontend: track prepared state per item
-   - Backend: keep `markPrepared(orderId)` for now
-   - Later: add `markItemPrepared(orderId, itemId)`
+- Realtime callbacks: wrap with lifecycle guards (`isAdded`, `view != null`, `STARTED`); post UI work to main.
+- Add `navigateSafe` helper for NavController; use it for notification clicks and realtime-triggered navigation.
+- Add null/detached checks before accessing adapters/bindings inside callbacks.
 
-3. "RUNNING LATE" badge
-   - Show if `order.updatedAt` is > 15 minutes old
-   - Backend: add `expectedTime` later
+**Acceptance:** No crashes when notifications or realtime events arrive mid-navigation or after fragment detach.
 
-4. "Eat away" / "Parcel" buttons
-   - Map to `order.type` (DINE_IN → "Eat away", PARCEL → "Parcel")
-   - Frontend: visual feedback only
-   - Backend: add `updateOrderType()` later
+---
 
-5. Restaurant name / date
-   - Restaurant: hardcode "Street Feast" or fetch from store
-   - Date: format current date
+## Phase 7 — Login Persistence
+**Goal:** Stay logged in after back press or process death.
 
-### Detailed implementation steps
+- Supabase client: enable persistent storage + auto refresh (`Auth` config with storage adapter) and load session on startup before routing.
+- Do not clear ServiceLocator/auth on back press; only on explicit logout.
+- Keep back press just finishing the activity.
 
-#### Step 1: Create layout files
+**Acceptance:** Kill app or press back and reopen → still logged in; logout still works and clears session.
 
-**File: `res/layout/chef_page.xml`**
-- Copy from help.txt (lines 9-623)
+---
 
-**File: `res/drawable/bg_tab_selected.xml`** (lines 633-637)
-**File: `res/drawable/bg_tab_unselected.xml`** (lines 640-649)
-**File: `res/drawable/bg_card.xml`** (lines 652-665)
-**File: `res/drawable/bg_badge_running_late.xml`** (lines 669-676)
-**File: `res/drawable/bg_qty_badge.xml`** (lines 678-685)
-**File: `res/drawable/bg_green_cta.xml`** (lines 687-694)
-**File: `res/drawable/bg_black_pill.xml`** (lines 696-703)
-**File: `res/drawable/bg_white_outline_pill.xml`** (lines 705-715)
+## Recommended execution order
+1. Phase 1 (license propagation)  
+2. Phase 2 (table scroll)  
+3. Phase 4 (add/edit occupancy)  
+4. Phase 3 (table display sanitize)  
+5. Phase 6 (crash hardening)  
+6. Phase 5 (notification sound)  
+7. Phase 7 (auth persistence)
 
-**Icons needed:**
-- `ic_close.xml` (close/back icon)
-- `ic_cutlery.xml` (cutlery icon for dine-in)
-- `ic_bag.xml` (bag icon for parcel)
+---
 
-#### Step 2: Create new fragment
-
-**File: `ChefPageFragment.kt`** (new)
-
-```kotlin
-class ChefPageFragment : Fragment() {
-    private var _binding: ChefPageBinding? = null
-    private val binding get() = _binding!!
-    
-    private val viewModel: OrdersViewModel by viewModels { ... }
-    
-    private var currentOrder: Order? = null
-    private val itemPreparedStates = mutableMapOf<String, Boolean>() // itemId -> isPrepared
-    
-    override fun onCreateView(...): View {
-        _binding = ChefPageBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-    
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        setupCloseButton()
-        setupTabs()
-        setupOrderCard()
-        setupBottomButtons()
-        observeOrders()
-        observeMessages()
-        viewModel.refresh()
-    }
-    
-    // Map to existing backend
-    private fun setupCloseButton() {
-        binding.btnClose.setOnClickListener {
-            findNavController().popBackStack()
-        }
-    }
-    
-    // Create tabs dynamically from preparingOrders
-    private fun setupTabs() {
-        viewModel.preparingOrders.observe(viewLifecycleOwner) { orders ->
-            createTabs(orders)
-            if (orders.isNotEmpty()) {
-                selectTab(orders.first())
-            }
-        }
-    }
-    
-    // Bind order data to card UI
-    private fun setupOrderCard() {
-        // Map order.items to tvItem1Name, tvItem1Qty, etc.
-        // Handle switches for each item
-    }
-    
-    // Map to order.type
-    private fun setupBottomButtons() {
-        binding.btnEatAway.setOnClickListener {
-            // TODO: Update order type to DINE_IN (backend later)
-        }
-        binding.btnParcel.setOnClickListener {
-            // TODO: Update order type to PARCEL (backend later)
-        }
-    }
-    
-    // Use existing viewModel.markPrepared() when all items are prepared
-    private fun onItemSwitchChanged(itemId: String, isChecked: Boolean) {
-        itemPreparedStates[itemId] = isChecked
-        checkIfAllPrepared()
-    }
-    
-    private fun checkIfAllPrepared() {
-        val allPrepared = currentOrder?.items?.all { item ->
-            itemPreparedStates[item.id] == true
-        } ?: false
-        
-        if (allPrepared && currentOrder != null) {
-            viewModel.markPrepared(currentOrder!!.id)
-        }
-    }
-}
-```
-
-#### Step 3: Data binding logic
-
-**Order → UI mapping:**
-
-```kotlin
-fun bindOrderToCard(order: Order) {
-    // Header
-    binding.tvTableHeader.text = "Table ${formatTableNumber(order.orderNumber)} - #${order.orderNumber}"
-    binding.tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
-    
-    // Running late badge
-    val isLate = isOrderRunningLate(order)
-    binding.badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
-    
-    // Items (dynamically create or use existing item1-4)
-    order.items.forEachIndexed { index, item ->
-        bindItemToView(item, index + 1)
-    }
-    
-    // Mark All Prepared button
-    binding.btnMarkAllPrepared.setOnClickListener {
-        viewModel.markPrepared(order.id)
-    }
-    
-    // Bottom buttons based on order.type
-    updateBottomButtonsForOrderType(order.type)
-}
-
-fun bindItemToView(item: OrderItem, position: Int) {
-    // Map to tvItem{position}Name, tvItem{position}Qty, etc.
-    // Set switch state from itemPreparedStates
-    // Color bar: red if not prepared, green if prepared
-}
-```
-
-#### Step 4: Navigation update
-
-**Option A:** Replace both fragments with one
-- Update `nav_graph.xml` to use `ChefPageFragment`
-- Remove old fragments or keep for fallback
-
-**Option B:** Keep both, add new as separate route
-- Add `chefPageFragment` to nav graph
-- Update bottom nav to point to new fragment
-
-### Features to implement later (backend)
-
-1. Per-item preparation status
-   - Add `itemPreparedStatus` to OrderItem
-   - Add `markItemPrepared(orderId, itemId)` API
-
-2. Table number
-   - Add `tableNumber` to Order model
-   - Update database schema
-
-3. Running late calculation
-   - Add `expectedPreparationTime` to Order
-   - Calculate based on order complexity
-
-4. Order type update
-   - Add `updateOrderType(orderId, type)` API
-
-5. Restaurant name
-   - Fetch from `stores` table
-   - Store in ViewModel or SharedPreferences
-
-### Migration checklist
-
-- [ ] Create `chef_page.xml` layout
-- [ ] Create all drawable XMLs
-- [ ] Create placeholder icons
-- [ ] Create `ChefPageFragment.kt`
-- [ ] Map `btnClose` → navigation back
-- [ ] Map tabs → `preparingOrders` list
-- [ ] Map `tvTableHeader` → `order.orderNumber`
-- [ ] Map `tvLastUpdated` → `DateTimeUtils.getTimeAgo(order.updatedAt)`
-- [ ] Map `badgeRunningLate` → time-based logic
-- [ ] Map items → `order.items` array
-- [ ] Map `switchItemX` → per-item prepared state (frontend only)
-- [ ] Map `btnMarkAllPrepared` → `viewModel.markPrepared(order.id)`
-- [ ] Map `btnEatAway` / `btnParcel` → `order.type` display
-- [ ] Update navigation graph
-- [ ] Test with existing backend
-- [ ] Add empty state handling
-- [ ] Handle multiple orders (tab scrolling)
-
-Should I generate the code files for this implementation?
+If you want, I can draft the concrete patch list for each phase (files and edits) so you can apply in agent mode.

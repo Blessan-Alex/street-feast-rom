@@ -15,6 +15,7 @@ import com.streatfeast.app.R
 import com.streatfeast.app.databinding.ItemGivenOrderCardBinding
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderItem
+import com.streatfeast.app.ui.OrderDisplayMapper
 import com.streatfeast.app.utils.DateTimeUtils
 
 class GivenOrderCardAdapter(
@@ -44,11 +45,8 @@ class GivenOrderCardAdapter(
 
         @RequiresApi(Build.VERSION_CODES.O)
         fun bind(order: Order) {
-            // Extract table number - for now using order number as placeholder
-            // In real implementation, table number should come from order metadata
-            val tableNumber = extractTableNumber(order)
-            
-            binding.tvTableOrder.text = "Table $tableNumber - #${order.orderNumber}"
+            val locationLabel = OrderDisplayMapper.locationLabel(order)
+            binding.tvTableOrder.text = "$locationLabel - #${order.orderNumber}"
             binding.tvTimeAgo.text = DateTimeUtils.getTimeAgo(order.updatedAt)
             
             // Clear existing items
@@ -74,8 +72,20 @@ class GivenOrderCardAdapter(
                 val tvTips = itemView.findViewById<TextView>(R.id.tvTips)
                 val btnAlter = itemView.findViewById<TextView>(R.id.btnAlter)
                 
-                // Hide alter button for given orders (only show in preview order)
-                btnAlter.visibility = View.GONE
+                // Show alter button if order status allows modification
+                val canModify = order.status != com.streatfeast.app.models.OrderStatus.DELIVERED &&
+                        order.status != com.streatfeast.app.models.OrderStatus.CLOSED &&
+                        order.status != com.streatfeast.app.models.OrderStatus.CANCELED
+                
+                if (canModify) {
+                    btnAlter.visibility = View.VISIBLE
+                    btnAlter.isEnabled = true
+                    btnAlter.setOnClickListener {
+                        onAlterOrderClick(order, item)
+                    }
+                } else {
+                    btnAlter.visibility = View.GONE
+                }
                 
                 // Set stripe color based on veg flag
                 val stripeColor = if (item.isVeg) {
@@ -87,11 +97,14 @@ class GivenOrderCardAdapter(
                 
                 // Bind item data
                 tvItem.text = item.nameSnapshot
-                badge.text = "x${item.qty}"
+                if (item.qty > 0) {
+                    badge.text = "x${item.qty}"
+                    badge.visibility = View.VISIBLE
+                } else {
+                    badge.visibility = View.GONE
+                }
                 tvSize.text = if (item.size != null) "Size: ${item.size}" else "Size: -"
                 tvTips.text = if (item.chefTip.isNotBlank()) "Tips: ${item.chefTip}" else "Tips: None"
-                
-                // Alter button is hidden, so no click listener needed
                 
                 binding.llItems.addView(itemView)
             }
@@ -100,13 +113,6 @@ class GivenOrderCardAdapter(
             binding.btnAddItems.setOnClickListener {
                 onAddItemsClick(order)
             }
-        }
-        
-        private fun extractTableNumber(order: Order): Int {
-            // TODO: Extract table number from order metadata
-            // For now, using a placeholder - in real implementation, this should come from order
-            // Maybe from order metadata or a separate field
-            return order.orderNumber % 20 + 1 // Placeholder: derive from order number
         }
     }
 

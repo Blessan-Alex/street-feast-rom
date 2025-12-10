@@ -8,7 +8,7 @@ import { toast } from '../components/Toast';
 
 export const MenuUpload: React.FC = () => {
   const navigate = useNavigate();
-  const { addCategory, addItems } = useMenuStore();
+  const { addCategory, addItems, saveMenuToBackend } = useMenuStore();
   const [file, setFile] = useState<File | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -54,7 +54,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
     toast.success('Template downloaded successfully');
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!validation || !validation.valid) {
       toast.error('Please fix validation errors before applying');
       return;
@@ -74,7 +74,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
 
       // Create categories and items
       categoriesMap.forEach((items, categoryName) => {
-        const categoryId = `cat-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        const categoryId = crypto.randomUUID();
         const now = Date.now();
 
         // Add category
@@ -89,12 +89,12 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
       // Add items for this category
       const itemsToAdd: any[] = [];
       
-      items.forEach((item, index) => {
+      items.forEach((item) => {
         if (item.vegFlag === 'Both') {
           // Create two separate items for "Both" vegFlag
           itemsToAdd.push(
             {
-              id: `item-${Date.now()}-${index}-veg-${Math.random().toString(36).substring(7)}`,
+              id: crypto.randomUUID(),
               categoryId,
               name: `${item.itemName} (Veg)`,
               sizes: item.sizes,
@@ -105,7 +105,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
               updatedAt: now
             },
             {
-              id: `item-${Date.now()}-${index}-nonveg-${Math.random().toString(36).substring(7)}`,
+              id: crypto.randomUUID(),
               categoryId,
               name: `${item.itemName} (Non-Veg)`,
               sizes: item.sizes,
@@ -119,7 +119,7 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
         } else {
           // Single item for Veg or NonVeg
           itemsToAdd.push({
-            id: `item-${Date.now()}-${index}-${Math.random().toString(36).substring(7)}`,
+            id: crypto.randomUUID(),
             categoryId,
             name: item.itemName,
             sizes: item.sizes,
@@ -135,10 +135,20 @@ Booze Worthy Snacks,Korean Chicken,Non Veg,Half / Full / Extra Large,Medium Spic
         addItems(itemsToAdd);
       });
 
+      // Save to backend
+      const result = await saveMenuToBackend();
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to save menu to backend');
+        setIsProcessing(false);
+        return;
+      }
+
       toast.success(`Successfully imported ${validation.rows.length} items in ${categoriesMap.size} categories`);
       navigate('/menu/summary');
-    } catch (error) {
-      toast.error('Failed to import menu data');
+    } catch (error: any) {
+      console.error('Error importing menu:', error);
+      toast.error(error.message || 'Failed to import menu data');
+    } finally {
       setIsProcessing(false);
     }
   };

@@ -20,11 +20,19 @@ import com.streatfeast.app.adapters.TableChip
 import com.streatfeast.app.adapters.TableChipAdapter
 import com.streatfeast.app.databinding.FragmentGivenOrderBinding
 import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.navigation.OrderNavArgs
+import com.streatfeast.app.utils.TableDisplayMapper
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderItem
 import com.streatfeast.app.models.OrderStatus
 import com.streatfeast.app.viewmodels.OrdersViewModel
 import com.streatfeast.app.viewmodels.OrdersViewModelFactory
+import com.streatfeast.app.viewmodels.AuthViewModel
+import com.streatfeast.app.dialogs.OrderModificationDialog
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @RequiresApi(Build.VERSION_CODES.O)
 class GivenOrderFragment : Fragment() {
@@ -37,6 +45,8 @@ class GivenOrderFragment : Fragment() {
             ServiceLocator.provideOrderRepository(requireContext().applicationContext)
         )
     }
+
+    private val authViewModel: AuthViewModel by activityViewModels()
 
     private lateinit var tableChipAdapter: TableChipAdapter
     private lateinit var orderCardAdapter: GivenOrderCardAdapter
@@ -57,12 +67,46 @@ class GivenOrderFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupAppbar()
         setupTableChipAdapter()
         setupOrderCardAdapter()
         setupSearch()
         setupBottomNavigation()
         observeDeliveredOrders()
         observeMessages()
+    }
+
+    private fun setupAppbar() {
+        // Hide back button (users can use system back)
+        val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
+        navBack?.visibility = View.GONE
+        
+        // Show logout button
+        setupLogoutButton()
+    }
+
+    private fun setupLogoutButton() {
+        val logoutButton = binding.appbar.root.findViewById<ViewGroup>(R.id.btnLogout)
+        logoutButton?.visibility = View.VISIBLE
+        logoutButton?.setOnClickListener {
+            lifecycleScope.launch {
+                try {
+                    // FIRST: Logout from auth
+                    authViewModel.logout()
+                    
+                    // Wait a bit to ensure logout completes
+                    delay(100)
+                    
+                    // THEN: Stop realtime and clear ServiceLocator
+                    ServiceLocator.provideOrderRepository(requireContext().applicationContext).stopRealtime()
+                    ServiceLocator.clear()
+                } catch (e: Exception) {
+                    android.util.Log.e("GivenOrderFragment", "Error during logout", e)
+                    // Even if there's an error, try to clear
+                    ServiceLocator.clear()
+                }
+            }
+        }
     }
 
     private fun setupTableChipAdapter() {
@@ -82,22 +126,57 @@ class GivenOrderFragment : Fragment() {
     private fun setupOrderCardAdapter() {
         orderCardAdapter = GivenOrderCardAdapter(
             onAlterOrderClick = { order, item ->
-                // TODO: Open ItemCustomizeBottomSheet in edit mode
-                android.util.Log.d("GivenOrderFragment", "Alter order: ${order.id}, item: ${item.id}")
+                // Check order status and show confirmation if needed
+                val status = order.status
+                if (!OrderModificationDialog.canModifyOrder(status)) {
+                    // Show error - cannot alter
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        OrderModificationDialog.getModificationErrorMessage(status),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    return@GivenOrderCardAdapter
+                }
+                
+                // Show confirmation dialog if order is being prepared
+                if (OrderModificationDialog.requiresWarning(status)) {
+                    OrderModificationDialog.showPreparingOrderConfirmation(
+                        requireContext(),
+                        onConfirm = { navigateToEditOrder(order) }
+                    )
+                } else {
+                    // Navigate directly for Created/Accepted orders
+                    navigateToEditOrder(order)
+                }
             },
             onAddItemsClick = { order ->
-                // Navigate to preview order with existing order context
-                val bundle = Bundle().apply {
-                    putString("existingOrderId", order.id)
-                    putString("orderType", order.type.name)
-                    putInt("tableNumber", extractTableNumber(order))
-                }
-                findNavController().navigate(R.id.previewOrderFragment, bundle)
+                // Navigate to preview order with existing order context (add items mode)
+                val args = OrderNavArgs(
+                    orderType = order.type,
+                    tableNumber = extractTableNumber(order),
+                    licensePlate = order.licensePlate,
+                    existingOrderId = order.id,
+                    isEditing = false,
+                    showHeader = false
+                )
+                findNavController().navigate(R.id.previewOrderFragment, args.toBundle())
             }
         )
 
         binding.rvGivenBody.layoutManager = LinearLayoutManager(requireContext())
         binding.rvGivenBody.adapter = orderCardAdapter
+    }
+    
+    private fun navigateToEditOrder(order: Order) {
+        val args = OrderNavArgs(
+            orderType = order.type,
+            tableNumber = extractTableNumber(order),
+            licensePlate = order.licensePlate,
+            existingOrderId = order.id,
+            isEditing = true,
+            showHeader = false
+        )
+        findNavController().navigate(R.id.previewOrderFragment, args.toBundle())
     }
 
     private fun setupSearch() {
@@ -111,21 +190,31 @@ class GivenOrderFragment : Fragment() {
     }
 
     private fun observeDeliveredOrders() {
-        viewModel.deliveredOrders.observe(viewLifecycleOwner) { orders ->
-            allOrders = orders
-            updateTableChips(orders)
+        // Observe editable orders but filter out fully prepared orders
+        // Editable orders: Created, Accepted, InKitchen, Prepared
+        // But exclude orders where all items are prepared (order is fully ready for delivery)
+        viewModel.editableOrders.observe(viewLifecycleOwner) { orders ->
+            // Filter out orders where all items are prepared
+            val editableOrders = orders.filter { order ->
+                // If order has items, check if all are prepared
+                if (order.items.isNotEmpty()) {
+                    // Order is editable if not all items are prepared
+                    !order.items.all { it.isPrepared }
+                } else {
+                    // Empty orders are not editable
+                    false
+                }
+            }
+            allOrders = editableOrders
+            updateTableChips(editableOrders)
             filterOrders()
         }
     }
 
     private fun updateTableChips(orders: List<Order>) {
-        val chips = orders.map { order ->
-            TableChip(
-                tableNumber = extractTableNumber(order),
-                orderNumber = order.orderNumber,
-                orderId = order.id
-            )
-        }.distinctBy { it.tableNumber to it.orderNumber }
+        val chips = orders.mapNotNull { order ->
+            TableDisplayMapper.toChip(order)
+        }.distinctBy { it.orderId }
 
         tableChipAdapter = TableChipAdapter(chips) { chip ->
             selectedTableChip = chip
@@ -140,8 +229,7 @@ class GivenOrderFragment : Fragment() {
         filteredOrders = allOrders.filter { order ->
             // Filter by selected table chip
             val matchesTable = selectedTableChip?.let { chip ->
-                extractTableNumber(order) == chip.tableNumber && 
-                order.orderNumber == chip.orderNumber
+                order.id == chip.orderId
             } ?: true
 
             // Filter by search query
@@ -149,7 +237,11 @@ class GivenOrderFragment : Fragment() {
                 true
             } else {
                 order.orderNumber.toString().contains(searchQuery) ||
-                extractTableNumber(order).toString().contains(searchQuery)
+                extractTableNumber(order).toString().contains(searchQuery) ||
+                order.items.any { item ->
+                    item.nameSnapshot.lowercase().contains(searchQuery) ||
+                    item.chefTip.lowercase().contains(searchQuery)
+                }
             }
 
             matchesTable && matchesSearch
@@ -189,9 +281,8 @@ class GivenOrderFragment : Fragment() {
     }
 
     private fun extractTableNumber(order: Order): Int {
-        // TODO: Extract table number from order metadata
-        // For now, using a placeholder - in real implementation, this should come from order
-        return order.orderNumber % 20 + 1 // Placeholder: derive from order number
+        // Extract table number from order model
+        return order.tableNumber ?: 0
     }
 
     override fun onDestroyView() {

@@ -56,36 +56,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Go back chip (for Screen 4) -->
-    <LinearLayout
-        android:id="@+id/btnGoBack"
-        android:layout_width="124dp"
-        android:layout_height="44dp"
-        android:layout_marginEnd="@dimen/sf_pad_screen_h"
-        android:background="@drawable/sf_bg_chip"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:elevation="2dp"
-        android:visibility="visible"
-        app:layout_constraintTop_toBottomOf="@id/stepper"
-        app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:src="@drawable/ic_chev_left_20" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Go back"
-            android:textColor="@color/sf_text_secondary"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-    </LinearLayout>
 
     <!-- Table handle (for Screen 3) -->
     <include
@@ -157,66 +128,13 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <!-- 2x2 Most bought cards -->
-            <androidx.constraintlayout.widget.ConstraintLayout
+            <!-- Horizontal RecyclerView for Most bought items -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvMostBought"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp">
-
-                <androidx.constraintlayout.widget.Guideline
-                    android:id="@+id/gMid"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    app:layout_constraintGuide_percent="0.5" />
-
-                <include
-                    android:id="@+id/mb1"
-                    layout="@layout/item_most_bought"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toStartOf="@id/gMid"
-                    app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginEnd="4dp" />
-
-                <include
-                    android:id="@+id/mb2"
-                    layout="@layout/item_most_bought"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintStart_toEndOf="@id/gMid"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginStart="4dp" />
-
-                <include
-                    android:id="@+id/mb3"
-                    layout="@layout/item_most_bought"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    app:layout_constraintTop_toBottomOf="@id/mb1"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toStartOf="@id/gMid"
-                    app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginEnd="4dp"
-                    android:layout_marginTop="8dp" />
-
-                <include
-                    android:id="@+id/mb4"
-                    layout="@layout/item_most_bought"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    app:layout_constraintTop_toBottomOf="@id/mb2"
-                    app:layout_constraintStart_toEndOf="@id/gMid"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.5"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginTop="8dp" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
+                android:layout_marginTop="12dp"
+                android:nestedScrollingEnabled="false" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -227,73 +145,13 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <!-- 3 columns categories using Flow -->
-            <androidx.constraintlayout.widget.ConstraintLayout
+            <!-- Categories RecyclerView -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvCategories"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp">
-
-                <androidx.constraintlayout.helper.widget.Flow
-                    android:id="@+id/catFlow"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    app:flow_wrapMode="chain"
-                    app:flow_horizontalStyle="packed"
-                    app:flow_verticalGap="8dp"
-                    app:flow_horizontalGap="8dp"
-                    app:flow_maxElementsWrap="3"
-                    app:constraint_referenced_ids="c1,c2,c3,c4,c5,c6,c7,c8,c9"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent" />
-
-                <include
-                    android:id="@+id/c1"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c2"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c3"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c4"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c5"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c6"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c7"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c8"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-                <include
-                    android:id="@+id/c9"
-                    layout="@layout/item_category"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
+                android:layout_marginTop="12dp"
+                android:nestedScrollingEnabled="false" />
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

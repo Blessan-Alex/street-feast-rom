@@ -31,7 +31,7 @@
     <!-- Street Feast Design System Dimensions -->
     <!-- Padding -->
     <dimen name="sf_pad_screen_h">20dp</dimen>
-    <dimen name="sf_pad_section_top">18dp</dimen>
+    <dimen name="sf_pad_section_top">30dp</dimen>
     
     <!-- Radius -->
     <dimen name="sf_radius_xl">22dp</dimen>

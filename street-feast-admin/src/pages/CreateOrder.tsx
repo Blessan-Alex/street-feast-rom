@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useMenuStore, Item } from '../store/menuStore';
+import { useMenuStore, Item, Category } from '../store/menuStore';
 import { useOrdersStore } from '../store/ordersStore';
 import { OrderSummaryCard } from '../components/OrderSummaryCard';
 import { ItemAdditionModal } from '../components/ItemAdditionModal';
@@ -19,8 +19,8 @@ export const CreateOrder: React.FC = () => {
   // Frequent items
   const frequentItems = useMemo(() => {
     return frequentItemIds
-      .map(id => items.find(item => item.id === id))
-      .filter(item => item !== undefined) as Item[];
+      .map((id: string) => items.find((item: Item) => item.id === id))
+      .filter((item: Item | undefined) => item !== undefined) as Item[];
   }, [frequentItemIds, items]);
 
   // Filtered items based on search
@@ -28,8 +28,8 @@ export const CreateOrder: React.FC = () => {
     if (!searchTerm) return items;
     
     const term = searchTerm.toLowerCase();
-    return items.filter(item => {
-      const category = categories.find(c => c.id === item.categoryId);
+    return items.filter((item: Item) => {
+      const category = categories.find((c: Category) => c.id === item.categoryId);
       return (
         item.name.toLowerCase().includes(term) ||
         category?.name.toLowerCase().includes(term)
@@ -40,7 +40,7 @@ export const CreateOrder: React.FC = () => {
   // Items for selected category
   const categoryItems = useMemo(() => {
     if (!selectedCategory) return [];
-    return items.filter(item => item.categoryId === selectedCategory);
+    return items.filter((item: Item) => item.categoryId === selectedCategory);
   }, [selectedCategory, items]);
 
   // Debounce search
@@ -57,7 +57,7 @@ export const CreateOrder: React.FC = () => {
     if (editingItem) {
       setEditingOrderItem(editingItem);
       // Find the menu item and set it for editing
-      const menuItem = items.find(i => i.id === editingItem.itemId);
+      const menuItem = items.find((i: Item) => i.id === editingItem.itemId);
       if (menuItem) {
         setItemToAdd(menuItem);
       }
@@ -96,7 +96,7 @@ export const CreateOrder: React.FC = () => {
   };
 
   const getCategoryById = (id: string) => {
-    return categories.find(c => c.id === id);
+    return categories.find((c: Category) => c.id === id);
   };
 
   const handleSelectCategory = (categoryId: string) => {
@@ -190,7 +190,7 @@ export const CreateOrder: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {filteredItems.map(item => {
+                  {filteredItems.map((item: Item) => {
                     const category = getCategoryById(item.categoryId);
                     return (
                       <div
@@ -239,7 +239,7 @@ export const CreateOrder: React.FC = () => {
                 </button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {categoryItems.map(item => (
+                {categoryItems.map((item: Item) => (
                   <div
                     key={item.id}
                     className="relative p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-action-primary hover:shadow-lg transition-all"
@@ -279,8 +279,8 @@ export const CreateOrder: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {categories.map(category => {
-                    const itemCount = items.filter(i => i.categoryId === category.id).length;
+                  {categories.map((category: Category) => {
+                    const itemCount = items.filter((i: Item) => i.categoryId === category.id).length;
                     return (
                       <button
                         key={category.id}
