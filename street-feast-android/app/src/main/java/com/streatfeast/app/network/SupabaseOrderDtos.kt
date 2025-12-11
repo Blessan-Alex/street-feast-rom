@@ -16,7 +16,8 @@ data class SupabaseOrderDto(
     @SerialName("table_number") val tableNumber: Int? = null,
     @SerialName("license_plate") val licensePlate: String? = null,
     @SerialName("created_at") val createdAt: String,
-    @SerialName("updated_at") val updatedAt: String
+    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("is_edited") val isEdited: Boolean = false
 )
 
 @Serializable

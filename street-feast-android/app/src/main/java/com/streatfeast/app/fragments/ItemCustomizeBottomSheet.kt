@@ -321,21 +321,8 @@ class ItemCustomizeBottomSheet : Fragment() {
     }
     
     private fun addItemToDraft() {
-        if (isEditingOrder && orderItem != null) {
-            // Update order item directly (not draft)
-            val item = orderItem!!
-            lifecycleScope.launch {
-                ordersViewModel.updateOrderItem(
-                    itemId = item.id,
-                    quantity = quantity,
-                    size = selectedSize,
-                    chefTip = chefTip
-                )
-            }
-            // Navigate back after update
-            findNavController().popBackStack()
-        } else if (isEditMode && orderItem != null) {
-            // Update existing item in draft
+        if (orderItem != null) {
+            // Update existing item in draft (even when editing an order) and let alter/add flows handle persistence
             val item = orderItem!!
             draftViewModel.updateDraftItem(item.id) { currentItem ->
                 currentItem.copy(

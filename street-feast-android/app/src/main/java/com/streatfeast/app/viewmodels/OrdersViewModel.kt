@@ -144,6 +144,10 @@ class OrdersViewModel(
         }
     }
 
+    /**
+     * Creates a brand-new order. Do not use for add/alter flows.
+     * The isEdit flag is deprecated and ignored for behaviour selection.
+     */
     fun createOrder(
         orderType: OrderType,
         items: List<OrderItem>,
@@ -165,54 +169,20 @@ class OrdersViewModel(
                 refresh()
                 _isLoading.value = false
             }.onFailure { e ->
-                // If table is occupied for DINE_IN, try to find existing order and add items instead
-                if (orderType == OrderType.DINE_IN && 
-                    tableNumber != null && 
-                    !isEdit &&
-                    e.message?.contains("already occupied", ignoreCase = true) == true) {
-                    
-                    Log.d("OrdersViewModel", "Table $tableNumber is occupied. Attempting to find existing order and add items instead.")
-                    
-                    // Try to find existing order and add items to it
-                    val editableOrdersSnapshot = editableOrders.value
-                    val existingOrder = editableOrdersSnapshot?.find { order ->
-                        order.type == OrderType.DINE_IN && 
-                        order.tableNumber == tableNumber &&
-                        order.status in listOf(
-                            OrderStatus.CREATED,
-                            OrderStatus.ACCEPTED,
-                            OrderStatus.IN_KITCHEN,
-                            OrderStatus.PREPARED
-                        )
-                    }
-                    
-                    if (existingOrder != null) {
-                        Log.d("OrdersViewModel", "Found existing order ${existingOrder.id} for table $tableNumber. Adding items instead.")
-                        val addResult = repository.addItemsToOrder(existingOrder.id, items)
-                        addResult.onSuccess { orderId ->
-                            _successMessage.value = "Items added to existing order successfully"
-                            Log.d("OrdersViewModel", "Items added to existing order: $orderId")
-                            refresh()
-                            _isLoading.value = false
-                        }.onFailure { addError ->
-                            val errorMessage = addError.message ?: "Failed to add items to order"
-                            _error.value = errorMessage
-                            Log.e("OrdersViewModel", "Failed to add items to existing order", addError)
-                            _isLoading.value = false
-                        }
-                    } else {
-                        // Couldn't find existing order even though table is occupied
-                        val errorMessage = e.message ?: "Failed to create order"
-                        _error.value = errorMessage
-                        Log.e("OrdersViewModel", "Table occupied but couldn't find existing order", e)
-                        _isLoading.value = false
-                    }
+                val occupiedDineIn = orderType == OrderType.DINE_IN &&
+                    tableNumber != null &&
+                    e.message?.contains("already occupied", ignoreCase = true) == true
+
+                if (occupiedDineIn) {
+                    val errorMessage = "Table $tableNumber already has an active order. Use Add Items or Alter Order."
+                    _error.value = errorMessage
+                    Log.e("OrdersViewModel", errorMessage, e)
                 } else {
                     val errorMessage = e.message ?: "Failed to create order"
                     _error.value = errorMessage
                     Log.e("OrdersViewModel", "Failed to create order", e)
-                    _isLoading.value = false
                 }
+                _isLoading.value = false
             }
         }
     }

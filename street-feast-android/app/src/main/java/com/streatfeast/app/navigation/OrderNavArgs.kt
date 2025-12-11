@@ -5,6 +5,15 @@ import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.utils.Constants
 
 /**
+ * Explicit modes for order flows.
+ */
+enum class OrderEditMode {
+    NEW,
+    ADD_ITEMS,
+    EDIT
+}
+
+/**
  * Single source of truth for order navigation arguments.
  * Keeps order context (type, table, license, edit flags) consistent across fragments.
  */
@@ -14,7 +23,7 @@ data class OrderNavArgs(
     val licensePlate: String? = null,
     val showHeader: Boolean = false,
     val existingOrderId: String? = null,
-    val isEditing: Boolean = false,
+    val editMode: OrderEditMode = OrderEditMode.NEW,
     val chefTip: String? = null,
     val orderId: String? = null
 ) {
@@ -24,7 +33,7 @@ data class OrderNavArgs(
         private const val KEY_LICENSE_PLATE = "licensePlate"
         private const val KEY_SHOW_HEADER = "showHeader"
         private const val KEY_EXISTING_ORDER_ID = "existingOrderId"
-        private const val KEY_IS_EDITING = "isEditing"
+        private const val KEY_EDIT_MODE = "editMode"
         private const val KEY_CHEF_TIP = "chefTip"
         private const val KEY_ORDER_ID = "orderId"
 
@@ -45,13 +54,17 @@ data class OrderNavArgs(
             }
             val tableNumber = rawTable.takeIf { it > 0 } ?: null
 
+            val editMode = bundle.getString(KEY_EDIT_MODE)?.let { raw ->
+                runCatching { OrderEditMode.valueOf(raw) }.getOrNull()
+            } ?: OrderEditMode.NEW
+
             return OrderNavArgs(
                 orderType = orderType,
                 tableNumber = tableNumber,
                 licensePlate = bundle.getString(KEY_LICENSE_PLATE),
                 showHeader = bundle.getBoolean(KEY_SHOW_HEADER, false),
                 existingOrderId = bundle.getString(KEY_EXISTING_ORDER_ID),
-                isEditing = bundle.getBoolean(KEY_IS_EDITING, false),
+                editMode = editMode,
                 chefTip = bundle.getString(KEY_CHEF_TIP),
                 orderId = bundle.getString(KEY_ORDER_ID)
             )
@@ -69,7 +82,7 @@ data class OrderNavArgs(
         licensePlate?.let { putString(KEY_LICENSE_PLATE, it) }
         putBoolean(KEY_SHOW_HEADER, showHeader)
         existingOrderId?.let { putString(KEY_EXISTING_ORDER_ID, it) }
-        putBoolean(KEY_IS_EDITING, isEditing)
+        putString(KEY_EDIT_MODE, editMode.name)
         chefTip?.let { putString(KEY_CHEF_TIP, it) }
         orderId?.let { putString(KEY_ORDER_ID, it) }
     }

@@ -576,7 +576,7 @@ class SupabaseOrderRepository(
             // Prepare items JSONB array
             val itemsJson = items.map { item ->
                 buildMap<String, Any?> {
-                    put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
+                    // Do not send client-side IDs; server will generate new ones to avoid PK collisions
                     put("sku", item.itemId)
                     put("name", item.nameSnapshot)
                     put("size", item.size)
@@ -1096,6 +1096,8 @@ class SupabaseOrderRepository(
         Log.e("SupabaseOrderRepository", "alterOrderV2 failed", e)
         // Improve error messages to be status-specific
         val errorMessage = when {
+            e.message?.contains("duplicate key value", ignoreCase = true) == true ->
+                "Could not alter order: duplicate item ids. Please retry."
             e.message?.contains("Illegal order status transition") == true -> 
                 "Cannot modify an order that is already prepared. Please contact support."
             e.message?.contains("Cannot alter order with status: Delivered") == true -> 
@@ -1112,7 +1114,7 @@ class SupabaseOrderRepository(
                 e.message ?: "Failed to alter order"
             else -> e.message ?: "Failed to alter order"
         }
-        throw Exception(errorMessage, e)
+        return Result.failure(Exception(errorMessage, e))
     }
 
     /**
@@ -1185,6 +1187,8 @@ class SupabaseOrderRepository(
 
         // Improve error messages
         val errorMessage = when {
+            e.message?.contains("already being prepared", ignoreCase = true) == true ->
+                "Order is already in kitchen. Use Alter Order instead."
             e.message?.contains("Cannot modify item in order with status: Delivered") == true ->
                 "Cannot modify item in a delivered order"
             e.message?.contains("Cannot modify item in order with status: Closed") == true ->
@@ -1341,7 +1345,8 @@ class SupabaseOrderRepository(
         updatedAt = parseIsoToMillis(updatedAt),
         parentOrderId = parentOrderId,
         tableNumber = tableNumber,
-        licensePlate = licensePlate
+        licensePlate = licensePlate,
+        isEdited = isEdited
     )
 
     private fun SupabaseOrderItemDto.toEntity(): OrderItemEntity {

@@ -74,6 +74,7 @@ class ChefPageFragment : Fragment() {
     // Combine new orders and preparing orders into single list
     // Initialize in onViewCreated after fragment is attached
     private lateinit var combinedOrders: MediatorLiveData<List<Order>>
+    private var dateUpdateJob: kotlinx.coroutines.Job? = null
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -138,7 +139,23 @@ class ChefPageFragment : Fragment() {
     
     private fun setupDate() {
         val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
-        binding.tvDate.text = dateFormat.format(Date())
+        
+        // Update date immediately
+        fun updateDate() {
+            binding.tvDate.text = dateFormat.format(Date())
+        }
+        
+        updateDate()
+        
+        // Update date every minute
+        dateUpdateJob = lifecycleScope.launch {
+            while (true) {
+                delay(60000) // 1 minute
+                if (isAdded && view != null) {
+                    updateDate()
+                }
+            }
+        }
     }
     
     private fun setupRefreshButton() {
@@ -871,6 +888,8 @@ class ChefPageFragment : Fragment() {
     
     override fun onDestroyView() {
         super.onDestroyView()
+        dateUpdateJob?.cancel()
+        dateUpdateJob = null
         _binding = null
         itemPreparedStates.clear()
         tabViews.clear()

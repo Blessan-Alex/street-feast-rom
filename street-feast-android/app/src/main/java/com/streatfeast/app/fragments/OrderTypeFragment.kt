@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -14,8 +15,12 @@ import com.streatfeast.app.di.ServiceLocator
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.navigation.OrderNavArgs
 import com.streatfeast.app.viewmodels.AuthViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class OrderTypeFragment : Fragment() {
     
@@ -23,6 +28,7 @@ class OrderTypeFragment : Fragment() {
     private val binding get() = _binding!!
     
     private val authViewModel: AuthViewModel by activityViewModels()
+    private var dateUpdateJob: Job? = null
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -82,8 +88,30 @@ class OrderTypeFragment : Fragment() {
         val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
         navBack?.visibility = View.GONE
         
-        // Update date if needed (can be done programmatically)
-        // For now, date is set in XML
+        // Setup real-time date
+        setupDate()
+    }
+    
+    private fun setupDate() {
+        val tvDate = binding.appbar.root.findViewById<TextView>(R.id.tvDate)
+        val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
+        
+        // Update date immediately
+        fun updateDate() {
+            tvDate?.text = dateFormat.format(Date())
+        }
+        
+        updateDate()
+        
+        // Update date every minute
+        dateUpdateJob = lifecycleScope.launch {
+            while (true) {
+                delay(60000) // 1 minute
+                if (isAdded && view != null) {
+                    updateDate()
+                }
+            }
+        }
     }
     
     private fun setupLogoutButton() {
@@ -135,6 +163,8 @@ class OrderTypeFragment : Fragment() {
     
     override fun onDestroyView() {
         super.onDestroyView()
+        dateUpdateJob?.cancel()
+        dateUpdateJob = null
         _binding = null
     }
 }

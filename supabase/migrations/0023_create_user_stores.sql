@@ -34,3 +34,5 @@ CREATE POLICY "Users can view their own store associations"
 
 COMMIT;
 
+
+

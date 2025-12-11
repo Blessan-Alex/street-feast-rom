@@ -306,22 +306,22 @@ export const OrderSummaryCard: React.FC = () => {
                   </svg>
                 </button>
               ) : (
-                <button
-                  onClick={handleRefreshTables}
-                  disabled={isRefreshingTables || isLoadingTables}
-                  className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
-                  aria-label="Refresh table status"
-                  title="Refresh table status"
+              <button
+                onClick={handleRefreshTables}
+                disabled={isRefreshingTables || isLoadingTables}
+                className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                aria-label="Refresh table status"
+                title="Refresh table status"
+              >
+                <svg
+                  className={`w-5 h-5 transition-transform duration-300 ${isRefreshingTables ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <svg
-                    className={`w-5 h-5 transition-transform duration-300 ${isRefreshingTables ? 'animate-spin' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
               )}
             </div>
             
@@ -331,11 +331,11 @@ export const OrderSummaryCard: React.FC = () => {
                 isTableSelectorExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
               }`}
             >
-              {isLoadingTables ? (
-                <div className="text-center py-4">
-                  <p className="text-sm text-gray-500">Loading tables...</p>
-                </div>
-              ) : (
+            {isLoadingTables ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-500">Loading tables...</p>
+              </div>
+            ) : (
                 <div className="mb-2">
                   {!draft.tableNumber && (
                     <button
@@ -355,25 +355,25 @@ export const OrderSummaryCard: React.FC = () => {
                       </svg>
                     </button>
                   )}
-                  <TableSelector
-                    selectedTable={draft.tableNumber}
-                    occupiedTables={occupiedTables}
-                    onSelectTable={(tableNumber) => {
-                      setDraft({ tableNumber });
-                      setIsExpanded(true); // Expand when table is selected
+                <TableSelector
+                  selectedTable={draft.tableNumber}
+                  occupiedTables={occupiedTables}
+                  onSelectTable={(tableNumber) => {
+                    setDraft({ tableNumber });
+                    setIsExpanded(true); // Expand when table is selected
                       setIsTableSelectorExpanded(false); // Collapse table selector when table is selected
-                    }}
-                  />
+                  }}
+                />
                 </div>
               )}
             </div>
             
             {/* Selected Table Display with Toggle */}
-            {draft.tableNumber && (
-              <div className="flex items-center justify-between mt-2">
+                {draft.tableNumber && (
+                  <div className="flex items-center justify-between mt-2">
                 <p className="text-sm text-gray-600 font-medium">
                   Selected: {formatTableNumber(draft.tableNumber)}
-                </p>
+                    </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsTableSelectorExpanded(!isTableSelectorExpanded)}
@@ -390,22 +390,22 @@ export const OrderSummaryCard: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1"
-                    aria-label={isExpanded ? 'Collapse order summary' : 'Expand order summary'}
+                    <button
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="text-sm text-action-primary hover:text-action-primary-dark focus:outline-none focus:ring-2 focus:ring-action-primary rounded p-1"
+                      aria-label={isExpanded ? 'Collapse order summary' : 'Expand order summary'}
                     title={isExpanded ? 'Collapse order summary' : 'Expand order summary'}
-                  >
-                    <svg
-                      className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
+                      <svg
+                        className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
               </div>
             )}
           </div>

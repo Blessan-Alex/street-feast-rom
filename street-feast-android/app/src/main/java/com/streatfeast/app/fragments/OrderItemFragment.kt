@@ -24,6 +24,7 @@ import com.streatfeast.app.models.MenuItem
 import com.streatfeast.app.models.Category
 import com.streatfeast.app.models.OrderType
 import com.streatfeast.app.models.OrderStatus
+import com.streatfeast.app.navigation.OrderEditMode
 import com.streatfeast.app.navigation.OrderNavArgs
 import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.OrderDraftViewModel
@@ -50,6 +51,7 @@ class OrderItemFragment : Fragment() {
     private var tableNumber: Int = Constants.DEFAULT_TABLE_COUNT
     private var licensePlate: String? = null
     private var showHeader: Boolean = false
+    private var editMode: OrderEditMode = OrderEditMode.NEW
     private var currentSearchTerm: String = ""
     private var allMenuItems: List<MenuItem> = emptyList()
     private var frequentItemIds: List<String> = emptyList()
@@ -90,6 +92,7 @@ class OrderItemFragment : Fragment() {
         tableNumber = navArgs.tableNumber ?: Constants.DEFAULT_TABLE_COUNT
         licensePlate = navArgs.licensePlate
         showHeader = navArgs.showHeader
+        editMode = navArgs.editMode
         
         setupScreenState()
         setupStepper()
@@ -493,42 +496,14 @@ class OrderItemFragment : Fragment() {
         
         // Handle preview bar click - navigate to preview order (Screen 10)
         binding.previewBar.root.setOnClickListener {
-            // Check if there's an existing order on this table (for DINE_IN orders)
-            if (orderType == OrderType.DINE_IN && tableNumber != null) {
-                // Find existing order for this table
-                val editableOrders = ordersViewModel.editableOrders.value
-                android.util.Log.d("OrderItemFragment", "Checking for existing order on table $tableNumber. Editable orders count: ${editableOrders?.size ?: 0}")
-                
-                val existingOrder = editableOrders?.find { order ->
-                    order.type == OrderType.DINE_IN && 
-                    order.tableNumber == tableNumber &&
-                    order.status in listOf(
-                        OrderStatus.CREATED,
-                        OrderStatus.ACCEPTED,
-                        OrderStatus.IN_KITCHEN,
-                        OrderStatus.PREPARED
-                    )
-                }
-                
-                android.util.Log.d("OrderItemFragment", "Found existing order: ${existingOrder?.id ?: "none"} for table $tableNumber")
-                
-                val nextArgs = navArgs.copy(
-                    orderType = orderType,
-                    tableNumber = tableNumber,
-                    licensePlate = licensePlate,
-                    existingOrderId = existingOrder?.id, // Set existingOrderId if found
-                    isEditing = false // Adding items, not editing
-                )
-                findNavController().navigate(R.id.previewOrderFragment, nextArgs.toBundle())
-            } else {
-                // For non-DINE_IN orders, no need to check for existing orders
-                val nextArgs = navArgs.copy(
-                    orderType = orderType,
-                    tableNumber = tableNumber,
-                    licensePlate = licensePlate
-                )
-                findNavController().navigate(R.id.previewOrderFragment, nextArgs.toBundle())
-            }
+            val nextArgs = navArgs.copy(
+                orderType = orderType,
+                tableNumber = tableNumber,
+                licensePlate = licensePlate,
+                editMode = editMode,
+                existingOrderId = navArgs.existingOrderId
+            )
+            findNavController().navigate(R.id.previewOrderFragment, nextArgs.toBundle())
         }
     }
     

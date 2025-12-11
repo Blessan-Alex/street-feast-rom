@@ -20,6 +20,7 @@ data class Order @RequiresApi(Build.VERSION_CODES.O) constructor(
     val parentOrderId: String? = null,
     val tableNumber: Int? = null,
     val licensePlate: String? = null,
+    val isEdited: Boolean = false,
     var items: List<OrderItem> = emptyList() // populated from subcollection
 ) : Parcelable
 

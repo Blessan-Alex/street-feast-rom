@@ -150,12 +150,28 @@ interface OrderAlteredPayload {
   orderType: string;
 }
 
+interface OrderAddItemsPayload {
+  type: "ORDER_ADD_ITEMS";
+  orderId: string;
+  orderNumber: number;
+  storeId: string;
+  itemCount: number;
+  tableNumber?: number | null;
+  licensePlate?: string | null;
+  orderType: string;
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const payload = (await req.json()) as OrderPayload | BulkUpdatePayload | ItemPreparedPayload | OrderAlteredPayload;
+  const payload = (await req.json()) as
+    | OrderPayload
+    | BulkUpdatePayload
+    | ItemPreparedPayload
+    | OrderAlteredPayload
+    | OrderAddItemsPayload;
 
   // Handle order altered notifications (from alter_order_v2 RPC)
   if (payload.type === "ORDER_ALTERED") {
@@ -167,10 +183,10 @@ serve(async (req) => {
     }
 
     try {
-      const subscriptionIds = await fetchSubscriptionIds(storeId, ["waiter", "admin"]);
+      const subscriptionIds = await fetchSubscriptionIds(storeId, ["chef", "waiter", "admin"]);
       
-      const heading = `Order #${orderNumber} has been updated`;
-      const content = `Order #${orderNumber} has been modified. Please refresh to see changes.`;
+      const heading = `Order #${orderNumber} edited`;
+      const content = `Order #${orderNumber} was replaced/updated. Review changes.`;
       
       await notifyOneSignal(subscriptionIds, heading, content, {
         status: "OrderAltered",
@@ -183,6 +199,39 @@ serve(async (req) => {
       });
     } catch (error) {
       console.error("Order altered notification failed", error);
+      return new Response("Error", { status: 500 });
+    }
+
+    return new Response("OK", { status: 200 });
+  }
+
+  // Handle add-items notifications (child or merged orders)
+  if (payload.type === "ORDER_ADD_ITEMS") {
+    const addPayload = payload as OrderAddItemsPayload;
+    const { storeId, orderNumber, orderId, itemCount, tableNumber, licensePlate, orderType } = addPayload;
+
+    if (!storeId || !orderNumber || !orderId || !itemCount) {
+      return new Response("Bad payload", { status: 202 });
+    }
+
+    try {
+      const subscriptionIds = await fetchSubscriptionIds(storeId, ["chef", "waiter", "admin"]);
+
+      const heading = `+${itemCount} item${itemCount > 1 ? "s" : ""} added to order #${orderNumber}`;
+      const content = `Order #${orderNumber} received additional items.`;
+
+      await notifyOneSignal(subscriptionIds, heading, content, {
+        status: "OrderAddItems",
+        orderId,
+        orderNumber,
+        itemCount,
+        tableNumber: tableNumber ?? null,
+        licensePlate: licensePlate ?? null,
+        orderType,
+        storeId,
+      });
+    } catch (error) {
+      console.error("Order add-items notification failed", error);
       return new Response("Error", { status: 500 });
     }
 

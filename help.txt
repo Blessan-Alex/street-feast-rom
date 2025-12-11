@@ -1,288 +1,477 @@
-Not quite production-level yet — the proposed fixes are *correct*, but a senior-level plan needs: **clear contracts, data model fixes, UI/state separation, backend event design, acceptance criteria, and rollback-safe sequencing**.
+Nice, this is **good debugging fuel**. Let me turn this into something you can paste straight into Cursor as “things to fix”.
 
-Below is a **complete production-grade plan** you can paste into Cursor. It includes *exact tasks*, *file-level changes*, and *how to implement per-item notifications properly*.
+I’ll break it into:
 
----
+1. **Issue A – Add Items still hitting table-occupancy guard**
+2. **Issue B – Alter flow doesn’t use `alter_order_v2` (no Edited pill, no notifications, chef sees silent changes)**
+3. **Critical bug – Editing after chef marks items done mutates the *same* prepared items**
 
-# ✅ Production-Grade Plan (Chef page fixes + per-item prepared notifications)
-
-## Scope
-
-Fix 3 Chef-side issues:
-
-1. Wrong “Table XX” label (uses orderNumber instead of real tableNumber + orderType)
-2. Veg/Non-veg indicator incorrectly changes when prepared toggle changes
-3. Per-item prepared toggles currently local-only; implement per-item notifications (server-driven)
+For each: problem → why it’s happening (from logs) → how to fix → which files/fields to inspect.
 
 ---
 
-## Phase 1 — Table label correctness (UI + model contract)
+## 1️⃣ Issue A – “Add Items” still calls `createOrder` → “Table X is already occupied”
 
-### 1.1 Create a shared mapper: `OrderDisplayMapper`
+### 🧩 Problem (what you saw)
 
-**Add file:** `ui/OrderDisplayMapper.kt`
+You clicked **Add Items** on an existing DINE_IN order (table 4), added 1 item in preview, hit “Place order”, and got:
 
-Responsibilities:
+> Table 4 is already occupied. Use Add Items or Alter Order.
 
-* Convert an `Order` into:
+…even though you *were already using Add Items*.
 
-  * `locationLabel` (Table X / EatAway #### / Parcel)
-  * `headerLabel` (Location + order number e.g. “Table 3 · #41”)
+### 🔍 Evidence from logs
 
-Rules:
+Relevant snippet:
 
-* DINE_IN: use `order.tableNumber` only if valid: `in 1..tableCount` (use `DEFAULT_TABLE_COUNT = 7` for now)
-* EAT_AWAY: use `order.licensePlate` else “----”
-* PARCEL: “Parcel”
-* If invalid dine-in table number → “Table ?”
+```text
+2025-12-11 15:56:51.358  SupabaseOrderRepository  D  createOrder: type=DineIn, table=4, license=null, items=3
+2025-12-11 15:56:51.540  SupabaseOrderRepository  D  checkTableAvailability: table=4, available=false, occupiedTables=[2, 4, 5]
+2025-12-11 15:56:51.541  SupabaseOrderRepository  E  createOrder failed (Ask Gemini)
+    java.lang.IllegalStateException: Table 4 is already occupied
+...
+2025-12-11 15:56:51.551  OrdersViewModel         E  Table 4 already has an active order. Use Add Items or Alter Order. (Ask Gemini)
+    java.lang.IllegalStateException: Table 4 is already occupied
+```
 
-Example:
+Key point: **Add Items flow is still calling `createOrder(...)`**, so it:
+
+* Runs `checkTableAvailability(table=4)`
+* Sees table 4 is in `occupiedTables=[2, 4, 5]`
+* Throws the “Table 4 is already occupied” error
+
+So the *UI mode* is “Add Items”, but the **repo method** is still the “new base order” path.
+
+### 🎯 Intended behaviour
+
+For **Add Items** on an existing DINE_IN order:
+
+* You should **not** call `createOrder`.
+* You should call the *child/add-on path* (`addItemsToOrder` / `orders_upsert`), which:
+
+  * Creates a **child order** with `parent_order_id = base.id`
+  * Skips table-occupancy checks
+  * Emits `ORDER_ADD_ITEMS` in `order_events`
+  * Shows an **“Add-on”** chip in the chef UI
+
+### ✅ Fix – Android wiring
+
+You basically need a **single switch on “mode”** in your preview’s `placeOrder()`:
+
+**Where to look:**
+
+* `PreviewOrderFragment.kt`
+* `OrdersViewModel.kt`
+* `SupabaseOrderRepository.kt`
+
+**What to change conceptually:**
+
+In `PreviewOrderFragment.placeOrder()` (or wherever the confirm button lives), instead of always calling `viewModel.createOrder(...)`, do:
 
 ```kotlin
-object OrderDisplayMapper {
-    const val DEFAULT_TABLE_COUNT = 7
+when (editMode) {
+    NEW -> viewModel.createOrder(orderType, tableNumber, licensePlate, itemsSnapshot)
+    ADD_ITEMS -> viewModel.addItemsToOrder(existingOrderId, itemsDeltaSnapshot)
+    EDIT -> viewModel.alterOrder(existingOrderId, itemsSnapshot) // for Issue B
+}
+```
 
-    fun locationLabel(order: Order, tableCount: Int = DEFAULT_TABLE_COUNT): String {
-        return when (order.type) {
-            OrderType.DINE_IN -> {
-                val t = order.tableNumber
-                if (t != null && t in 1..tableCount) "Table $t" else "Table ?"
-            }
-            OrderType.EAT_AWAY -> "EatAway ${order.licensePlate?.takeIf { it.length == 4 } ?: "----"}"
-            OrderType.PARCEL -> "Parcel"
-        }
-    }
+Then in `OrdersViewModel`:
 
-    fun headerLabel(order: Order, tableCount: Int = DEFAULT_TABLE_COUNT): String {
-        return "${locationLabel(order, tableCount)} · #${order.orderNumber}"
+```kotlin
+fun addItemsToOrder(baseOrderId: UUID, items: List<OrderItemDraft>) {
+    viewModelScope.launch {
+        repository.addItemsToOrder(baseOrderId, items)
     }
 }
 ```
 
-### 1.2 Update ChefPageFragment to use mapper (remove formatTableNumber usage)
-
-**Modify:** `ChefPageFragment`
-
-* Replace every `formatTableNumber(order.orderNumber)` with:
-
-  * `OrderDisplayMapper.locationLabel(order)`
-* Replace header text to:
-
-  * `OrderDisplayMapper.headerLabel(order)`
-
-### 1.3 Ensure Order model includes correct fields everywhere
-
-Verify Chef flow is actually receiving:
-
-* `Order.tableNumber`
-* `Order.type`
-* `Order.licensePlate` (for EatAway)
-
-If missing in DTO mapping:
-
-* Update parsing/serialization in repository layer to include these fields.
-
-**Acceptance Criteria**
-
-* Chef list shows “Table 1..7” only for dine-in
-* EatAway shows “EatAway 1234”
-* Parcel shows “Parcel”
-* Never prints 40/41 as table labels
-
----
-
-## Phase 2 — Veg indicator must not react to prepared toggle (UI separation)
-
-### 2.1 Separate “veg indicator” from “prepared state”
-
-Current bug: you reuse a color bar for veg/non-veg but recolor it for prepared.
-
-**Fix:** keep veg indicator purely based on `item.isVeg` (or `vegFlagSnapshot`).
-
-Prepared state must be shown using:
-
-* the switch itself
-* optional alpha change on whole row
-* optional checkmark icon (recommended for clarity)
-
-### 2.2 Implement in bindItemToView
-
-**Modify binding logic** inside your item rendering:
-
-* Set veg bar color ONCE:
-
-  * green if veg, red if non-veg
-* On switch change:
-
-  * do NOT change veg bar color
-  * update row alpha OR show a small prepared check icon
-
-Recommended:
+And in `SupabaseOrderRepository.kt`:
 
 ```kotlin
-val vegColor = if (item.isVeg) 0xFF2ECC71.toInt() else 0xFFF5515F.toInt()
-vegBar.setBackgroundColor(vegColor)
-
-val prepared = itemPreparedStates[item.id] == true
-row.alpha = if (prepared) 0.6f else 1f
-preparedIcon.visibility = if (prepared) View.VISIBLE else View.GONE
-
-switchView.setOnCheckedChangeListener(null)
-switchView.isChecked = prepared
-switchView.setOnCheckedChangeListener { _, checked ->
-    itemPreparedStates[item.id] = checked
-    row.alpha = if (checked) 0.6f else 1f
-    preparedIcon.visibility = if (checked) View.VISIBLE else View.GONE
-    checkIfAllPrepared()
+suspend fun addItemsToOrder(
+    baseOrderId: UUID,
+    items: List<OrderItemDraft>
+) {
+    Log.d(TAG, "addItemsToOrder: baseOrderId=$baseOrderId, items=${items.size}")
+    // Call your orders_upsert / add-items RPC which:
+    // - Inserts child order
+    // - Emits ORDER_ADD_ITEMS
 }
 ```
 
-**Important:** `setOnCheckedChangeListener(null)` before `isChecked` prevents recycled-view bugs.
+**Important**: add a log line in `placeOrder()` like:
 
-**Acceptance Criteria**
+```kotlin
+Log.d("PreviewOrderFragment", "placeOrder mode=$editMode, existingOrderId=$existingOrderId")
+```
 
-* Veg bar never changes color when toggling prepared
-* Prepared state is clearly visible, but independent from veg/non-veg
+So next time you can *prove* the mode → repo mapping is correct.
 
----
+### 🔬 DB / backend fields to check
 
-## Phase 3 — Per-item prepared notifications (production approach)
+When you re-run QA for “Add Items”:
 
-### Reality check (important)
+* **`orders` table**
 
-Client-only “send notification to waiter” is **not production-safe**, because:
+  * Base order: `parent_order_id IS NULL`, `table_number = 4`
+  * Child order: `parent_order_id = <base_id>`, `table_number = 4`
+* **`order_events`**
 
-* Chef app doesn’t have waiter device IDs
-* Notification sending must be centralized, audited, and retried server-side
+  * New row with `event_type = 'ORDER_ADD_ITEMS'`
+  * `payload->>'baseOrderId' = <base_id>`
+  * `payload->>'childOrderId' = <child_id>`
+  * `payload->>'itemsAddedCount' = '1'`
+  * `payload->>'tableNumber' = '4'`
 
-✅ Correct approach: **write an item-prepared event to DB**, and trigger notifications from backend.
-
----
-
-## Phase 3A — Data model for per-item prepared state
-
-You need a durable place to record item prepared state.
-
-Choose one:
-
-### Option A (best): order_items table has `is_prepared`
-
-* Add column `is_prepared boolean default false`
-* Each item toggle updates the DB row
-
-### Option B: a separate table `order_item_events`
-
-* Insert event rows like `{order_id, item_id, status, created_at}`
-* Slightly heavier but great for audit/history
-
-**Recommended:** Option A if you just need current state.
+If you still see `createOrder` in logs when hitting Add Items, the wiring is still wrong.
 
 ---
 
-## Phase 3B — Backend notification trigger
+## 2️⃣ Issue B – Alter flow isn’t using `alter_order_v2` at all
 
-Implement one backend mechanism:
+This is the core of why:
 
-### Option 1: DB trigger + Edge Function
+* No **Edited** pill for order #92
+* No **notifications**
+* Chef silently sees items change on the same card
 
-* When `order_items.is_prepared` becomes true:
+### 🧩 Problem
 
-  * trigger calls edge function with payload (orderId, itemName, orderNumber, storeId)
-  * edge function sends OneSignal to waiter devices for that store
+For the DINE_IN order on **table 3** (`number=92`, `id=75bff6f6-...`):
 
-### Option 2: RPC function `mark_item_prepared(order_id, item_id)`
+* You created the order (OK)
+* You tried to **alter** it
+* The chef page updated items (good), but:
 
-RPC does:
+  * No notification (ORDER_ALTERED never fired)
+  * No `isEdited` flag → no Edited pill
+  * DB still shows **only one** order with `id=75bff6f6-...` and `isEdited=false`
 
-* updates DB
-* sends notification
-* returns updated “all prepared?” state
+### 🔍 Evidence from logs
 
-**Recommended for simplicity:** Option 2 (RPC)
+Creation:
 
-RPC contract:
+```text
+2025-12-11 15:59:01.505  SupabaseOrderRepository  D  createOrder: type=DineIn, table=3, license=null, items=2
+...
+2025-12-11 15:59:01.937  SupabaseOrderRepository  D  createOrder: Successfully created order "75bff6f6-2315-4ffc-bc31-cd3bbc93428e"
+```
 
-* Inputs: `order_id uuid`, `item_id uuid`
-* Output:
+When you *enter* alter:
 
-  * `all_prepared boolean`
-  * `order_number int`
-  * `table_number int`
-  * `license_plate text`
-  * `order_type text`
+```text
+onViewCreated: orderType=DINE_IN, licensePlate='null',
+               tableNumber=3,
+               existingOrderId=75bff6f6-2315-4ffc-bc31-cd3bbc93428e,
+               editMode=EDIT
+```
+
+👆 UI **correctly knows** this is an EDIT of existing order 75bff6f6…
+
+But when you save:
+
+```text
+2025-12-11 16:03:56.132  SupabaseOrderRepository  D  updateOrderItem: itemId=a982..., quantity=5, ...
+2025-12-11 16:03:56.358  SupabaseOrderRepository  D  updateOrderItem: Successfully updated item a982...
+...
+2025-12-11 16:03:56.380  SupabaseOrderRepository  D  Realtime UPDATE event - Order #null (ID: "75bff6f6-..."), Status: "Created"
+...
+SupabaseOrderDto(id=75bff6f6-..., number=92, status=Created,
+                 parentOrderId=null, tableNumber=3, ..., isEdited=false)
+```
+
+**Things missing:**
+
+* No `alter_order_v2` call in logs.
+* No INSERT on `orders` (no new order ID).
+* `isEdited` remains `false`.
+* `parentOrderId` remains `null`.
+
+So the “alter” UX path is still doing **in-place `updateOrderItem`** on the base order, not the new Phase 2.5 architecture.
+
+### 🎯 Intended behaviour for Alter
+
+On alter:
+
+1. Backend `alter_order_v2` should:
+
+   * Clone old order into a **new** replacement order row
+   * Set `is_edited = true` on the **new** order
+   * Link `parent_order_id = old_order.id`
+   * Mark old order status as **Canceled/Altered**
+   * Emit an `ORDER_ALTERED` event into `order_events` with:
+
+     * `oldOrderId`, `newOrderId`
+     * `oldOrderNumber`, `newOrderNumber`
+     * `tableNumber` / `licensePlate`
+2. Android should:
+
+   * Treat the new order as the live one.
+   * Chef UI: show **Edited** pill when `isEdited == true`.
+
+### ✅ Fix – use `alter_order_v2` instead of `updateOrderItem`
+
+**Where to look:**
+
+* `PreviewOrderFragment.kt` – `placeOrder()` logic under `editMode=EDIT`
+* `OrdersViewModel.kt` – expose `alterOrder(...)`
+* `SupabaseOrderRepository.kt` – implement the RPC call
+* Supabase side:
+
+  * `supabase/migrations/0030_add_is_edited_to_orders.sql` (the function body of `alter_order_v2`)
+  * `order_events` emission inside `alter_order_v2`
+  * `supabase/functions/order-events/index.ts` – branch for `ORDER_ALTERED`
+
+**Android-side wiring (conceptual):**
+
+In `PreviewOrderFragment.placeOrder()`:
+
+```kotlin
+when (editMode) {
+    NEW -> viewModel.createOrder(...)
+    ADD_ITEMS -> viewModel.addItemsToOrder(existingOrderId!!, itemsDelta)
+    EDIT -> viewModel.alterOrder(existingOrderId!!, itemsSnapshot)
+}
+```
+
+In `OrdersViewModel`:
+
+```kotlin
+fun alterOrder(orderId: UUID, items: List<OrderItemDraft>) {
+    viewModelScope.launch {
+        repository.alterOrder(orderId, items)
+    }
+}
+```
+
+In `SupabaseOrderRepository.kt`:
+
+```kotlin
+suspend fun alterOrder(
+    orderId: UUID,
+    items: List<OrderItemDraft>
+): Order {
+    Log.d(TAG, "alterOrder: orderId=$orderId, items=${items.size}")
+
+    // Build the payload your RPC expects (full snapshot or diff)
+    val payload = AlterOrderPayload(orderId = orderId, items = items)
+
+    val response = supabase.rpc("alter_order_v2", payload).decodeSingle<SupabaseOrderDto>()
+    Log.d(TAG, "alterOrder: replacement order id=${response.id}, number=${response.number}")
+
+    // Optionally call refresh() or update Room with response
+    return mapper.toDomain(response)
+}
+```
+
+**Backend checks:**
+
+Inside `alter_order_v2` (in SQL / PL/pgSQL):
+
+* Ensure you:
+
+  * `INSERT INTO orders (...) VALUES (..., is_edited := true, parent_order_id := old.id, ...) RETURNING ...`
+  * `UPDATE orders SET status = 'Canceled' (or 'Altered') WHERE id = old.id;`
+  * `INSERT INTO order_events(event_type, order_id, payload) VALUES ('ORDER_ALTERED', new.id, <json payload>);`
+
+Verify by checking:
+
+```sql
+SELECT id, number, status, parent_order_id, is_edited
+FROM orders
+WHERE number IN (92, 93?) -- or filter by created_at DESC
+ORDER BY created_at DESC;
+```
+
+You should see *two* rows after an alter:
+
+* Old: `status = 'Canceled' / 'Altered'`, `is_edited = false`
+* New: `status = 'Created'`, `is_edited = true`, `parent_order_id = old.id`
+
+And in `order_events`:
+
+```sql
+SELECT * FROM order_events
+WHERE event_type = 'ORDER_ALTERED'
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+If nothing appears, the RPC never fired or doesn’t insert the event.
+
+### 🚨 Why there are no notifications & no Edited pill
+
+* No `ORDER_ALTERED` row in `order_events` ⇒ edge function has nothing to consume ⇒ **no push**.
+* `SupabaseOrderDto` from refresh shows `isEdited=false` ⇒ Android chef UI has no reason to show the **Edited** pill.
+* Because you still mutate the same order row, chef just sees items “magically change” with no banner or new card.
+
+Once the flow is switched to `alter_order_v2`, both problems disappear:
+
+* Notifications: handled by `ORDER_ALTERED` in `order-events/index.ts`.
+* UI badge: `isEdited=true` drives the pill.
 
 ---
 
-## Phase 3C — Android client changes (Chef)
+## 3️⃣ Critical bug – Editing after chef marks items “Done” mutates already-prepared quantity
 
-### 3.1 Add API call in OrdersViewModel
+### 🧩 Problem
 
-**Add:** `markItemPrepared(orderId, itemId)`
+> “I toggled the malai chaap as done in chef page, and then tried editing from waiter page, it changed the quantity from 17 to 21, the edit worked and chef page now shows 21 is done. That is a major error.”
 
-* calls Supabase RPC
-* returns `allPrepared`
+You’re absolutely right – this is **really bad** operationally:
+Chef thinks they already prepared 21 of something that the kitchen physically cooked 17 of.
 
-### 3.2 Update toggle handler
+### 🔍 Why this is happening (from behaviour + logs)
 
-On checked = true:
+* Chef marking an item as “Done” likely sets some **per-item done state** on the same `order_items` row (e.g. `is_done=true` or `done_quantity = quantity`).
+* Since “alter” is still using `updateOrderItem` on the **same order** (Issue B), the waiter changes:
 
-* call `viewModel.markItemPrepared(order.id, item.id)`
-* update local UI only after success (or optimistically with rollback)
+```text
+item quantity 17 → 21
+```
 
-If RPC returns `allPrepared == true`:
+But the “done” state is not reset. So now:
 
-* also call existing `markPrepared(order.id)` (so the “order ready” status + ready-order notification still happens)
+* `quantity = 21`
+* `done_quantity` (or implicit is_done flag) still refers to “all items done”
+* Chef UI renders it as **21/21 done**.
 
-**Acceptance Criteria**
+The logs show repeated `updateOrderItem` calls and realtime UPDATE events on the **same order id** – there’s no new order created to separate “old cooked items” from “new additional items”.
 
-* Toggling one item sends waiter notification (server-driven)
-* When last item is toggled, order-level “Prepared” flow still occurs
-* Toggle state persists after app restart (because it’s stored in DB)
+### 🎯 Intended semantics
+
+For correct kitchen flow:
+
+* Once items are sent to the kitchen (InKitchen/Prepared), **you should not be mutating that same order row** for “edits”.
+* Instead, you either:
+
+  1. Create a **replacement order** (the `alter_order_v2` design), or
+  2. Maintain explicit `prepared_quantity` vs `requested_quantity` and show the delta properly (more complex).
+
+Your design already chose option **1** (replacement order), so let’s lean into that.
+
+### ✅ Fix options (what to implement)
+
+#### Option A – Strict replacement (recommended; matches your Phase 2.5 design)
+
+* **Disallow** direct `updateOrderItem` on orders with `status ∈ {InKitchen, Prepared}`.
+* Force the UI to always use `alter_order_v2` for any changes once the order is in kitchen.
+
+**Backend guard (Postgres / RPC level):**
+
+In the function / API used by `updateOrderItem`:
+
+```sql
+IF (SELECT status FROM orders WHERE id = _order_id) IN ('InKitchen', 'Prepared') THEN
+    RAISE EXCEPTION 'Order is already being prepared. Use alter_order_v2 instead.';
+END IF;
+```
+
+Then in Android, catch that and show:
+
+> “Order is already in kitchen. Use **Alter Order** to change it.”
+
+And the Alter path, as described above, will:
+
+* Create a new order with updated quantities
+* Mark the old one as canceled/altered
+* Emit `ORDER_ALTERED`
+* Give chef a **visible edited ticket** instead of silently changing the old one.
+
+#### Option B – Complex per-item tracking (only if you really want inline mutation)
+
+If for some reason you must keep a single order row and mutate it:
+
+* Add columns like `prepared_quantity` / `completed_quantity` on `order_items`.
+* When quantity is increased from 17 → 21:
+
+  * Decide whether the extra 4 count:
+
+    * become **unprepared** (`prepared_quantity` stays 17, `quantity`=21)
+      → chef sees “17/21 done”
+    * or you keep `prepared_quantity` synced, which is what you have now (wrong in your scenario).
+* You’d need to adjust all chef UI logic to display “prepared/total” properly.
+
+Given you *already* built edit-as-replacement semantics, I’d seriously recommend staying with Option A and removing this whole class of bugs.
+
+### 🔬 Fields / files to inspect for this bug
+
+* **Tables:**
+
+  * `orders`: `status`, `id`, `parent_order_id`, `is_edited`
+  * `order_items`: check whatever fields represent done/prepared state (e.g. `is_done`, `done_quantity` etc.)
+* **Code:**
+
+  * Backend function that handles **chef “Done”** toggle
+
+    * Possibly `update_order_item_status`, or a status update on `order_items`
+  * `SupabaseOrderRepository.kt`
+
+    * Look for `updateOrderItem(...)` usages and ensure:
+
+      * It is *not* called for “edit” on InKitchen/Prepared orders
+  * Chef Android:
+
+    * `PreparingOrdersAdapter.kt`
+    * How it maps item-level DB fields to “done” UI state.
 
 ---
 
-## Phase 4 — UX & reliability hardening (must for production)
+## 4️⃣ Why no notifications at all (chef side)
 
-### 4.1 Disable toggles while network call in-flight
+You also mention:
 
-* Prevent double taps and race conditions
-* Show loading (tiny progress on row or disable switch)
+> “the change reflected in chef page as well , but again no notifications , no edited banner…”
 
-### 4.2 Handle failures gracefully
+That’s a direct consequence of the above:
 
-* If RPC fails:
+* For Add Items: the flow failed at table occupancy (Issue A) → **no child order** → **no `ORDER_ADD_ITEMS`** → no notification.
+* For Alter: the flow never calls `alter_order_v2` (Issue B) → **no `ORDER_ALTERED`** → no notification.
 
-  * revert switch
-  * show toast/snackbar “Could not mark prepared. Try again.”
+Once you fix the client to call:
 
-### 4.3 Avoid fragment crash from async callbacks
+* `addItemsToOrder` → emits `ORDER_ADD_ITEMS`
+* `alter_order_v2` → emits `ORDER_ALTERED`
 
-* Ensure all UI updates happen if fragment is added/started:
+…then check:
 
-  * `if (!isAdded) return`
-  * use `viewLifecycleOwner.lifecycleScope`
+* Table `order_events` to confirm rows are created.
+* `supabase/functions/order-events/index.ts` is:
 
----
+  * Listening to `INSERT` on `order_events`
+  * Handling `ORDER_ADD_ITEMS` & `ORDER_ALTERED` branches
+  * Making the right OneSignal POSTs.
 
-# Rollout Order (safe sequencing)
+You can add extra logs in the edge function like:
 
-1. Phase 1 (label mapper + Chef uses order.tableNumber/type) ✅ low risk
-2. Phase 2 (veg indicator separation) ✅ UI-only
-3. Phase 3A/3B (backend item prepared persistence + notifications) ✅ backend first
-4. Phase 3C (Chef client uses RPC) ✅ then ship
-5. Phase 4 (hardening)
+```ts
+console.log("[order-events] New event:", event_type, payload);
+```
 
----
-
-# Quick “Cursor Checklist” (paste this)
-
-* Create `OrderDisplayMapper.kt` and update ChefPageFragment to use it instead of `formatTableNumber(order.orderNumber)`
-* Ensure `Order` includes `tableNumber`, `type`, `licensePlate` in Chef data pipeline
-* Refactor item row binding: veg bar depends only on `isVeg`; prepared state uses alpha/check icon; fix switch listener recycling
-* Implement backend RPC `mark_item_prepared(order_id, item_id)` that updates DB + sends OneSignal to waiter store devices; returns `all_prepared`
-* Update Chef app toggle to call RPC; if last item → also call existing `markPrepared(order.id)`
-* Add UX hardening: disable toggle while in-flight, revert on error, lifecycle-safe UI updates
+So you’ll see in Supabase logs when an event is processed.
 
 ---
 
-If you paste your `ChefPageFragment` item-row layout XML (the one with the red/green bar + switch), I can give you the exact UI change (checkmark view id + constraints) so Cursor can apply it without guessing.
+### TL;DR for Cursor prompts
+
+If you want a short “ask Cursor to fix this” summary:
+
+* **Bug A**: Add Items still calls `createOrder` instead of `addItemsToOrder`, triggering `checkTableAvailability` and “Table already occupied” errors.
+* **Bug B**: Alter flow still uses `updateOrderItem` on the existing order instead of calling `alter_order_v2`, so:
+
+  * No new replacement order
+  * `is_edited` never becomes `true`
+  * No `ORDER_ALTERED` events → no notifications
+  * Chef silently sees changed items.
+* **Critical kitchen bug**: Editing an order after chef marks items done mutates the same `order_items` rows, so done state is now wrong (e.g. 17 cooked → quantity changed to 21, UI shows 21 done).
+
+**Fix direction**:
+
+* Wire preview `placeOrder()` logic to a strict mode switch:
+
+  * `NEW` → `createOrder`
+  * `ADD_ITEMS` → `addItemsToOrder` (child order path, emits `ORDER_ADD_ITEMS`)
+  * `EDIT` → `alterOrder` → RPC `alter_order_v2` (replacement order, emits `ORDER_ALTERED`).
+* Add backend guards preventing `updateOrderItem` on `InKitchen/Prepared` orders; enforce using `alter_order_v2` instead.
+* Verify `order_events` rows and edge function `order-events/index.ts` handling so chef/waiter/admin all get the correct push notifications.

@@ -70,6 +70,7 @@ private fun OrderWithItems.toModel(): Order {
         parentOrderId = order.parentOrderId,
         tableNumber = order.tableNumber,
         licensePlate = order.licensePlate,
+        isEdited = order.isEdited,
         items = items.map { it.toModel() }
     )
 }

@@ -17,6 +17,8 @@
     <!-- Actions -->
     <string name="action_accept">Accept</string>
     <string name="action_mark_prepared">Mark Prepared</string>
+    <string name="label_add_on">Add-on</string>
+    <string name="label_edited">Edited</string>
     <string name="action_accept_all">Mark All as Accepted</string>
     <string name="action_mark_all_prepared">Mark All as Prepared</string>
     <string name="action_mark_all_delivered">Mark All as Delivered</string>

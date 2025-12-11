@@ -8,6 +8,7 @@ import androidx.annotation.RequiresApi
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.streatfeast.app.R
 import com.streatfeast.app.databinding.ItemPreparingOrderBinding
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.utils.DateTimeUtils
@@ -44,6 +45,23 @@ class PreparingOrdersAdapter(
                 // Order type chip
                 chipOrderType.text = order.type.toDisplayString()
                 chipOrderType.setChipBackgroundColorResource(order.status.colorRes)
+
+                // Edited / Add-on indicator
+                when {
+                    order.isEdited -> {
+                        chipEdited.visibility = View.VISIBLE
+                        chipEdited.text = binding.root.context.getString(R.string.label_edited)
+                        chipEdited.setChipBackgroundColorResource(R.color.status_canceled)
+                    }
+                    order.parentOrderId != null -> {
+                        chipEdited.visibility = View.VISIBLE
+                        chipEdited.text = binding.root.context.getString(R.string.label_add_on)
+                        chipEdited.setChipBackgroundColorResource(R.color.status_prepared)
+                    }
+                    else -> {
+                        chipEdited.visibility = View.GONE
+                    }
+                }
                 
                 // Time ago
                 tvTime.text = DateTimeUtils.getTimeAgo(order.createdAt)

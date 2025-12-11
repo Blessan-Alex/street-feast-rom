@@ -116,6 +116,23 @@ begin
 
     perform set_config('app.current_user_id', null, true);
 
+    -- Emit ORDER_ADD_ITEMS event when creating a child order (add-on)
+    if v_parent_order_id is not null then
+        insert into order_events (store_id, order_id, event_type, payload)
+        values (
+            p_store_id,
+            v_order_id,
+            'ORDER_ADD_ITEMS',
+            jsonb_build_object(
+                'baseOrderId', v_parent_order_id,
+                'childOrderId', v_order_id,
+                'tableNumber', v_table_number,
+                'licensePlate', v_license_plate,
+                'itemsAddedCount', jsonb_array_length(coalesce(p_items, '[]'::jsonb))
+            )
+        );
+    end if;
+
     return v_order_id;
 end;
 $$;

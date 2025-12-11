@@ -1,107 +1,589 @@
-Below is a focused, senior-level implementation plan, phase by phase, aligned with the issues and the production-grade guidance in `help.txt`. Each phase includes goals, concrete steps, ownership hints (client vs backend), and acceptance criteria.
+Perfect, this is exactly the moment to align what you *want* with what you *actually* have.
+
+I’ll do two things:
+
+1. **Compare current vs new plan** (so we know what to change vs keep).
+2. **Give you a Cursor-friendly implementation plan** with concrete steps, file names, and behaviours — production-level, edge-case aware.
+
+You can drop the plan section straight into Cursor and let it go to town.
 
 ---
 
-## Phase 0 — Safety Net: Navigation Arg Contract
-**Goal:** Stop losing order context (table, license, orderId, mode).
+## 1. Current vs New Plan – where they differ
 
-- Add `OrderNavArgs.kt` (data class + `from(bundle)` + `toBundle()`).
-- Fields: `orderType`, `tableNumber`, `licensePlate`, `showHeader`, `existingOrderId`, `isEditing`, `chefTip`, `orderId`.
-- Refactor all fragments that navigate in the order flow (`OrderType`, `OrderWhere`, `OrderItem`, `PreviewOrder`, `PreviewOrderHeader`, `ItemCustomize`) to read/write args only via `OrderNavArgs`.
-- Update nav actions to pass `args.toBundle()`.
+### A. Behaviour selection (Preview screen)
 
-**Acceptance:** No fragment in the order flow accesses raw bundle keys; navigating back and forth preserves table/license/edit flags.
+**Current:**
 
----
+* In `PreviewOrderFragment`:
 
-## Phase 1 — EatAway License Propagation (High Impact)
-**Goal:** Eat Away orders place successfully with 4-digit license.
+  ```kotlin
+  when {
+      isEditing && existingOrderId != null -> performAlterOrder()
+      existingOrderId != null && !isEditing -> addItemsToOrder()
+      else -> createOrder()  // with dine-in duplicate retry to addItems
+  }
+  ```
 
-- In `OrderWhereFragment`: include `licensePlate` when navigating for EatAway.
-- In `OrderItemFragment`: read `licensePlate` from args; pass it onward to preview/header.
-- In `PreviewOrderFragment`: show license, require exactly 4 digits, disable Place Order until valid.
+* In `PreviewOrderHeaderFragment` it’s *different*:
 
-**Acceptance:** Entering 4 digits once is enough; no “need 4 digit license number” error on place order.
+  ```kotlin
+  if (isEditing && existingOrderId != null) {
+      performAlterOrder()
+  } else if (existingOrderId != null) {
+      // merges current items + draft, then alterOrder(...)
+  } else {
+      createOrder(...)
+  }
+  ```
 
----
+So:
 
-## Phase 2 — Table Selection UI (Reachable on Small Screens)
-**Goal:** All table buttons reachable; future-proof for dynamic counts.
+* Same logical action is implemented *twice* with different rules.
+* Header path uses **alterOrder** for “existingOrderId but !isEditing” (i.e. turns “Add items” into “Alter”), which violates the new plan.
 
-- Minimal option: wrap content (appbar→bottom nav) in `NestedScrollView` with `clipToPadding=false`; ensure bottom padding so row 7 isn’t cut.
-- Better option: RecyclerView grid (span=2) bound to a list (initially 1..7); reuse occupied state styling.
-- Keep occupied state logic; keep selection behavior.
+**New plan:**
 
-**Acceptance:** On smallest screen and large font, table 7 is selectable (scroll if needed).
+* Single source of truth: `editMode: OrderEditMode = NEW | ADD_ITEMS | EDIT`
+* Behaviour only depends on `editMode`:
 
----
-
-## Phase 3 — Given Orders Table Display Sanitization
-**Goal:** No bogus table numbers (40/41) shown; non–dine-in labeled correctly.
-
-- Add `TableDisplayMapper.kt`: for DineIn enforce 1..7 else “Table ?”/hidden; for EatAway show `EatAway ####`; for Parcel show “Parcel”.
-- Update `GivenOrderFragment` to build chips using mapper; dedupe by `orderId` (not raw table number).
-
-**Acceptance:** Chips never show >7; EatAway/Parcel render meaningful labels.
-
----
-
-## Phase 4 — Add-Items/Edit “Table Occupied” Fix
-**Goal:** Editing/adding items to an existing DineIn order must not be blocked by occupancy.
-
-- Backend (preferred): In `orders_upsert` or a new RPC, skip table-availability check when `parent_order_id` is set or `isEdit=true`.
-- Frontend: stop creating child DineIn orders for add-items. Instead, either:
-  - Use an `append_items_to_order(order_id, items[])` RPC, or
-  - Merge and call `alter_order` on the same orderId, or
-  - Use `update_order_item` for qty/size changes and `delete_order_item` for removals.
-- Keep table locked to the parent’s table; do not revalidate occupancy for edits/adds.
-
-**Acceptance:** Add-items/edit flows succeed for occupied tables; no duplicate child orders; orderId stays the same.
+  ```kotlin
+  when (args.editMode) {
+      NEW       -> createOrder()
+      ADD_ITEMS -> addItemsToOrder()
+      EDIT      -> alterOrder()
+  }
+  ```
 
 ---
 
-## Phase 5 — Notification Sound (3–5s, Reliable)
-**Goal:** Consistent audible cue in foreground/background.
+### B. Add Items vs Alter Order semantics
 
-- Add `res/raw/ping_long.wav` (3–5s) or loop existing ping for up to 5s with a timed stop.
-- Set channel sound in `NotificationHelper.createNotificationChannel` with `setSound(uri, audioAttributes)`; create channel once.
-- Foreground: if still using `SoundManager`, add try/catch, optional looping with delayed stop.
+**Current:**
 
-**Acceptance:** Background notifications play the long sound via channel; foreground play is stable (no crashes, no infinite loop).
+* **Add items** (Preview):
 
----
+  * If `existingOrderId != null && !isEditing` → `addItemsToOrder()`
+  * Repo behaviour:
 
-## Phase 6 — Crash Hardening (Realtime + Navigation)
-**Goal:** Chef/waiter apps don’t crash when the other updates.
+    * If order status in `Created/Accepted` → merge into **same order** via `orders_upsert`.
+    * If in `InKitchen/Prepared/Delivered` → create **child add-on order** with `parent_order_id`.
 
-- Realtime callbacks: wrap with lifecycle guards (`isAdded`, `view != null`, `STARTED`); post UI work to main.
-- Add `navigateSafe` helper for NavController; use it for notification clicks and realtime-triggered navigation.
-- Add null/detached checks before accessing adapters/bindings inside callbacks.
+* **Alter order**:
 
-**Acceptance:** No crashes when notifications or realtime events arrive mid-navigation or after fragment detach.
+  * Uses `alter_order_v2` RPC from Android (good).
+  * Old order canceled, new order created (with desired semantics).
+  * Edge function sends `ORDER_ALTERED` notification → waiter/admin (not chef).
 
----
+This is **mostly compatible** with the new plan already.
 
-## Phase 7 — Login Persistence
-**Goal:** Stay logged in after back press or process death.
+**New plan wants:**
 
-- Supabase client: enable persistent storage + auto refresh (`Auth` config with storage adapter) and load session on startup before routing.
-- Do not clear ServiceLocator/auth on back press; only on explicit logout.
-- Keep back press just finishing the activity.
+* **Add items**:
 
-**Acceptance:** Kill app or press back and reopen → still logged in; logout still works and clears session.
+  * Never removes existing items; only appends.
+  * For Created/Accepted: allowed to merge into same order (current code already does this – good).
+  * For InKitchen/Prepared/Delivered: creates child order (current code also does this – good).
+* **Alter order**:
 
----
+  * Always replace the order via `alter_order_v2`.
+  * Old order inactive, new order active, same table/license/parcel.
+  * No table-occupied issues because this is not a “new table”.
 
-## Recommended execution order
-1. Phase 1 (license propagation)  
-2. Phase 2 (table scroll)  
-3. Phase 4 (add/edit occupancy)  
-4. Phase 3 (table display sanitize)  
-5. Phase 6 (crash hardening)  
-6. Phase 5 (notification sound)  
-7. Phase 7 (auth persistence)
+So: behaviour is *conceptually aligned*, but selection logic & table checks are messy.
 
 ---
 
-If you want, I can draft the concrete patch list for each phase (files and edits) so you can apply in agent mode.
+### C. Table “occupied” behaviour
+
+**Current:**
+
+* `createOrder` for DINE_IN checks table availability.
+* If backend says “Table X is already occupied”:
+
+  * `OrdersViewModel` catches it and **auto-falls-back** to `addItemsToOrder` on the existing order (using cached editable orders).
+  * That means:
+
+    * New-order flow sometimes *magically* behaves like Add Items.
+    * But this only triggers when the error comes back from network, and only if the local cache finds a matching order.
+
+This is clever but fragile: you get inconsistent UX and weird “Ask Gemini” logs + double calls.
+
+**New plan:**
+
+* **Mode decides behaviour**, not random errors:
+
+  * New DINE_IN → fail clearly if table is occupied.
+  * Add Items → skip table availability checks.
+  * Edit → use `alter_order_v2`, which doesn’t do “table occupied” logic at all; it’s a replacement, not a second occupant.
+
+---
+
+### D. Notifications / Chef awareness
+
+**Current:**
+
+* `ORDER_ALTERED` → waiter/admin only.
+* Chef just sees the updated order when list refreshes, no explicit “edited” signal, no banner.
+
+**New plan:**
+
+* Explicit events:
+
+  * `ORDER_CREATED`
+  * `ORDER_ADD_ITEMS`
+  * `ORDER_ALTERED`
+* Chef / waiter / admin get clear text like:
+
+  * “Table 4 – Order #44 edited (replaced by #47)”
+  * “Table 2 – +3 items added to order #40”
+* Chef UI can show an “Edited” badge.
+
+So we need to enrich the edge function + chef UI, not just rely on generic status changes.
+
+---
+
+## 2. Cursor Plan – step-by-step refactor
+
+Below is a concrete plan you can paste into Cursor. It’s split into phases and has file-level tasks.
+
+---
+
+### PHASE 0 – Types & Navigation: introduce `OrderEditMode`
+
+**Goal:** Stop juggling `isEditing` + `existingOrderId` everywhere. Use a single typed mode.
+
+**Steps:**
+
+1. **Add `OrderEditMode` enum**
+
+   * File: `street-feast-android/app/src/main/java/com/streatfeast/app/navigation/OrderNavArgs.kt` (or wherever `OrderNavArgs` lives).
+
+   ```kotlin
+   enum class OrderEditMode {
+       NEW,
+       ADD_ITEMS,
+       EDIT
+   }
+   ```
+
+2. **Extend `OrderNavArgs`**
+
+   ```kotlin
+   data class OrderNavArgs(
+       val orderType: OrderType = OrderType.DINE_IN,
+       val tableNumber: Int? = null,
+       val licensePlate: String? = null,
+       val showHeader: Boolean = false,
+       val existingOrderId: String? = null,
+       val editMode: OrderEditMode = OrderEditMode.NEW
+   )
+   ```
+
+3. **Add mapping helpers**
+
+   * Add `toBundle()` / `from(Bundle)` to handle `editMode` serialization (as `name` string).
+   * Replace any direct `isEditing` nav argument usage with `editMode == EDIT` in calling code (we’ll clean more in Phase 2).
+
+---
+
+### PHASE 1 – Wire correct modes from GivenOrder / entry points
+
+**Goal:** Buttons explicitly say what the user is doing.
+
+1. **GivenOrderFragment – Add Items button**
+
+   * File: `GivenOrderFragment.kt`
+   * Where you handle “Add items” click:
+
+   ```kotlin
+   val args = OrderNavArgs(
+       orderType = order.type,
+       tableNumber = order.tableNumber,
+       licensePlate = order.licensePlate,
+       existingOrderId = order.id,
+       editMode = OrderEditMode.ADD_ITEMS,
+       showHeader = true
+   )
+   findNavController().navigate(R.id.orderItemFragment, args.toBundle())
+   ```
+
+2. **GivenOrderFragment – Alter Order button**
+
+   * Preload draft with current items if you don’t already:
+
+   ```kotlin
+   draftViewModel.loadFromExistingOrder(order) // implement to copy items -> draft
+   ```
+
+   * Then:
+
+   ```kotlin
+   val args = OrderNavArgs(
+       orderType = order.type,
+       tableNumber = order.tableNumber,
+       licensePlate = order.licensePlate,
+       existingOrderId = order.id,
+       editMode = OrderEditMode.EDIT,
+       showHeader = true
+   )
+   findNavController().navigate(R.id.orderItemFragment, args.toBundle())
+   ```
+
+3. **New order flows (OrderWhereFragment etc.)**
+
+   * Wherever you start a completely new order, explicitly set:
+
+   ```kotlin
+   val args = OrderNavArgs(
+       orderType = selectedType,
+       tableNumber = selectedTable,
+       licensePlate = enteredLicense,
+       editMode = OrderEditMode.NEW,
+       showHeader = true
+   )
+   ```
+
+---
+
+### PHASE 2 – OrderItem → Preview: carry mode + ID cleanly
+
+**Goal:** Ensure the mode + existingOrderId survive until we hit “Place Order”.
+
+1. **OrderItemFragment – use `editMode` instead of `isEditing`**
+
+   * File: `OrderItemFragment.kt`
+   * You already read:
+
+   ```kotlin
+   navArgs = OrderNavArgs.from(arguments)
+   orderType = navArgs.orderType
+   tableNumber = navArgs.tableNumber ?: Constants.DEFAULT_TABLE_COUNT
+   licensePlate = navArgs.licensePlate
+   showHeader = navArgs.showHeader
+   ```
+
+   * Keep `editMode` in a property:
+
+   ```kotlin
+   private var editMode: OrderEditMode = OrderEditMode.NEW
+
+   // in onViewCreated
+   editMode = navArgs.editMode
+   ```
+
+2. **Preview bar click → forward editMode & existingOrderId**
+
+   Replace the current click handler where you build `nextArgs`:
+
+   ```kotlin
+   binding.previewBar.root.setOnClickListener {
+       val nextArgs = navArgs.copy(
+           orderType = orderType,
+           tableNumber = tableNumber,
+           licensePlate = licensePlate,
+           editMode = editMode,
+           existingOrderId = navArgs.existingOrderId
+       )
+       findNavController().navigate(R.id.previewOrderFragment, nextArgs.toBundle())
+   }
+   ```
+
+   * Remove any logic that tries to re-guess `existingOrderId` here for DINE_IN when the table is occupied. That logic belongs in GivenOrder and/or createOrder fallback, not in this navigation.
+
+---
+
+### PHASE 3 – Centralise “Place Order” logic in Preview
+
+**Goal:** One decision tree for both header + body preview, using `editMode`.
+
+1. **Create a shared place-order handler**
+
+   * File: `PreviewOrderFragment.kt`
+
+   ```kotlin
+   private fun placeOrder(args: OrderNavArgs) {
+       val draftItems = draftViewModel.items.value ?: emptyList()
+       if (draftItems.isEmpty()) {
+           Toast.makeText(requireContext(), "Add at least one item", Toast.LENGTH_SHORT).show()
+           return
+       }
+
+       when (args.editMode) {
+           OrderEditMode.NEW -> {
+               ordersViewModel.createOrder(
+                   orderType = args.orderType,
+                   tableNumber = args.tableNumber,
+                   licensePlate = args.licensePlate,
+                   items = draftItems,
+                   isEdit = false,
+                   existingOrderId = null
+               )
+           }
+           OrderEditMode.ADD_ITEMS -> {
+               val id = args.existingOrderId
+               if (id == null) {
+                   android.util.Log.e("PreviewOrderFragment", "ADD_ITEMS without existingOrderId")
+                   Toast.makeText(requireContext(), "No base order to add items to", Toast.LENGTH_SHORT).show()
+                   return
+               }
+               ordersViewModel.addItemsToOrder(
+                   orderId = id,
+                   items = draftItems
+               )
+           }
+           OrderEditMode.EDIT -> {
+               val id = args.existingOrderId
+               if (id == null) {
+                   android.util.Log.e("PreviewOrderFragment", "EDIT without existingOrderId")
+                   Toast.makeText(requireContext(), "No order to edit", Toast.LENGTH_SHORT).show()
+                   return
+               }
+               ordersViewModel.alterOrder(
+                   orderId = id,
+                   items = draftItems
+               )
+           }
+       }
+   }
+   ```
+
+2. **Hook up the main CTA**
+
+   ```kotlin
+   val args = OrderNavArgs.from(arguments)
+
+   binding.btnPlaceOrder.setOnClickListener {
+       placeOrder(args)
+   }
+   ```
+
+3. **PreviewOrderHeaderFragment – stop doing its own branching**
+
+   * In `PreviewOrderHeaderFragment.kt`, instead of repeating the same when/isEditing logic, just:
+
+   ```kotlin
+   val parentFragment = parentFragment as? PreviewOrderFragment
+   headerPlaceOrderButton.setOnClickListener {
+       parentFragment?.onHeaderPlaceOrderClicked()
+   }
+   ```
+
+   * And in `PreviewOrderFragment`:
+
+   ```kotlin
+   fun onHeaderPlaceOrderClicked() {
+       placeOrder(OrderNavArgs.from(requireArguments()))
+   }
+   ```
+
+   This ensures **header and body do exactly the same thing**.
+
+---
+
+### PHASE 4 – Repository & ViewModel: clean, mode-safe methods
+
+**Goal:** Ensure the three code paths call the correct backend logic and never hit table-checks incorrectly.
+
+1. **Strengthen OrdersViewModel methods**
+
+   * File: `OrdersViewModel.kt`
+
+   Ensure you have three clear entry points:
+
+   ```kotlin
+   fun createOrder(
+       orderType: OrderType,
+       tableNumber: Int?,
+       licensePlate: String?,
+       items: List<OrderItemDraft>,
+       isEdit: Boolean = false,
+       existingOrderId: String? = null
+   ) = viewModelScope.launch {
+       // This should only be used for NEW orders now.
+       // isEdit/ existingOrderId could be removed later for clarity.
+       repository.createOrder(orderType, tableNumber, licensePlate, items, isEdit, existingOrderId)
+   }
+
+   fun addItemsToOrder(
+       orderId: String,
+       items: List<OrderItemDraft>
+   ) = viewModelScope.launch {
+       repository.addItemsToOrder(orderId, items)
+   }
+
+   fun alterOrder(
+       orderId: String,
+       items: List<OrderItemDraft>
+   ) = viewModelScope.launch {
+       repository.alterOrderV2(orderId, items)  // always V2
+   }
+   ```
+
+2. **Stop auto-fallback from createOrder → addItems**
+
+   * Still in `OrdersViewModel.createOrder`, you currently have:
+
+   ```kotlin
+   if (orderType == DINE_IN && tableNumber != null && !isEdit &&
+       error.message?.contains("already occupied") == true
+   ) {
+       // find existing order and call addItemsToOrder(...)
+   }
+   ```
+
+   **Change this to:**
+
+   * Either **remove** this block completely, or:
+   * Replace it with a *user-visible* error:
+
+   ```kotlin
+   // Do NOT silently add items to an existing order anymore
+   _errorLiveData.postValue("Table $tableNumber already has an active order. Use 'Add items' or 'Alter order'.")
+   ```
+
+   This makes behaviour predictable: **only the Add Items path adds items**.
+
+---
+
+### PHASE 5 – Table availability + backend contract
+
+**Goal:** Make sure “table occupied” only happens where it makes sense.
+
+You already have:
+
+* `0029_fix_child_order_table_check.sql` → child orders skip table check → good.
+* `alter_order_v2` RPC that replaces an order → also good.
+
+What we want to ensure:
+
+1. **`createOrder` only used for new base orders**
+
+   * After Phase 3 & 4, confirm that:
+
+     * Add Items path → `addItemsToOrder` only.
+     * Alter path → `alter_order_v2` only.
+     * No edit/add path calls `createOrder`.
+
+2. **Back-end occupancy logic**
+
+   * In Supabase (SQL / RPC), ensure:
+
+   ```sql
+   -- Pseudocode:
+   table_occupied := exists(
+     select 1 from orders
+     where store_id = storeId
+       and table_number = tableNumber
+       and parent_order_id is null
+       and status in ('Created', 'Accepted', 'InKitchen', 'Prepared')
+   );
+   ```
+
+   * `check_table_availability` should use that query.
+   * Child orders (`parent_order_id` not null) *never* participate in occupancy.
+
+   If you want to be extra safe when editing via `alter_order_v2`, allow editing regardless of occupancy because you’re replacing the row, not creating a new base order.
+
+---
+
+### PHASE 6 – Notifications & Chef UI polish (optional but recommended)
+
+**Goal:** Align with industry-grade clarity for edits / add-ons.
+
+1. **Edge function: enrich events**
+
+   * File: `supabase/functions/order-events/index.ts`
+
+   Make sure you distinguish:
+
+   * `ORDER_CREATED`
+   * `ORDER_ADD_ITEMS`
+   * `ORDER_ALTERED`
+
+   and send appropriate titles:
+
+   ```ts
+   if (payload.type === "ORDER_ADD_ITEMS") {
+     // "Table 4 – +3 items added to order #44"
+   } else if (payload.type === "ORDER_ALTERED") {
+     // "Table 4 – Order #44 edited (replaced by #47)"
+   }
+   ```
+
+   Send to:
+
+   * Waiter OneSignal segment
+   * Admin Electron realtime (as you already do)
+   * Optional: Chef topic (if you maintain one).
+
+2. **Chef app UI**
+
+   * When rendering active orders:
+
+     * Hide canceled orders by default.
+     * For altered order, show the *new* order (child) with a small “Edited” pill if `parent_order_id != null` and `event_type = ORDER_ALTERED`.
+
+   This makes it obvious that the ticket they’re looking at is an edited version.
+
+---
+
+### PHASE 7 – Edge cases & QA checklist
+
+Once Cursor implements the above, sanity-check:
+
+1. **Dine-in**
+
+   * Table 4 has live order.
+
+   * Flow: *Given Orders → Add Items*:
+
+     * Add items, place order.
+     * Expected:
+
+       * No “table occupied” errors.
+       * Original order intact.
+       * Child order created (or same order if in Created/Accepted).
+       * Chef & waiter get “+X items” notification.
+
+   * Flow: *Given Orders → Alter Order*:
+
+     * Change quantities, remove/add items, place order.
+     * Expected:
+
+       * Old order becomes inactive (Canceled / Altered).
+       * New active order with same table.
+       * Chef/waiter/admin get “edited” notification.
+       * No occupancy issues.
+
+2. **Eat Away**
+
+   * License 1234 order exists.
+   * Add Items & Alter keep `licensePlate = "1234"` preserved.
+   * No table checks, no weird errors.
+
+3. **Parcel**
+
+   * No table, no license. All flows work solely on orderId.
+
+4. **Zero-item submission**
+
+   * Place order disabled or shows error if no items in draft.
+
+5. **Delivered / Closed orders**
+
+   * Attempting Alter should either:
+
+     * Be hidden in UI (no button), or
+     * Show “Cannot edit delivered order, start new order or add items as new order”.
+
+---
+
+If you hand this plan to Cursor, it has a very clear story:
+
+* **Mode-driven** flows (NEW / ADD_ITEMS / EDIT).
+* **Separation of concerns** between create/add/alter.
+* **No sneaky table-occupied fallbacks**.
+* **Consistent notifications** to waiter / chef / admin.
+
+This is the kind of structure you see in production POS systems, but tailored to your Supabase + Android stack.

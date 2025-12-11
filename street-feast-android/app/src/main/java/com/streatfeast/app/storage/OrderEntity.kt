@@ -16,7 +16,8 @@ data class OrderEntity(
     val updatedAt: Long,
     val parentOrderId: String?,
     val tableNumber: Int?,
-    val licensePlate: String?
+    val licensePlate: String?,
+    val isEdited: Boolean
 )
 
 

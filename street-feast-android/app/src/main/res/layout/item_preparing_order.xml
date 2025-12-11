@@ -37,6 +37,20 @@
             app:layout_constraintTop_toTopOf="@id/tvOrderNumber"
             app:layout_constraintBottom_toBottomOf="@id/tvOrderNumber" />
 
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipEdited"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:text="@string/label_add_on"
+            android:textColor="@color/white"
+            android:visibility="gone"
+            app:chipBackgroundColor="@color/status_prepared"
+            app:layout_constraintStart_toEndOf="@id/chipOrderType"
+            app:layout_constraintTop_toTopOf="@id/chipOrderType"
+            app:layout_constraintBottom_toBottomOf="@id/chipOrderType"
+            tools:visibility="visible" />
+
         <!-- Time -->
         <TextView
             android:id="@+id/tvTime"

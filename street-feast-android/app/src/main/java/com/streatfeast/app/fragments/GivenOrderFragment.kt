@@ -20,6 +20,7 @@ import com.streatfeast.app.adapters.TableChip
 import com.streatfeast.app.adapters.TableChipAdapter
 import com.streatfeast.app.databinding.FragmentGivenOrderBinding
 import com.streatfeast.app.di.ServiceLocator
+import com.streatfeast.app.navigation.OrderEditMode
 import com.streatfeast.app.navigation.OrderNavArgs
 import com.streatfeast.app.utils.TableDisplayMapper
 import com.streatfeast.app.models.Order
@@ -31,8 +32,13 @@ import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.dialogs.OrderModificationDialog
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import android.widget.TextView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @RequiresApi(Build.VERSION_CODES.O)
 class GivenOrderFragment : Fragment() {
@@ -54,6 +60,7 @@ class GivenOrderFragment : Fragment() {
     private var allOrders: List<Order> = emptyList()
     private var filteredOrders: List<Order> = emptyList()
     private var selectedTableChip: TableChip? = null
+    private var dateUpdateJob: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -81,8 +88,33 @@ class GivenOrderFragment : Fragment() {
         val navBack = binding.appbar.root.findViewById<View>(R.id.ivNavBack)
         navBack?.visibility = View.GONE
         
+        // Setup real-time date
+        setupDate()
+        
         // Show logout button
         setupLogoutButton()
+    }
+    
+    private fun setupDate() {
+        val tvDate = binding.appbar.root.findViewById<TextView>(R.id.tvDate)
+        val dateFormat = SimpleDateFormat("EEE, MMM dd", Locale.getDefault())
+        
+        // Update date immediately
+        fun updateDate() {
+            tvDate?.text = dateFormat.format(Date())
+        }
+        
+        updateDate()
+        
+        // Update date every minute
+        dateUpdateJob = lifecycleScope.launch {
+            while (true) {
+                delay(60000) // 1 minute
+                if (isAdded && view != null) {
+                    updateDate()
+                }
+            }
+        }
     }
 
     private fun setupLogoutButton() {
@@ -156,7 +188,7 @@ class GivenOrderFragment : Fragment() {
                     tableNumber = extractTableNumber(order),
                     licensePlate = order.licensePlate,
                     existingOrderId = order.id,
-                    isEditing = false,
+                    editMode = OrderEditMode.ADD_ITEMS,
                     showHeader = false
                 )
                 findNavController().navigate(R.id.previewOrderFragment, args.toBundle())
@@ -173,7 +205,7 @@ class GivenOrderFragment : Fragment() {
             tableNumber = extractTableNumber(order),
             licensePlate = order.licensePlate,
             existingOrderId = order.id,
-            isEditing = true,
+            editMode = OrderEditMode.EDIT,
             showHeader = false
         )
         findNavController().navigate(R.id.previewOrderFragment, args.toBundle())
@@ -287,6 +319,8 @@ class GivenOrderFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        dateUpdateJob?.cancel()
+        dateUpdateJob = null
         _binding = null
     }
 }
