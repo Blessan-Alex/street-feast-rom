@@ -182,13 +182,13 @@ class GivenOrderFragment : Fragment() {
                 }
             },
             onAddItemsClick = { order ->
-                // Navigate to preview order with existing order context (add items mode)
+                // Navigate to preview order in EDIT mode - will load existing items and allow adding more
                 val args = OrderNavArgs(
                     orderType = order.type,
                     tableNumber = extractTableNumber(order),
                     licensePlate = order.licensePlate,
                     existingOrderId = order.id,
-                    editMode = OrderEditMode.ADD_ITEMS,
+                    editMode = OrderEditMode.EDIT, // Use EDIT mode to load existing items
                     showHeader = false
                 )
                 findNavController().navigate(R.id.previewOrderFragment, args.toBundle())

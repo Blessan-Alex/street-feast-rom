@@ -507,7 +507,15 @@ class PreviewOrderHeaderFragment : Fragment() {
                 when (editMode) {
                     OrderEditMode.EDIT -> findNavController().popBackStack()
                     OrderEditMode.ADD_ITEMS -> findNavController().popBackStack(R.id.givenOrderFragment, false)
-                    OrderEditMode.NEW -> findNavController().popBackStack(R.id.orderTypeFragment, false)
+                    OrderEditMode.NEW -> {
+                        // If NEW mode has existingOrderId, it came from "Add Items" flow
+                        // Navigate back to givenOrderFragment, otherwise to orderTypeFragment
+                        if (existingOrderId != null) {
+                            findNavController().popBackStack(R.id.givenOrderFragment, false)
+                        } else {
+                            findNavController().popBackStack(R.id.orderTypeFragment, false)
+                        }
+                    }
                 }
             }
         }

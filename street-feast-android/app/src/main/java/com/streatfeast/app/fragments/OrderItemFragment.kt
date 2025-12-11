@@ -500,7 +500,7 @@ class OrderItemFragment : Fragment() {
                 orderType = orderType,
                 tableNumber = tableNumber,
                 licensePlate = licensePlate,
-                editMode = editMode,
+                editMode = editMode,              // keep ADD_ITEMS/EDIT context
                 existingOrderId = navArgs.existingOrderId
             )
             findNavController().navigate(R.id.previewOrderFragment, nextArgs.toBundle())

@@ -26,33 +26,39 @@ class AuthRepository(
         client.auth.currentUserOrNull() != null
     }
 
-    suspend fun login(email: String, password: String): Result<User> = runCatching {
-        Log.d("AuthRepository", "Attempting login for: $email")
-        
-        client.auth.signInWith(Email) {
-            this.email = email
-            this.password = password
-        }
-        
-        Log.d("AuthRepository", "Auth sign in successful")
-        
-        val userId = client.auth.currentUserOrNull()?.id
-        Log.d("AuthRepository", "Got user ID from auth: $userId")
-        
-        if (userId == null) {
-            Log.e("AuthRepository", "User ID is null after sign in")
-            error("Missing user id")
-        }
-        
-        Log.d("AuthRepository", "Fetching user profile for ID: $userId")
-        val user = fetchUser(userId)
-        Log.d("AuthRepository", "Fetched user result: ${if (user != null) "SUCCESS - ${user.email}, role: ${user.role}" else "NULL"}")
+    suspend fun login(email: String, password: String): Result<User> = withContext(Dispatchers.IO) {
+        runCatching {
+            Log.d("AuthRepository", "Attempting login for: $email")
+            
+            client.auth.signInWith(Email) {
+                this.email = email
+                this.password = password
+            }
+            
+            Log.d("AuthRepository", "Auth sign in successful")
+            
+            val userId = client.auth.currentUserOrNull()?.id
+            Log.d("AuthRepository", "Got user ID from auth: $userId")
+            
+            if (userId == null) {
+                Log.e("AuthRepository", "User ID is null after sign in")
+                error("Missing user id")
+            }
+            
+            Log.d("AuthRepository", "Fetching user profile for ID: $userId")
+            val user = fetchUser(userId)
+            Log.d("AuthRepository", "Fetched user result: ${if (user != null) "SUCCESS - ${user.email}, role: ${user.role}" else "NULL"}")
 
-        user ?: error("User profile missing")
-    }.onFailure { e ->
-        Log.e("AuthRepository", "Login failed", e)
-        Log.e("AuthRepository", "Error message: ${e.message}")
-        Log.e("AuthRepository", "Error type: ${e.javaClass.simpleName}")
+            user ?: error("User profile missing")
+        }.onFailure { e ->
+            if (e is CancellationException) {
+                Log.w("AuthRepository", "Login cancelled", e)
+                throw e
+            }
+            Log.e("AuthRepository", "Login failed", e)
+            Log.e("AuthRepository", "Error message: ${e.message}")
+            Log.e("AuthRepository", "Error type: ${e.javaClass.simpleName}")
+        }
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {

@@ -1,7 +1,10 @@
 package com.streatfeast.app.repositories
 
 import android.content.Context
+import android.os.Build
+import io.ktor.client.statement.bodyAsText
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.streatfeast.app.BuildConfig
 import com.streatfeast.app.models.Order
 import com.streatfeast.app.models.OrderStatus
@@ -27,7 +30,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
@@ -38,6 +40,7 @@ import kotlinx.serialization.json.Json
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.Order as PgOrder
+import java.time.Instant
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 
 // Realtime
@@ -383,6 +386,48 @@ class SupabaseOrderRepository(
     suspend fun markAllDelivered(): Result<Int> =
         bulkUpdateStatus(OrderStatus.PREPARED, OrderStatus.DELIVERED)
 
+    /**
+     * Fetch the most recent active order for a table (Created/Accepted/InKitchen/Prepared).
+     * Returns null if none found. Used to auto-route add-items when table is occupied.
+     */
+    suspend fun getActiveOrderForTable(tableNumber: Int): Order? = withContext(repoDispatcher) {
+        val storeId = getStoreId()
+        client.postgrest["orders"]
+            .select {
+                filter {
+                    eq("store_id", storeId)
+                    eq("table_number", tableNumber)
+                    isIn("status", listOf("Created", "Accepted", "InKitchen", "Prepared"))
+                }
+                order(column = "created_at", order = PgOrder.DESCENDING)
+                limit(1)
+            }
+            .decodeList<SupabaseOrderDto>()
+            .firstOrNull()
+            ?.toOrder()
+    }
+
+    /**
+     * Gets the active order for a given license plate (EAT_AWAY orders).
+     * Returns the most recent active order with the given license plate, or null if none exists.
+     */
+    private suspend fun getActiveOrderForLicensePlate(licensePlate: String): Order? = withContext(repoDispatcher) {
+        val storeId = getStoreId()
+        client.postgrest["orders"]
+            .select {
+                filter {
+                    eq("store_id", storeId)
+                    eq("license_plate", licensePlate)
+                    isIn("status", listOf("Created", "Accepted", "InKitchen", "Prepared"))
+                }
+                order(column = "created_at", order = PgOrder.DESCENDING)
+                limit(1)
+            }
+            .decodeList<SupabaseOrderDto>()
+            .firstOrNull()
+            ?.toOrder()
+    }
+
     private suspend fun bulkUpdateStatus(
         fromStatus: OrderStatus,
         toStatus: OrderStatus
@@ -530,7 +575,7 @@ class SupabaseOrderRepository(
             var sanitizedLicensePlate = licensePlate
                 ?.filter { it.isDigit() }
                 ?.take(4)
-            // Validate based on order type
+            // Validate and handle occupied tables/license plates
             when (orderType) {
                 OrderType.DINE_IN -> {
                     if (tableNumber == null || tableNumber !in 1..7) {
@@ -540,7 +585,25 @@ class SupabaseOrderRepository(
                     if (!isEdit) {
                         val isAvailable = checkTableAvailability(tableNumber, currentStoreId)
                         if (!isAvailable) {
-                            error("Table $tableNumber is already occupied")
+                            // Table is occupied - find and cancel the existing order
+                            Log.d("SupabaseOrderRepository", "Table $tableNumber is occupied, finding existing order to cancel")
+                            val existingOrder = getActiveOrderForTable(tableNumber)
+                            if (existingOrder != null) {
+                                try {
+                                    Log.d("SupabaseOrderRepository", "Cancelling existing order ${existingOrder.id} for table $tableNumber")
+                                    cancelOrder(existingOrder.id)
+                                    // Refresh to update local state after cancellation
+                                    refresh()
+                                    Log.d("SupabaseOrderRepository", "Successfully cancelled order ${existingOrder.id}, proceeding with new order")
+                                } catch (e: Exception) {
+                                    // Log error but continue - order might have been cancelled by another process
+                                    // The orders_upsert RPC will catch if table is still occupied
+                                    Log.w("SupabaseOrderRepository", "Failed to cancel existing order ${existingOrder.id}: ${e.message}", e)
+                                }
+                            } else {
+                                Log.w("SupabaseOrderRepository", "Table $tableNumber marked as occupied but no active order found - proceeding anyway")
+                            }
+                            // Continue to create new order (table should now be free, or orders_upsert will catch it)
                         }
                     }
                 }
@@ -548,9 +611,27 @@ class SupabaseOrderRepository(
                     if (sanitizedLicensePlate.isNullOrEmpty() || !sanitizedLicensePlate.matches(Regex("^\\d{4}$"))) {
                         error("EAT_AWAY orders require a 4-digit license plate")
                     }
+                    // Check if there's an active order for this license plate
+                    if (!isEdit && sanitizedLicensePlate != null) {
+                        val existingOrder = getActiveOrderForLicensePlate(sanitizedLicensePlate)
+                        if (existingOrder != null) {
+                            try {
+                                Log.d("SupabaseOrderRepository", "Found existing order ${existingOrder.id} for license plate $sanitizedLicensePlate, cancelling it")
+                                cancelOrder(existingOrder.id)
+                                // Refresh to update local state after cancellation
+                                refresh()
+                                Log.d("SupabaseOrderRepository", "Successfully cancelled order ${existingOrder.id}, proceeding with new order")
+                            } catch (e: Exception) {
+                                // Log error but continue - order might have been cancelled by another process
+                                Log.w("SupabaseOrderRepository", "Failed to cancel existing order ${existingOrder.id}: ${e.message}", e)
+                            }
+                            // Continue to create new order with same license plate
+                        }
+                    }
                 }
                 OrderType.PARCEL -> {
-                    // No validation needed for PARCEL
+                    // No validation needed for PARCEL - no occupancy concept
+                    // Just proceed with normal order creation
                 }
             }
 
@@ -742,9 +823,9 @@ class SupabaseOrderRepository(
                     parentOrder.licensePlate?.let { put("license_plate", it) }
                 }
 
+                // For add-on (child) orders, let the DB generate item IDs to avoid PK collisions
                 val itemsJson = items.map { item ->
                     buildMap<String, Any?> {
-                        put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
                         put("sku", item.itemId)
                         put("name", item.nameSnapshot)
                         put("size", item.size)
@@ -808,9 +889,9 @@ class SupabaseOrderRepository(
                     }
                 }
 
+                // For newly added items, omit ID so DB assigns a new PK and avoids collisions
                 val newItemsJson = items.map { item ->
                     buildMap<String, Any?> {
-                        put("id", item.id.ifEmpty { java.util.UUID.randomUUID().toString() })
                         put("sku", item.itemId)
                         put("name", item.nameSnapshot)
                         put("size", item.size)
@@ -833,6 +914,7 @@ class SupabaseOrderRepository(
                     put("parent_order_id", parentOrder.parentOrderId)
                     put("created_at", parentOrder.createdAt)
                     put("updated_at", isoNowUtc())
+                    put("is_edited", true) // flag so chef/admin UIs can surface edits
                     parentOrder.tableNumber?.let { put("table_number", it) }
                     parentOrder.licensePlate?.let { put("license_plate", it) }
                 }
@@ -862,7 +944,24 @@ class SupabaseOrderRepository(
                     setBody(payloadJson)
                 }
                 
-                val orderId = response.body<String>()
+                // Parse response as plain text (RPC returns ID string)
+                val responseText = response.bodyAsText().trim()
+                val orderId = responseText.trim('"') // handle JSON string
+                
+                if (orderId.isBlank()) {
+                    httpClient.close()
+                    error("orders_upsert returned empty order id")
+                }
+                
+                // Safety: if backend returned a new order, cancel the original to avoid duplicates
+                if (orderId != parentOrderId) {
+                    Log.e(
+                        "SupabaseOrderRepository",
+                        "orders_upsert returned new orderId=$orderId, expected=$parentOrderId. Cancelling original."
+                    )
+                    cancelOrder(parentOrderId)
+                }
+                
                 httpClient.close()
 
                 Log.d("SupabaseOrderRepository", "addItemsToOrder: Updated existing order $orderId")
@@ -963,6 +1062,17 @@ class SupabaseOrderRepository(
             else -> e.message ?: "Failed to alter order"
         }
         throw Exception(errorMessage, e)
+    }
+
+    private suspend fun cancelOrder(orderId: String) {
+        client.postgrest["orders"]
+            .update({
+                set("status", "Canceled")
+                set("updated_at", isoNowUtc())
+            }) {
+                filter { eq("id", orderId) }
+            }
+        Log.d("SupabaseOrderRepository", "Cancelled original order $orderId because a new one was created.")
     }
 
     /**
@@ -1348,6 +1458,28 @@ class SupabaseOrderRepository(
         licensePlate = licensePlate,
         isEdited = isEdited
     )
+
+    // --- DTO -> Domain mapping (used when direct decoding to Order is unavailable) ---
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun SupabaseOrderDto.toOrder(): Order {
+        val orderType = type?.let(OrderType::fromString) ?: OrderType.DINE_IN
+        val orderStatus = OrderStatus.fromString(status)
+        return Order(
+            id = id,
+            orderNumber = number ?: 0,
+            type = orderType,
+            chefTip = chefTip.orEmpty(),
+            status = orderStatus,
+            createdBy = createdBy.orEmpty(),
+            createdAt = Instant.ofEpochMilli(parseIsoToMillis(createdAt)),
+            updatedAt = Instant.ofEpochMilli(parseIsoToMillis(updatedAt)),
+            parentOrderId = parentOrderId,
+            tableNumber = tableNumber,
+            licensePlate = licensePlate,
+            isEdited = isEdited,
+            items = emptyList() // Items are not fetched in this query
+        )
+    }
 
     private fun SupabaseOrderItemDto.toEntity(): OrderItemEntity {
         val extractedChefTip = modifiers?.get("chefTip")

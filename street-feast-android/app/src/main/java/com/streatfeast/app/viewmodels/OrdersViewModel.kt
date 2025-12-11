@@ -132,6 +132,9 @@ class OrdersViewModel(
         }
     }
 
+    suspend fun getActiveOrderForTable(tableNumber: Int): Order? =
+        repository.getActiveOrderForTable(tableNumber)
+
     fun markItemPrepared(
         orderId: String,
         itemId: String,
@@ -210,6 +213,20 @@ class OrdersViewModel(
                 Log.e("OrdersViewModel", "Failed to add items to order", e)
             }
         }
+    }
+
+    /**
+     * Add items by reusing the alter flow (alterOrderV2).
+     * This replaces the order (cancel + recreate) and avoids table-occupied checks.
+     */
+    fun addItemsByAlterFlow(
+        parentOrderId: String,
+        baseItems: List<OrderItem>,
+        newItems: List<OrderItem>,
+        chefTip: String?
+    ) {
+        val combined = baseItems + newItems
+        alterOrder(parentOrderId, combined, chefTip)
     }
 
     fun alterOrder(

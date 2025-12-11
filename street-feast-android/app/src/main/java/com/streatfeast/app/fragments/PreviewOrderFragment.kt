@@ -85,6 +85,13 @@ class PreviewOrderFragment : Fragment() {
         licensePlate = navArgs.licensePlate
         existingOrderId = navArgs.existingOrderId
         editMode = navArgs.editMode
+
+        // Defensive: ADD_ITEMS must have an existing order id; otherwise bail out
+        if (editMode == OrderEditMode.ADD_ITEMS && existingOrderId == null) {
+            android.util.Log.w("PreviewOrderFragment", "ADD_ITEMS without existingOrderId; navigating back")
+            findNavController().popBackStack()
+            return
+        }
         
         // Add defensive check for EAT_AWAY - recover from saved state if needed
         if (orderType == OrderType.EAT_AWAY && licensePlate.isNullOrBlank()) {
@@ -235,6 +242,15 @@ class PreviewOrderFragment : Fragment() {
     
     private fun observeDraftItems() {
         draftViewModel.draftItems.observe(viewLifecycleOwner) { items ->
+            // Keep base order items visible in ADD_ITEMS even if draft is empty on return
+            if (editMode == OrderEditMode.ADD_ITEMS &&
+                baseOrderItems.isNotEmpty() &&
+                items.isEmpty()
+            ) {
+                draftViewModel.loadOrderItems(baseOrderItems)
+                return@observe
+            }
+
             val displayItems = when (editMode) {
                 OrderEditMode.ADD_ITEMS -> {
                     val newItems = items.filter { draftItem ->
@@ -324,14 +340,21 @@ class PreviewOrderFragment : Fragment() {
                     val previousItemCount = currentOrder?.items?.size ?: 0
                     val previousItemIds = currentOrder?.items?.map { it.id }?.toSet() ?: emptySet()
                     currentOrder = order
+                    // Always set baseOrderItems to ensure it's available when placing order
                     baseOrderItems = order.items
                     
                     val currentItemIds = order.items.map { it.id }.toSet()
                     val orderChanged = order.items.size != previousItemCount || currentItemIds != previousItemIds
                     
                     if (editMode == OrderEditMode.EDIT) {
-                        if (orderChanged || previousItemCount == 0) {
-                            android.util.Log.d("PreviewOrderFragment", "Order updated: ${order.items.size} items (was $previousItemCount)")
+                        // Always load order items into draft in EDIT mode
+                        // Check if draft is empty or if order changed to avoid unnecessary reloads
+                        val draftItems = draftViewModel.getDraftItems()
+                        val draftIsEmpty = draftItems.isEmpty()
+                        val shouldLoad = draftIsEmpty || orderChanged
+                        
+                        if (shouldLoad) {
+                            android.util.Log.d("PreviewOrderFragment", "Loading order items into draft: ${order.items.size} items (draft was empty: $draftIsEmpty, order changed: $orderChanged)")
                             draftViewModel.loadOrderItems(order.items)
                         }
                     } else if (editMode == OrderEditMode.ADD_ITEMS) {
@@ -340,6 +363,11 @@ class PreviewOrderFragment : Fragment() {
                             draftViewModel.clearDraft()
                         }
                     }
+                } else {
+                    // Log warning if order not found in editableOrders
+                    android.util.Log.w("PreviewOrderFragment", "Order $orderId not found in editableOrders")
+                    // Try refreshing to see if order appears
+                    ordersViewModel.refresh()
                 }
             }
         }
@@ -358,7 +386,10 @@ class PreviewOrderFragment : Fragment() {
     }
     
     private fun performAlterOrder(items: List<OrderItem>, chefTip: String? = null) {
-        val orderId = existingOrderId ?: return
+        val orderId = existingOrderId ?: run {
+            Toast.makeText(requireContext(), "Order ID is missing. Please try again.", Toast.LENGTH_SHORT).show()
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             ordersViewModel.alterOrder(orderId, items, chefTip)
         }
@@ -384,11 +415,6 @@ class PreviewOrderFragment : Fragment() {
             return
         }
 
-        android.util.Log.d(
-            "PreviewOrderFragment",
-            "placeOrder mode=${args.editMode}, existingOrderId=${args.existingOrderId}, items=${items.size}, baseItems=${baseOrderItems.size}"
-        )
-
         // Disable UI during network call
         binding.placeOrderBar.root.isEnabled = false
         binding.placeOrderBar.root.alpha = 0.5f
@@ -398,9 +424,40 @@ class PreviewOrderFragment : Fragment() {
             binding.placeOrderBar.root.alpha = if (isLoading) 0.5f else 1f
         }
 
+        // Store effective mode for success handler (accessible outside launch block)
+        var effectiveModeForSuccess: OrderEditMode? = null
+
         lifecycleScope.launch {
-            when (args.editMode) {
+            // Resolve existing order inside coroutine (suspend call)
+            var effectiveExistingOrderId = args.existingOrderId
+            if (effectiveExistingOrderId == null &&
+                effectiveOrderType == OrderType.DINE_IN &&
+                tableNumber != null
+            ) {
+                val active = ordersViewModel.getActiveOrderForTable(tableNumber)
+                effectiveExistingOrderId = active?.id
+            }
+            // Only auto-switch to EDIT if mode is NEW and no explicit existingOrderId was passed
+            // If existingOrderId is explicitly passed with NEW mode (e.g., from "Add Items"),
+            // keep NEW mode so createOrder handles cancel + create
+            val effectiveMode = if (effectiveExistingOrderId != null && args.existingOrderId == null && args.editMode == OrderEditMode.NEW) {
+                OrderEditMode.EDIT
+            } else {
+                args.editMode
+            }
+            val orderId = effectiveExistingOrderId
+
+            // Store for success handler
+            effectiveModeForSuccess = effectiveMode
+
+            android.util.Log.d(
+                "PreviewOrderFragment",
+                "placeOrder mode=$effectiveMode, existingOrderId=$orderId, items=${items.size}, baseItems=${baseOrderItems.size}"
+            )
+
+            when (effectiveMode) {
                 OrderEditMode.NEW -> {
+                    // No existing order detected; proceed with create
                     ordersViewModel.createOrder(
                         orderType = effectiveOrderType,
                         items = items,
@@ -411,44 +468,52 @@ class PreviewOrderFragment : Fragment() {
                     )
                 }
                 OrderEditMode.ADD_ITEMS -> {
-                    val orderId = args.existingOrderId
-                    if (orderId == null) {
-                        Toast.makeText(requireContext(), "No base order to add items to", Toast.LENGTH_SHORT).show()
-                        binding.placeOrderBar.root.isEnabled = true
-                        binding.placeOrderBar.root.alpha = 1f
-                        return@launch
-                    }
-
-                    // Only send newly added items; base items stay untouched
-                    val newItems = items.filter { draftItem ->
-                        baseOrderItems.none { it.id == draftItem.id }
-                    }
-                    if (newItems.isEmpty()) {
-                        Toast.makeText(requireContext(), "Add at least one new item", Toast.LENGTH_SHORT).show()
-                        binding.placeOrderBar.root.isEnabled = true
-                        binding.placeOrderBar.root.alpha = 1f
-                        return@launch
-                    }
-
-                    ordersViewModel.addItemsToOrder(orderId, newItems)
+                    // Should not happen with existingOrderId; stop to avoid partial paths.
+                    Toast.makeText(requireContext(), "Add Items uses replace flow; retry", Toast.LENGTH_SHORT).show()
+                    binding.placeOrderBar.root.isEnabled = true
+                    binding.placeOrderBar.root.alpha = 1f
+                    return@launch
                 }
                 OrderEditMode.EDIT -> {
-                    val orderId = args.existingOrderId
-                    val order = currentOrder
-                    if (orderId == null || order == null) {
-                        Toast.makeText(requireContext(), "Order not found", Toast.LENGTH_SHORT).show()
+                    // In EDIT mode, use draft items directly (they already contain all items)
+                    // alterOrder will cancel the old order and create a new one atomically via alterOrderV2
+                    if (orderId == null) {
+                        Toast.makeText(requireContext(), "Order ID is missing. Please try again.", Toast.LENGTH_SHORT).show()
                         binding.placeOrderBar.root.isEnabled = true
                         binding.placeOrderBar.root.alpha = 1f
                         return@launch
                     }
 
-                    if (OrderModificationDialog.requiresWarning(order.status)) {
+                    // Try to get order status and chef tip if available (for warning dialog)
+                    // But don't fail if order is not found - alterOrderV2 will handle that
+                    var orderStatus: OrderStatus? = null
+                    var chefTip = ""
+                    
+                    val order = currentOrder ?: ordersViewModel.editableOrders.value?.find { it.id == orderId }
+                    if (order != null) {
+                        orderStatus = order.status
+                        chefTip = order.chefTip ?: ""
+                        // Update currentOrder for future reference
+                        currentOrder = order
+                    } else {
+                        // Order might not be in editableOrders (could be canceled already)
+                        // Use empty chef tip and proceed - alterOrderV2 will handle errors appropriately
+                        chefTip = ""
+                    }
+
+                    // Use alterOrder which internally calls alterOrderV2
+                    // This will cancel the old order and create a new one atomically
+                    // No need to validate order exists - alterOrderV2 will handle errors appropriately
+                    if (orderStatus != null && OrderModificationDialog.requiresWarning(orderStatus)) {
                         OrderModificationDialog.showPreparingOrderConfirmation(
                             requireContext(),
-                            onConfirm = { performAlterOrder(items, order.chefTip) }
+                            onConfirm = { 
+                                ordersViewModel.alterOrder(orderId, items, chefTip)
+                            }
                         )
                     } else {
-                        performAlterOrder(items, order.chefTip)
+                        // cancel + recreate via alter flow (new order ID; avoids table occupancy)
+                        ordersViewModel.alterOrder(orderId, items, chefTip)
                     }
                 }
             }
@@ -459,19 +524,55 @@ class PreviewOrderFragment : Fragment() {
             message?.let {
                 Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                 ordersViewModel.clearSuccessMessage()
-                draftViewModel.clearDraft()
-                
-                // Navigate based on operation type
-                when (args.editMode) {
-                    OrderEditMode.EDIT -> findNavController().popBackStack()
-                    OrderEditMode.ADD_ITEMS -> findNavController().popBackStack(R.id.givenOrderFragment, false)
-                    OrderEditMode.NEW -> findNavController().popBackStack(R.id.orderTypeFragment, false)
+
+                // Use stored effective mode, fallback to args.editMode if not set yet
+                val mode = effectiveModeForSuccess ?: args.editMode
+                when (mode) {
+                    OrderEditMode.NEW -> {
+                        draftViewModel.clearDraft()
+                        // If NEW mode has existingOrderId, it came from "Add Items" flow
+                        // Navigate back to givenOrderFragment, otherwise to orderTypeFragment
+                        if (args.existingOrderId != null) {
+                            findNavController().popBackStack(R.id.givenOrderFragment, false)
+                        } else {
+                            findNavController().popBackStack(R.id.orderTypeFragment, false)
+                        }
+                    }
+                    OrderEditMode.EDIT -> {
+                        draftViewModel.clearDraft()
+                        findNavController().popBackStack()
+                    }
+                    OrderEditMode.ADD_ITEMS -> {
+                        // Should not happen; align behavior with EDIT for safety
+                        draftViewModel.clearDraft()
+                        findNavController().popBackStack()
+                    }
                 }
             }
         }
         
         ordersViewModel.error.observe(viewLifecycleOwner) { error ->
             error?.let {
+                // If createOrder failed because the table is occupied, auto-fall back to add items
+                if (editMode == OrderEditMode.NEW &&
+                    tableNumber != null &&
+                    it.contains("already occupied", ignoreCase = true)
+                ) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val active = ordersViewModel.getActiveOrderForTable(tableNumber)
+                        if (active != null) {
+                            ordersViewModel.addItemsToOrder(active.id, draftViewModel.getDraftItems())
+                        } else {
+                            Toast.makeText(requireContext(), it, Toast.LENGTH_LONG).show()
+                        }
+                        ordersViewModel.clearError()
+                        binding.placeOrderBar.root.isEnabled = true
+                        binding.placeOrderBar.root.alpha = 1f
+                    }
+                    return@observe
+                }
+
+                // Default handling
                 Toast.makeText(requireContext(), it, Toast.LENGTH_LONG).show()
                 ordersViewModel.clearError()
                 binding.placeOrderBar.root.isEnabled = true

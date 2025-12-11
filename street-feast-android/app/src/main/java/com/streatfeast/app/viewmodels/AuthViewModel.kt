@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.streatfeast.app.models.User
 import com.streatfeast.app.repositories.AuthRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AuthViewModel(
     private val repository: AuthRepository
@@ -55,24 +57,29 @@ class AuthViewModel(
             return
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             Log.d("AuthViewModel", "Starting login process")
-            _isLoading.value = true
-            _error.value = null
+            withContext(Dispatchers.Main) {
+                _isLoading.value = true
+                _error.value = null
+            }
 
             val result = repository.login(email, password)
-            _isLoading.value = false
 
-            result.onSuccess { user ->
-                Log.d("AuthViewModel", "Login success - User: ${user.email}, Role: ${user.role}")
-                _currentUser.value = user
-                _isAuthenticated.value = true
-            }.onFailure { exception ->
-                Log.e("AuthViewModel", "Login failure", exception)
-                Log.e("AuthViewModel", "Error message: ${exception.message}")
-                Log.e("AuthViewModel", "Error type: ${exception.javaClass.simpleName}")
-                _error.value = exception.message ?: "Login failed"
-                _isAuthenticated.value = false
+            withContext(Dispatchers.Main) {
+                _isLoading.value = false
+
+                result.onSuccess { user ->
+                    Log.d("AuthViewModel", "Login success - User: ${user.email}, Role: ${user.role}")
+                    _currentUser.value = user
+                    _isAuthenticated.value = true
+                }.onFailure { exception ->
+                    Log.e("AuthViewModel", "Login failure", exception)
+                    Log.e("AuthViewModel", "Error message: ${exception.message}")
+                    Log.e("AuthViewModel", "Error type: ${exception.javaClass.simpleName}")
+                    _error.value = exception.message ?: "Login failed"
+                    _isAuthenticated.value = false
+                }
             }
         }
     }
