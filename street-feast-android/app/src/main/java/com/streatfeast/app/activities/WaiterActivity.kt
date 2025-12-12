@@ -30,6 +30,7 @@ import com.streatfeast.app.viewmodels.AuthViewModel
 import com.streatfeast.app.viewmodels.AuthViewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class WaiterActivity : AppCompatActivity() {
 
@@ -168,13 +169,17 @@ class WaiterActivity : AppCompatActivity() {
                 android.util.Log.d("WaiterActivity", "OneSignal notification received in foreground")
 
                 val additionalData = event.notification.additionalData
-                val orderNumber = (additionalData?.get("number") as? Number)?.toInt()
-                val status = additionalData?.get("status")?.toString()
+
+                val orderNumber =
+                    additionalData.optIntOrNull("orderNumber")
+                        ?: additionalData.optIntOrNull("number")
+
+                val status = additionalData.optStringOrNull("status")
 
                 // Show toast for all order-related notifications, not just Prepared
                 lifecycleScope.launch(Dispatchers.Main) {
                     when (status?.lowercase()) {
-                        "prepared" -> {
+                        "prepared", "itemprepared" -> {
                             val message = if (orderNumber != null) {
                                 "Order #$orderNumber is ready to be delivered"
                             } else {
@@ -224,9 +229,13 @@ class WaiterActivity : AppCompatActivity() {
                 android.util.Log.d("WaiterActivity", "OneSignal notification clicked")
 
                 val additionalData = event.notification.additionalData
-                val orderId = additionalData?.get("orderId")?.toString()
-                val orderNumber = (additionalData?.get("number") as? Number)?.toInt()
-                val status = additionalData?.get("status")?.toString()
+                val orderId = additionalData.optStringOrNull("orderId")
+
+                val orderNumber =
+                    additionalData.optIntOrNull("orderNumber")
+                        ?: additionalData.optIntOrNull("number")
+
+                val status = additionalData.optStringOrNull("status")
 
                 if (orderNumber != null) {
                     Toast.makeText(
@@ -248,7 +257,7 @@ class WaiterActivity : AppCompatActivity() {
 
                 navController?.let { controller ->
                     // If order is ready, navigate to ready orders
-                    if (status == "Prepared" || status == "prepared") {
+                    if (status?.equals("prepared", true) == true || status?.equals("itemprepared", true) == true) {
                         navigateToFragment(R.id.readyOrderFragment)
                     } else {
                         // Otherwise, navigate to appropriate fragment based on current state
@@ -274,7 +283,7 @@ class WaiterActivity : AppCompatActivity() {
             val navController = navHostFragment?.navController
 
             navController?.let { controller ->
-                if (status == "Prepared" || status == "prepared") {
+                if (status?.equals("prepared", true) == true || status?.equals("itemprepared", true) == true) {
                     navigateToFragment(R.id.readyOrderFragment)
                 } else {
                     // Default to order type fragment
@@ -409,6 +418,22 @@ class WaiterActivity : AppCompatActivity() {
         }
         
         android.util.Log.w("WaiterActivity", "Subscription ID check after login exhausted all retries")
+    }
+
+    private fun JSONObject?.optIntOrNull(key: String): Int? {
+        if (this == null) return null
+        return try {
+            if (has(key) && !isNull(key)) optInt(key, Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE }
+            else null
+        } catch (_: Exception) { null }
+    }
+
+    private fun JSONObject?.optStringOrNull(key: String): String? {
+        if (this == null) return null
+        return try {
+            if (has(key) && !isNull(key)) optString(key, null)
+            else null
+        } catch (_: Exception) { null }
     }
 
     private fun navigateToFragment(fragmentId: Int) {

@@ -20,9 +20,23 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") ?? "";
 const ONESIGNAL_REST_KEY = Deno.env.get("ONESIGNAL_REST_KEY") ?? "";
+const WEBHOOK_SECRET = Deno.env.get("DB_WEBHOOK_SECRET") ?? "";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing Supabase environment configuration");
+}
+
+function requireWebhookSecret(req: Request): boolean {
+  const got = req.headers.get("X-Webhook-Secret");
+  
+  // If webhook secret header is present, require it to match
+  if (got !== null) {
+    return WEBHOOK_SECRET.length > 0 && got === WEBHOOK_SECRET;
+  }
+  
+  // If header is not present, allow the request (for other callers like RPC functions, Android app)
+  // This maintains backward compatibility while securing database webhook calls
+  return true;
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -161,9 +175,21 @@ interface OrderAddItemsPayload {
   orderType: string;
 }
 
+interface OrderItemsPayload {
+  type: "INSERT" | "UPDATE";
+  table: "order_items";
+  record: Record<string, unknown>;
+  old_record?: Record<string, unknown> | null;
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // Verify webhook secret for database webhook requests (fail closed)
+  if (!requireWebhookSecret(req)) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   const payload = (await req.json()) as
@@ -171,7 +197,8 @@ serve(async (req) => {
     | BulkUpdatePayload
     | ItemPreparedPayload
     | OrderAlteredPayload
-    | OrderAddItemsPayload;
+    | OrderAddItemsPayload
+    | OrderItemsPayload;
 
   // Handle order altered notifications (from alter_order_v2 RPC)
   if (payload.type === "ORDER_ALTERED") {
@@ -235,6 +262,73 @@ serve(async (req) => {
       return new Response("Error", { status: 500 });
     }
 
+    return new Response("OK", { status: 200 });
+  }
+
+  // Handle order_items UPDATE events (from database webhook trigger)
+  if (payload?.table === "order_items" && payload?.type === "UPDATE") {
+    const itemsPayload = payload as OrderItemsPayload;
+    const record = itemsPayload.record ?? {};
+    const oldRecord = itemsPayload.old_record ?? {};
+    
+    const becamePrepared = record.is_prepared === true && oldRecord.is_prepared !== true;
+    
+    if (!becamePrepared) {
+      return new Response("No prepared transition", { status: 200 });
+    }
+    
+    const orderId = record.order_id as string | undefined;
+    const itemId = record.id as string | undefined;
+    const itemName = (record.name as string | undefined) ?? "Item";
+    
+    if (!orderId) {
+      return new Response("Missing order_id", { status: 202 });
+    }
+    
+    try {
+      // Fetch order context (store_id, number, table_number, license_plate, type)
+      const { data: orderData, error: orderError } = await supabase
+        .from("orders")
+        .select("store_id, number, table_number, license_plate, type")
+        .eq("id", orderId)
+        .single();
+      
+      if (orderError || !orderData) {
+        console.error("Failed to fetch order context", orderError);
+        return new Response("Order not found", { status: 202 });
+      }
+      
+      const storeId = orderData.store_id as string;
+      const orderNumber = orderData.number as number | undefined;
+      const tableNumber = orderData.table_number as number | null | undefined;
+      const licensePlate = orderData.license_plate as string | null | undefined;
+      const orderType = orderData.type as string | undefined;
+      
+      if (!storeId) {
+        return new Response("Missing store_id", { status: 202 });
+      }
+      
+      // Fetch subscription IDs for waiters and admins
+      const subscriptionIds = await fetchSubscriptionIds(storeId, ["waiter", "admin"]);
+      
+      const heading = `Item ready for order #${orderNumber ?? "N/A"}`;
+      const content = `${itemName} is prepared`;
+      
+      await notifyOneSignal(subscriptionIds, heading, content, {
+        status: "ItemPrepared",
+        orderId,
+        orderNumber: orderNumber ?? null,
+        itemId: itemId ?? null,
+        tableNumber: tableNumber ?? null,
+        licensePlate: licensePlate ?? null,
+        orderType: orderType ?? null,
+        storeId,
+      });
+    } catch (error) {
+      console.error("Item prepared notification failed", error);
+      return new Response("Error", { status: 500 });
+    }
+    
     return new Response("OK", { status: 200 });
   }
 

@@ -1,0 +1,6 @@
+# Supabase configuration file
+# See https://supabase.com/docs/guides/cli/configuring-your-project
+
+[functions.order-events]
+verify_jwt = false
+
