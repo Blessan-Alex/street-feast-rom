@@ -325,8 +325,8 @@ class OrderItemFragment : Fragment() {
     }
     
     private fun setupUpArrow() {
-        // Remove click listener - up arrow should only respond to swipes
-        binding.ivUp.setOnClickListener(null)
+        // Allow tap to collapse header
+        binding.ivUp.setOnClickListener { collapseBreadcrumbs() }
         
         // Keep only the swipe gesture detector
         var startY = 0f

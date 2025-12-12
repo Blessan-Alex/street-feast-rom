@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/itemRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="12dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <View
+        android:id="@+id/colorBar"
+        android:layout_width="3dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="10dp"
+        android:background="#F5515F" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvItemName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#111111"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvItemQty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_qty_badge"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="#666A7A"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvItemSize"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#6F7384"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvItemTips"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#A0A7BC"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/preparedIcon"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_marginEnd="8dp"
+        android:visibility="gone"
+        android:src="@drawable/ic_check_white_20"
+        android:contentDescription="@null"
+        app:tint="#2ECC71" />
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/switchItem"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+</LinearLayout>
+

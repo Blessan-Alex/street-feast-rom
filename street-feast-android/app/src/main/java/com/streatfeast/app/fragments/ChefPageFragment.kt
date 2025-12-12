@@ -38,18 +38,6 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Helper data class for item view configuration
-private data class ItemViewConfig(
-    val itemView: LinearLayout,
-    val nameView: TextView,
-    val qtyView: TextView,
-    val sizeView: TextView,
-    val tipsView: TextView,
-    val switchView: androidx.appcompat.widget.SwitchCompat,
-    val colorBar: View,
-    val preparedIcon: ImageView
-)
-
 @RequiresApi(Build.VERSION_CODES.O)
 class ChefPageFragment : Fragment() {
     
@@ -475,7 +463,6 @@ class ChefPageFragment : Fragment() {
         val tvTableHeader = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvTableHeader)
         val tvLastUpdated = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvLastUpdated)
         val badgeRunningLate = cardView.findViewById<TextView>(com.streatfeast.app.R.id.badgeRunningLate)
-        val tvMoreItems = cardView.findViewById<TextView>(com.streatfeast.app.R.id.tvMoreItems)
         
         tvTableHeader.text = OrderDisplayMapper.headerLabel(order)
         tvLastUpdated.text = DateTimeUtils.getTimeAgo(order.updatedAt)
@@ -484,86 +471,43 @@ class ChefPageFragment : Fragment() {
         val isLate = isOrderRunningLate(order)
         badgeRunningLate.visibility = if (isLate) View.VISIBLE else View.GONE
         
-        // Items - show up to 4 items, plus overflow indicator
-        val itemsToShow = order.items.take(4)
-        val itemConfigs = listOf(
-            ItemViewConfig(
-                cardView.findViewById(com.streatfeast.app.R.id.item1),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Name),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Qty),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Size),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem1Tips),
-                cardView.findViewById(com.streatfeast.app.R.id.switchItem1),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar1),
-                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon1)
-            ),
-            ItemViewConfig(
-                cardView.findViewById(com.streatfeast.app.R.id.item2),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Name),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Qty),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Size),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem2Tips),
-                cardView.findViewById(com.streatfeast.app.R.id.switchItem2),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar2),
-                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon2)
-            ),
-            ItemViewConfig(
-                cardView.findViewById(com.streatfeast.app.R.id.item3),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Name),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Qty),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Size),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem3Tips),
-                cardView.findViewById(com.streatfeast.app.R.id.switchItem3),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar3),
-                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon3)
-            ),
-            ItemViewConfig(
-                cardView.findViewById(com.streatfeast.app.R.id.item4),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Name),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Qty),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Size),
-                cardView.findViewById(com.streatfeast.app.R.id.tvItem4Tips),
-                cardView.findViewById(com.streatfeast.app.R.id.switchItem4),
-                cardView.findViewById(com.streatfeast.app.R.id.colorBar4),
-                cardView.findViewById(com.streatfeast.app.R.id.preparedIcon4)
-            )
-        )
-        
-        itemsToShow.forEachIndexed { index, item ->
-            if (index < itemConfigs.size) {
-                val config = itemConfigs[index]
-                // Log item tip for debugging
-                android.util.Log.d("ChefPageFragment", "Item ${item.nameSnapshot} chefTip: '${item.chefTip}'")
-                bindItemToView(
-                    order.id,
-                    item,
-                    config.itemView,
-                    config.nameView,
-                    config.qtyView,
-                    config.sizeView,
-                    config.tipsView,
-                    config.switchView,
-                    config.colorBar,
-                    config.preparedIcon,
-                    order.chefTip
-                )
-                config.itemView.visibility = View.VISIBLE
-            }
-        }
-        
-        // Hide unused item views
-        (itemsToShow.size until 4).forEach { index ->
-            if (index < itemConfigs.size) {
-                itemConfigs[index].itemView.visibility = View.GONE
-            }
-        }
+        // Render all items dynamically inside scrollable container
+        val itemsContainer = cardView.findViewById<LinearLayout>(com.streatfeast.app.R.id.itemsContainer)
+        itemsContainer.removeAllViews()
+        val inflater = LayoutInflater.from(cardView.context)
+        order.items.forEach { item ->
+            val row = inflater.inflate(com.streatfeast.app.R.layout.order_card_item_row, itemsContainer, false)
 
-        val remainingCount = order.items.size - itemsToShow.size
-        if (remainingCount > 0) {
-            tvMoreItems.visibility = View.VISIBLE
-            tvMoreItems.text = "+$remainingCount more"
-        } else {
-            tvMoreItems.visibility = View.GONE
+            val itemView = row.findViewById<LinearLayout>(com.streatfeast.app.R.id.itemRoot)
+            val nameView = row.findViewById<TextView>(com.streatfeast.app.R.id.tvItemName)
+            val qtyView = row.findViewById<TextView>(com.streatfeast.app.R.id.tvItemQty)
+            val sizeView = row.findViewById<TextView>(com.streatfeast.app.R.id.tvItemSize)
+            val tipsView = row.findViewById<TextView>(com.streatfeast.app.R.id.tvItemTips)
+            val switchView = row.findViewById<androidx.appcompat.widget.SwitchCompat>(com.streatfeast.app.R.id.switchItem)
+            val colorBar = row.findViewById<View>(com.streatfeast.app.R.id.colorBar)
+            val preparedIcon = row.findViewById<ImageView>(com.streatfeast.app.R.id.preparedIcon)
+
+            bindItemToView(
+                orderId = order.id,
+                item = item,
+                itemView = itemView,
+                nameView = nameView,
+                qtyView = qtyView,
+                sizeView = sizeView,
+                tipsView = tipsView,
+                switchView = switchView,
+                colorBar = colorBar,
+                preparedIcon = preparedIcon,
+                globalTip = order.chefTip
+            )
+
+            // Switch visibility rules (same behavior as before)
+            switchView.visibility = when (order.status) {
+                OrderStatus.IN_KITCHEN -> View.VISIBLE
+                else -> View.GONE
+            }
+
+            itemsContainer.addView(row)
         }
         
         // Update bottom buttons
@@ -579,10 +523,6 @@ class ChefPageFragment : Fragment() {
                 btnMarkAllPrepared.setOnClickListener {
                     viewModel.acceptOrder(order.id)
                 }
-                // Hide item switches for new orders (can't mark items prepared until accepted)
-                itemConfigs.take(itemsToShow.size).forEach { config ->
-                    config.switchView.visibility = View.GONE
-                }
             }
             OrderStatus.IN_KITCHEN -> {
                 // Preparing order - show mark prepared button
@@ -590,10 +530,6 @@ class ChefPageFragment : Fragment() {
                 btnMarkAllPrepared.text = "Mark All Prepared"
                 btnMarkAllPrepared.setOnClickListener {
                     viewModel.markPrepared(order.id)
-                }
-                // Show item switches for preparing orders
-                itemConfigs.take(itemsToShow.size).forEach { config ->
-                    config.switchView.visibility = View.VISIBLE
                 }
             }
             else -> {
