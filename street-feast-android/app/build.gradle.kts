@@ -65,6 +65,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlin {
         compilerOptions {
@@ -80,6 +81,11 @@ android {
 }
 
 // ---- Dependencies ----
+configurations.all {
+    // Exclude debug variant of multiplatform-settings to avoid duplicate class errors
+    exclude(group = "com.russhwolf", module = "multiplatform-settings-android-debug")
+}
+
 dependencies {
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -111,7 +117,14 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.6"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
-    implementation("io.github.jan-tennert.supabase:auth-kt") // was gotrue-kt in older versions
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    
+    // Multiplatform settings so the default session manager works
+    // Exclude debug variant to avoid duplicate class errors
+    implementation("com.russhwolf:multiplatform-settings-android:1.3.0") {
+        exclude(group = "com.russhwolf", module = "multiplatform-settings-android-debug")
+    }
+    
     // Ktor HTTP client engine (required for Supabase)
     implementation("io.ktor:ktor-client-okhttp:3.3.2")
 // JSON serialization (unchanged)
@@ -129,6 +142,9 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // Desugaring for minSdk 23 compatibility
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Testing
     testImplementation(libs.junit)

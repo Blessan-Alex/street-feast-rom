@@ -212,6 +212,10 @@ class SupabaseOrderRepository(
                 }
             }
         }.onFailure { e ->
+            if (e is kotlinx.coroutines.CancellationException) {
+                // Rethrow - this is normal lifecycle cancellation
+                throw e
+            }
             Log.e("SupabaseOrderRepository", "Failed to refresh orders", e)
         }
     }

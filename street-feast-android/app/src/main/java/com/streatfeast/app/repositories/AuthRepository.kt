@@ -18,12 +18,18 @@ class AuthRepository(
 ) {
 
     suspend fun getCurrentUser(): User? = withContext(Dispatchers.IO) {
-        val user = client.auth.currentUserOrNull() ?: return@withContext null
-        fetchUser(user.id)
+        client.auth.awaitInitialization()
+        val userId = client.auth.currentSessionOrNull()?.user?.id
+            ?: client.auth.currentUserOrNull()?.id
+            ?: return@withContext null
+        fetchUser(userId)
     }
 
     suspend fun isLoggedIn(): Boolean = withContext(Dispatchers.IO) {
-        client.auth.currentUserOrNull() != null
+        // Ensure session is loaded from storage before checking
+        client.auth.awaitInitialization()
+        // Use currentSessionOrNull for reliable session persistence check
+        client.auth.currentSessionOrNull() != null
     }
 
     suspend fun login(email: String, password: String): Result<User> = withContext(Dispatchers.IO) {

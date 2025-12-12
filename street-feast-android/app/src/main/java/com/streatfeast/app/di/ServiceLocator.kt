@@ -8,6 +8,7 @@ import com.streatfeast.app.storage.MenuLocalDataSource
 import com.streatfeast.app.storage.OrderLocalDataSource
 import com.streatfeast.app.storage.StreetFeastDatabase
 import com.streatfeast.app.utils.Constants
+import com.streatfeast.app.viewmodels.SessionViewModel
 
 object ServiceLocator {
 
@@ -46,6 +47,11 @@ object ServiceLocator {
         val db = StreetFeastDatabase.getInstance(context)
         val local = MenuLocalDataSource(db)
         return MenuRepository(client, local, context.applicationContext, Constants.DEFAULT_STORE_ID).also { menuRepository = it }
+    }
+
+    fun provideSessionViewModel(context: Context): SessionViewModel {
+        val client = SupabaseModule.provideClient(context)
+        return SessionViewModel(client)
     }
 
     suspend fun clear() {

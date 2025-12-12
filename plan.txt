@@ -1,13 +1,4 @@
-Perfect, this is exactly the moment to align what you *want* with what you *actually* have.
 
-I’ll do two things:
-
-1. **Compare current vs new plan** (so we know what to change vs keep).
-2. **Give you a Cursor-friendly implementation plan** with concrete steps, file names, and behaviours — production-level, edge-case aware.
-
-You can drop the plan section straight into Cursor and let it go to town.
-
----
 
 ## 1. Current vs New Plan – where they differ
 
